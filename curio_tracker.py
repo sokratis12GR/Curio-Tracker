@@ -28,12 +28,6 @@ csv_file_path = "saved/matches.csv"
 def check_file_exists():
     return not os.path.isfile(csv_file_path)
 
-# Load CSV data
-def load_csv_data(file_path):
-    with open(file_path, newline='', encoding='utf-8-sig') as csvfile:
-        reader = csv.reader(csvfile)
-        return set(row[0].strip() for row in reader if row)
-
 # Updated category imports
 def load_csv_with_types(file_path):
     term_types = {}
