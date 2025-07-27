@@ -11,22 +11,17 @@ import re
 import csv
 import time
 import os
+import config as c
 from datetime import datetime
 from termcolor import colored
 
 # Set path to tesseract executable (Check README)
-pytesseract.pytesseract.tesseract_cmd = r"D:\Dev\Tesseract-OCR\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = c.tesseract_path
 
-# Enable if you want extra information and a popup of the screenshot
-DEBUGGING = False
+os.makedirs(c.logs_dir, exist_ok=True)
+os.makedirs(c.saves_dir, exist_ok=True)
 
-os.makedirs("logs", exist_ok=True)
-os.makedirs("saved", exist_ok=True)
-
-csv_file_path = "saved/matches.csv"
-
-def check_file_exists():
-    return not os.path.isfile(csv_file_path)
+csv_file_path = c.csv_file_path
 
 # Updated category imports
 def load_csv_with_types(file_path):
@@ -39,15 +34,15 @@ def load_csv_with_types(file_path):
                 term_types[term.upper()] = type_name
     return term_types
 
-term_types = load_csv_with_types("AllValid.csv")
+term_types = load_csv_with_types(c.file_name)
 all_terms = set(term_types.keys())
 
 seen_matches = set()
 
 def get_poe_bbox():
-    windows = [w for w in gw.getWindowsWithTitle("Path of Exile") if w.visible]
+    windows = [w for w in gw.getWindowsWithTitle(c.target_application) if w.visible]
     if not windows:
-        print("❌ Path of Exile window not found.")
+        print(c.not_found_target_txt)
         return None
     win = windows[0]
     return (win.left, win.top, win.left + win.width, win.top + win.height)
@@ -59,24 +54,24 @@ def filter_item_text(image_np):
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
     # Unique: #AF6025
-    lower_orange = np.array([5, 100, 100])
-    upper_orange = np.array([25, 255, 255])
+    lower_orange = np.array([c.replica_l_hue, c.replica_l_sat, c.replica_l_val])
+    upper_orange = np.array([c.replica_u_hue, c.replica_u_sat, c.replica_u_val])
 
     # Rare: #D9C850
-    lower_yellow = np.array([20, 80, 150])
-    upper_yellow = np.array([40, 255, 255])
+    lower_yellow = np.array([c.rare_l_hue, c.rare_l_sat, c.rare_l_val])
+    upper_yellow = np.array([c.rare_u_hue, c.rare_u_sat, c.rare_u_val])
 
     # Currency: #AA9E82
-    lower_currency = np.array([15, 20, 90])
-    upper_currency = np.array([45, 100, 220])
+    lower_currency = np.array([c.currency_l_hue, c.currency_l_sat, c.currency_l_val])
+    upper_currency = np.array([c.currency_u_hue, c.currency_u_sat, c.currency_u_val])
 
-    # Scarabs (new gray): #B7B8B8 → HSV(0, 3, 184)
-    lower_scarab = np.array([0, 0, 150])
-    upper_scarab = np.array([180, 10, 255])
+    # Scarabs (new gray): #B7B8B8
+    lower_scarab = np.array([c.scarab_l_hue, c.scarab_l_sat, c.scarab_l_val])
+    upper_scarab = np.array([c.scarab_u_hue, c.scarab_u_sat, c.scarab_u_val])
 
     # Enchants (blue-gray): #5C7E9D
-    lower_enchant = np.array([95, 15, 70])
-    upper_enchant = np.array([130, 90, 240])
+    lower_enchant = np.array([c.enchant_l_hue, c.enchant_l_sat, c.enchant_l_val])
+    upper_enchant = np.array([c.enchant_u_hue, c.enchant_u_sat, c.enchant_u_val])
     
     # Create individual masks
     mask_orange = cv2.inRange(hsv, lower_orange, upper_orange)
@@ -112,9 +107,9 @@ def process_text(text):
         )
 
     if matches:
-        print("✅ Matches found:", matches)
+        print(c.matches_found, matches)
     else:
-        print("❌ No matches found.")
+        print(c.matches_not_found)
 
 
 def capture_once():
@@ -125,17 +120,17 @@ def capture_once():
     screenshot_np = np.array(screenshot)
     filtered = filter_item_text(screenshot_np)
     text = pytesseract.image_to_string(filtered, config="--psm 6", lang="eng")
-    if DEBUGGING:
+    if c.DEBUGGING:
         cv2.imshow("Filtered Mask", filtered)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    if DEBUGGING:
-        os.makedirs("logs", exist_ok=True)
-        with open(f"logs/ocr_poe_{timestamp}.txt", "w", encoding="utf-8") as f:
+    if c.DEBUGGING:
+        os.makedirs(c.logs_dir, exist_ok=True)
+        with open(f"{c.logs_dir}/ocr_poe_{timestamp}.txt", "w", encoding="utf-8") as f:
             f.write(text)
 
-    os.makedirs("saved", exist_ok=True)
+    os.makedirs(c.saves_dir, exist_ok=True)
     text_upper = text.upper()
     matched_terms_this_run = set()
 
@@ -145,7 +140,7 @@ def capture_once():
         writer = csv.writer(csvfile)
 
         if write_header:
-            writer.writerow(["Time", "Type", "Value"])
+            writer.writerow([c.csv_time_header, c.csv_type_header, c.csv_value_header])
         
         for term_upper, item_type in term_types.items():
             if term_upper in text_upper and term_upper not in matched_terms_this_run:
@@ -158,17 +153,17 @@ def capture_once():
 
 # If you dislike F2 and F3 to be capture/exit feel free to change them here
 def main():
-    print("🖼️ Press F2 to capture Path of Exile window.")
-    print("❌ Press F3 to exit the script.\n")
+    print(c.info_show_keys_1)
+    print(c.info_show_keys_2)
 
     while True:
-        if keyboard.is_pressed("f2"):
-            print("📸 Capturing screen...")
+        if keyboard.is_pressed(c.capture_key):
+            print(c.capturing_prompt)
             capture_once()
             time.sleep(0.5)
 
-        if keyboard.is_pressed("f3"):
-            print("👋 Exiting.")
+        if keyboard.is_pressed(c.exit_key):
+            print(c.exiting_prompt)
             break
 
         time.sleep(0.1)
