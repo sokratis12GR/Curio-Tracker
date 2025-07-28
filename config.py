@@ -1,5 +1,5 @@
 # Enable DEBUGGING
-DEBUGGING = True
+DEBUGGING = False
 
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
 
