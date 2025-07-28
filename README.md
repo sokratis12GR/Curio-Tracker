@@ -6,7 +6,7 @@ Would need to download some libraries to be able to use this tool, run the follo
 Afterwards make sure to download and install Tesseract OCR from https://github.com/tesseract-ocr/tesseract
 Once installed replace the following in the script with your installation path of Tesseract-OCR
 located in the config.py file, open with a text editor and search for `tesseract_path = r"D:\Dev\Tesseract-OCR\tesseract.exe"`:
-> `tesseract_path = YOUR/PATH/TO/tesseract.exe`
+> `tesseract_path = r"YOUR/PATH/TO/tesseract.exe"`
 
 # DEBUGGING
 By default the debugging of the tool is set to `False`, could be changed to `True` inside the config.py file.
