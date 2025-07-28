@@ -1,5 +1,5 @@
 # Enable DEBUGGING
-DEBUGGING = False
+DEBUGGING = True
 
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
 
@@ -7,7 +7,7 @@ DEBUGGING = False
 ### Lower
 replica_l_hue = 5
 replica_l_sat = 100
-replica_l_val = 100
+replica_l_val = 80 #100
 ### Upper
 replica_u_hue = 25
 replica_u_sat = 255
@@ -26,7 +26,7 @@ rare_u_val = 255
 ## Currency Item: #AA9E82
 ### Lower
 currency_l_hue = 15
-currency_l_sat = 20
+currency_l_sat = 0 # 20
 currency_l_val = 90
 ### Upper
 currency_u_hue = 45
