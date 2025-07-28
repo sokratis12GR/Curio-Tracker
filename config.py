@@ -7,7 +7,7 @@ DEBUGGING = False
 ### Lower
 replica_l_hue = 5
 replica_l_sat = 100
-replica_l_val = 255
+replica_l_val = 100
 ### Upper
 replica_u_hue = 25
 replica_u_sat = 255
