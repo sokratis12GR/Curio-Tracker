@@ -23,6 +23,11 @@ os.makedirs(c.saves_dir, exist_ok=True)
 
 csv_file_path = c.csv_file_path
 
+# default values in case they only run area lvl 83 blueprints
+blueprint_area_level = c.default_bp_lvl
+blueprint_layout = c.default_bp_area
+stack_size = 0
+
 # Updated category imports
 def load_csv_with_types(file_path):
     term_types = {}
@@ -89,7 +94,6 @@ def filter_item_text(image_np):
         mask_enchant
     )
 
-    # Optional morphology
     kernel = np.ones((1, 1), np.uint8)
     combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
     combined_mask = cv2.erode(combined_mask, kernel, iterations=1)
@@ -140,26 +144,122 @@ def capture_once():
         writer = csv.writer(csvfile)
 
         if write_header:
-            writer.writerow([c.csv_time_header, c.csv_type_header, c.csv_value_header])
+            writer.writerow([c.csv_league_header, c.csv_loggedby_header, # Static Values (Determined by config.py)
+                c.csv_blueprint_header, c.csv_area_level_header,
+                c.csv_trinket_header,
+                c.csv_replacement_header,
+                c.csv_replica_header,
+                c.csv_experimented_header,
+                c.csv_weapon_enchant_header,
+                c.csv_armor_enchant_trinket_header,
+                c.csv_scarab_trinket_header,
+                c.csv_currency_trinket_header,
+                c.csv_stack_size_trinket_header,
+                c.csv_variant_trinket_header,
+                c.csv_flag_trinket_header,
+                c.csv_time_header # Extra Row for Time validation, should be excluded when importing the data.
+                ])
         
-        for term_upper, item_type in term_types.items():
+        for term_upper, item_type in term_types.items(): # Term_Upper is the matching word in the csv file for valid entries/terms.
             if term_upper in text_upper and term_upper not in matched_terms_this_run:
-                writer.writerow([timestamp, item_type, term_upper])
-                matched_terms_this_run.add(term_upper)
+                term_title = term_upper.title()
+                writer.writerow([c.poe_league, c.poe_user, 
+                    blueprint_layout, blueprint_area_level, # Should persist for same blueprint curio checks, updates per keybind press on start of heist.
+                    isTrinket(term_title, item_type),
+                    isReplacement(term_title, item_type),
+                    isReplica(term_title, item_type),
+                    isExperimental(term_title, item_type),
+                    isEnchant(term_title, item_type),  # Armor and Weapon Enchants will be saved together as one, will review a better solution
+                    isEnchant(term_title, item_type), # Armor and Weapon Enchants will be saved together as one, will review a better solution
+                    isScarab(term_title, item_type),
+                    isCurrency(term_title, item_type),
+                    "" if stack_size == 0 else stack_size,
+                    "",
+                    False,
+                    timestamp])
+                matched_terms_this_run.add(term_title)
 
     write_header = not os.path.isfile(csv_file_path)
 
     process_text(text)
 
-# If you dislike F2 and F3 to be capture/exit feel free to change them here
+def isTrinket(term, type):
+    return term if type == "Trinket" else ""
+
+def isReplacement(term, type):
+    return term if type == "Replacement" else ""
+
+def isReplica(term, type):
+    return term if type == "Replica" else ""
+
+def isExperimental(term, type):
+    return term if type == "Experimental" else ""
+
+def isEnchant(term, type):
+    return term if type == "Enchants" else ""
+
+def isScarab(term, type):
+    return term if type == "Scarab" else ""
+
+def isCurrency(term, type):
+    return term if type == "Currency" else ""
+
+def capture_layout():
+    screenshot = pyautogui.screenshot()
+    full_width, full_height = screenshot.size
+
+    # Define the top-right crop region
+    left = full_width - c.TOP_RIGHT_CUT_WIDTH
+    top = 0
+    right = full_width
+    bottom = c.TOP_RIGHT_CUT_HEIGHT
+
+    cropped = screenshot.crop((left, top, right, bottom))
+
+    # Run OCR on the cropped region
+    text = pytesseract.image_to_string(cropped)
+    if c.DEBUGGING:
+        print("OCR Text:\n", text)
+
+    # Search for layout keyword
+    found_layout = None
+    for keyword in c.layout_keywords:
+        if keyword.lower() in text.lower():
+            found_layout = keyword
+            blueprint_layout = keyword
+            break
+
+    # Search for monster level using regex
+    match = re.search(r"Monster Level[: ]+(\d+)", text, re.IGNORECASE)
+    area_level = match.group(1) if match else "Not found"
+
+    # Report results
+    # if c.DEBUGGING:
+    if found_layout and area_level:
+        print("========== Result ==========")
+        print(f"Layout: {found_layout}")
+        print(f"Area Level: {area_level}")
+        print("============================")
+    else:
+        print("❌ Not found, try again.")
+
+
+# If you dislike F2 and F3 to be capture/exit feel free to change them in (config.py)
 def main():
-    print(c.info_show_keys_1)
-    print(c.info_show_keys_2)
+    print(c.info_show_keys_capture)
+    # print(c.info_show_keys_snippet) STILL WIP NOT ENABLED, added support for it in the config but that's it.
+    print(c.info_show_keys_layout)
+    print(c.info_show_keys_exit)
 
     while True:
         if keyboard.is_pressed(c.capture_key):
             print(c.capturing_prompt)
             capture_once()
+            time.sleep(0.5)
+
+        if keyboard.is_pressed(c.layout_capture_key):
+            print(c.layout_prompt)
+            capture_layout()
             time.sleep(0.5)
 
         if keyboard.is_pressed(c.exit_key):
