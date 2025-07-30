@@ -1,7 +1,10 @@
 # SETUP
 
-## Download the ZIP of this repository by clicking the green "<> Code" btn or via the releases page download the '.zip' folder and extract it at an accessible location:
+## Download the ZIP of this repository
+#### By clicking the green "<> Code" btn.
 <img width="376" height="333" alt="image" src="https://github.com/user-attachments/assets/080c3f2e-2f20-4771-93fa-89688b696749" />
+
+#### Or via the releases page download the '.zip' folder and extract it at an accessible location:
 
 
 Once downloaded, extract in a folder of preference, to continue follow the next steps.
