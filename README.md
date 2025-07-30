@@ -1,6 +1,6 @@
 # SETUP
 
-## Download the ZIP of this repository by clicking the green "<> Code" btn:
+## Download the ZIP of this repository by clicking the green "<> Code" btn or via the releases page download the '.zip' folder and extract it at an accessible location:
 <img width="376" height="333" alt="image" src="https://github.com/user-attachments/assets/080c3f2e-2f20-4771-93fa-89688b696749" />
 
 
@@ -21,12 +21,12 @@ We will need the OCR to capture the screen and read the text from the captured i
 
 To download it use the following link: https://github.com/tesseract-ocr/tesseract/releases/tag/5.5.0 and get the `.exe` file from "Assets", **install it inside a folder by itself**.
 
-Once installed replace the following in the script with your installation path of Tesseract-OCR located in the `config.py` file.
+Once installed replace the following in the script with your installation path of Tesseract-OCR located in the `user_settings.py` file.
 
 Open with a text editor and search for `tesseract_path = r"D:\Dev\Tesseract-OCR\tesseract.exe"`:
 > `tesseract_path = r"YOUR/PATH/TO/tesseract.exe"`
 
-## CONFIG (TL;DR)
+## CONFIG (TL;DR) `user_settings.py`
 Update the following entries
 
 `poe_league = "3.26"` to the current league
