@@ -1,7 +1,8 @@
 # SETUP
 
 ## Download the ZIP of this repository by clicking the green "<> Code" btn:
-<img width="401" height="398" alt="image" src="https://github.com/user-attachments/assets/1ca3d770-fe6e-4880-9974-d1f71db2663a" />
+<img width="376" height="333" alt="image" src="https://github.com/user-attachments/assets/080c3f2e-2f20-4771-93fa-89688b696749" />
+
 
 Once downloaded, extract in a folder of preference, to continue follow the next steps.
 
@@ -47,6 +48,11 @@ What it does it logs all characters found on screen into a file in /logs and the
 
 # Usage
 
-To use: open in cmd via `py curio_tracker.py`
+To use simply open cmd via the location of the script by right clicking the folder and selecting the following option:
+<img width="264" height="35" alt="image" src="https://github.com/user-attachments/assets/315ab833-0e31-4582-b218-74933a05d6a9" />
+
+Afterwards just type `py curio_tracker.py`
+
+Otherwise can use `py PATH/TO/CURIO/TRACKER/curio_tracker.py`
 
 # Appreciate any feedback ^^
