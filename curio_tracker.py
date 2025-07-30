@@ -20,7 +20,7 @@ from termcolor import colored
 import user_settings as user
 
 # Set path to tesseract executable (Check README)
-pytesseract.pytesseract.tesseract_cmd = c.tesseract_path
+pytesseract.pytesseract.tesseract_cmd = user.tesseract_path
 
 os.makedirs(c.logs_dir, exist_ok=True)
 os.makedirs(c.saves_dir, exist_ok=True)
