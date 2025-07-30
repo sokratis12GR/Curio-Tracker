@@ -1,16 +1,23 @@
 # SETUP
 
+## Python 
 This program runs on python, you will need to have it on your system, you can get it via the following link: https://www.python.org/downloads/
 
 **Important**: During installation, check the box `"Add Python to PATH"`
 
-Would need to download some libraries to be able to use this tool, run the following command in cmd:
+### Python Libraries
+
+To use the tool we will need to download some libraries, run the following command in cmd (make sure the prior step is followed):
 > pip install keyboard pyautogui opencv-python numpy pytesseract pillow pygetwindow termcolor
 
-Afterwards make sure to download and install Tesseract OCR from https://github.com/tesseract-ocr/tesseract
+## Tesseract OCR
+We will need the OCR to capture the screen and read the text from the captured image.
 
-Once installed replace the following in the script with your installation path of Tesseract-OCR
-located in the config.py file, open with a text editor and search for `tesseract_path = r"D:\Dev\Tesseract-OCR\tesseract.exe"`:
+To download it use the following link: https://github.com/tesseract-ocr/tesseract/releases/tag/5.5.0 and get the `.exe` file from "Assets", **install it inside a folder by itself**.
+
+Once installed replace the following in the script with your installation path of Tesseract-OCR located in the config.py file.
+
+Open with a text editor and search for `tesseract_path = r"D:\Dev\Tesseract-OCR\tesseract.exe"`:
 > `tesseract_path = r"YOUR/PATH/TO/tesseract.exe"`
 
 ## CONFIG (TL;DR)
