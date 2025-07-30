@@ -1,5 +1,9 @@
 # SETUP
 
+## Download the ZIP of this repository by clicking the green "<> Code" btn:
+<img width="401" height="398" alt="image" src="https://github.com/user-attachments/assets/1ca3d770-fe6e-4880-9974-d1f71db2663a" />
+
+
 ## Python 
 This program runs on python, you will need to have it on your system, you can get it via the following link: https://www.python.org/downloads/
 
