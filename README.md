@@ -15,7 +15,7 @@ We will need the OCR to capture the screen and read the text from the captured i
 
 To download it use the following link: https://github.com/tesseract-ocr/tesseract/releases/tag/5.5.0 and get the `.exe` file from "Assets", **install it inside a folder by itself**.
 
-Once installed replace the following in the script with your installation path of Tesseract-OCR located in the config.py file.
+Once installed replace the following in the script with your installation path of Tesseract-OCR located in the `config.py` file.
 
 Open with a text editor and search for `tesseract_path = r"D:\Dev\Tesseract-OCR\tesseract.exe"`:
 > `tesseract_path = r"YOUR/PATH/TO/tesseract.exe"`
