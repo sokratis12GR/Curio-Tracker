@@ -2,6 +2,8 @@
 
 This program runs on python, you will need to have it on your system, you can get it via the following link: https://www.python.org/downloads/
 
+**Important**: During installation, check the box `"Add Python to PATH"`
+
 Would need to download some libraries to be able to use this tool, run the following command in cmd:
 > pip install keyboard pyautogui opencv-python numpy pytesseract pillow pygetwindow termcolor
 
