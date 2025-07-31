@@ -15,9 +15,6 @@ layout_keywords = [
 TOP_RIGHT_CUT_WIDTH = 170
 TOP_RIGHT_CUT_HEIGHT = 100
 
-# Tesseract Executatble Location (README.MD)
-tesseract_path = r"D:\Dev\Tesseract-OCR\tesseract.exe"
-
 # Keys / Strings / Locations / Texts
 
 ## Logging
