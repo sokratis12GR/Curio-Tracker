@@ -35,6 +35,24 @@ stack_size = 0
 
 non_dup_count = 0
 
+####################################################################
+# Fixes title case issues like checking for items with apostrophes #
+####################################################################
+def smart_title_case(text):
+    text = text.replace("’", "'").replace("‘", "'").replace("`", "'")
+    text = re.sub(r"(')S\b", r"\1s", text)
+
+    def fix_word(word):
+        if word.lower().endswith("'s") and len(word) > 2:
+            base = word[:-2]
+            suffix = word[-2:]
+            # Capitalize first letter of base, lowercase rest, suffix lowercase
+            return base[:1].upper() + base[1:].lower() + suffix.lower()
+        else:
+            return word[:1].upper() + word[1:].lower()
+
+    # Apply smart title casing to each word
+    return re.sub(r"\b\w+'?s?\b", lambda m: fix_word(m.group(0)), text)
 
 # Updated category imports
 def load_csv_with_types(file_path):
@@ -44,8 +62,9 @@ def load_csv_with_types(file_path):
         next(reader, None)
         for row in reader:
             if len(row) >= 2:
-                term, type_name = row[0].strip(), row[1].strip()
-                term_types[term.title()] = type_name
+                raw_term, type_name = row[0].strip(), row[1].strip()
+                term_key = smart_title_case(raw_term)
+                term_types[term_key] = type_name
     return term_types
 
 term_types = load_csv_with_types(c.file_name)
@@ -60,8 +79,6 @@ def get_poe_bbox():
         return None
     win = windows[0]
     return (win.left, win.top, win.left + win.width, win.top + win.height)
-
-
 #############################################################
 # Saves the information on the screen based on colors       #
 # which is afterwards extracted as text                     #
@@ -120,13 +137,40 @@ def filter_item_text(image_np):
 
     return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
 
+def extract_currency_value(text, matched_term, term_types):
+    if term_types.get(matched_term) != "Currency":
+        return None
+
+    # Split text into lines
+    lines = text.splitlines()
+
+    # Find the line index where matched_term appears (case insensitive)
+    idx = None
+    for i, line in enumerate(lines):
+        if matched_term.lower() in line.lower():
+            idx = i
+            break
+
+    if idx is None:
+        return None  # term not found in text lines
+
+    # Look for ratio pattern in next few lines (say next 2 lines)
+    for j in range(idx + 1, min(idx + 3, len(lines))):
+        match = re.search(r"\b(\d+)\s*/\s*(\d+)\b", lines[j])
+        if match:
+            current = int(match.group(1))
+            maximum = int(match.group(2))
+            return (current, maximum)
+
+    return None
+
 #################################################
 # Check if a term or combo term is in the text. # 
 #################################################
 
 def is_term_match(term, text, use_fuzzy=True):
     def clean_word(word):
-        return word.strip(string.punctuation).title()
+        return smart_title_case(word.strip(string.punctuation))
 
     if ";" in term:
         part1, part2 = [p.strip() for p in term.split(";", 1)]
@@ -138,7 +182,7 @@ def is_term_match(term, text, use_fuzzy=True):
             return True
         if use_fuzzy:
             words = [clean_word(w) for w in text.split()]
-            term_clean = term.title()
+            term_clean = smart_title_case(term)
             max_len_diff = 2
             candidates = [w for w in words if abs(len(w) - len(term_clean)) <= max_len_diff]
             close = get_close_matches(term_clean, candidates, n=1, cutoff=0.83)
@@ -177,7 +221,7 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
     terms_source = term_types.keys() if use_fuzzy else all_terms
 
     for term in terms_source:
-        term_title = term.title()
+        term_title = smart_title_case(term)
         if is_term_match(term_title, text, use_fuzzy=use_fuzzy):
             duplicate = is_duplicate_recent_entry(term_title)
             if allow_dupes or not duplicate:
@@ -200,9 +244,9 @@ def process_text(text, allow_dupes=False):
             results.append(term_title)
 
     if c.DEBUGGING:
-        highlighted = text.title()
+        highlighted = smart_title_case(text)
         for term in sorted(all_terms, key=len, reverse=True):
-            pattern = rf"(?i)\b({re.escape(term.title())})\b"
+            pattern = rf"(?i)\b({re.escape(smart_title_case(term))})\b"
             highlighted = re.sub(
                 pattern,
                 lambda m: colored(m.group(1), "green", attrs=["bold"]),
@@ -220,10 +264,23 @@ def process_text(text, allow_dupes=False):
 
 
 def write_csv_entry(text, timestamp, allow_dupes=False):
+    global stack_size
     write_header = not os.path.isfile(csv_file_path)
 
     matched_terms = get_matched_terms(text, allow_dupes=allow_dupes, use_fuzzy=True)
+    
+    for matched_term, duplicate in matched_terms:
+        ratio = extract_currency_value(smart_title_case(text), matched_term, term_types)
+        if ratio:
+            stack_size = f"{ratio[0]}"
+            if c.DEBUGGING:
+                print(f"Ratio for {matched_term}: {ratio[0]}/{ratio[1]}")
+        else:
+            if c.DEBUGGING:
+                print("[Currency Ratio] None found.")
+
     process_text(text, allow_dupes)
+
 
     with open(csv_file_path, "a", newline='', encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
@@ -241,7 +298,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
             ])
 
         for term_title, duplicate in matched_terms:
-            item_type = term_types.get(term_title.title())  # assuming keys lowercase
+            item_type = term_types.get(smart_title_case(term_title))  # assuming keys lowercase
             # Only write if allow_dupes or not duplicate
             if allow_dupes or not duplicate:
                 writer.writerow([
@@ -275,7 +332,8 @@ def capture_once():
     screenshot = ImageGrab.grab(bbox=bbox)
     screenshot_np = np.array(screenshot)
     filtered = filter_item_text(screenshot_np)
-    text = pytesseract.image_to_string(filtered, config="--psm 6", lang="eng").title()
+    text = smart_title_case(pytesseract.image_to_string(filtered, config="--psm 6", lang="eng"))
+    global stack_size
 
     if c.DEBUGGING:
         cv2.imshow("Filtered Mask", filtered)
@@ -288,7 +346,6 @@ def capture_once():
             f.write(text)
 
     os.makedirs(c.saves_dir, exist_ok=True)
-    text_title = text.title()
     write_csv_entry(text, timestamp)
   
 
@@ -301,8 +358,9 @@ def capture_once():
 def capture_snippet():
     bbox = get_poe_bbox()
     if bbox is None:
-        print("PoE window not found. Exiting snippet.")
+        print(c.not_found_target_snippet_txt)
         exit()
+    global stack_size
 
     root = tk.Tk()
     root.attributes("-alpha", 0.3)
@@ -335,7 +393,7 @@ def capture_snippet():
         x2, y2 = max(start_x, end_x), max(start_y, end_y)
 
         if x2 - x1 < 5 or y2 - y1 < 5:
-            print("⚠️ Selected region is too small or invalid.")
+            print(c.snippet_txt_too_small)
             return
 
         bbox = (x1, y1, x2, y2)
@@ -343,11 +401,11 @@ def capture_snippet():
         screenshot_np = np.array(screenshot)
 
         if screenshot_np is None or screenshot_np.size == 0:
-            print("⚠️ Screenshot capture failed.")
+            print(c.snippet_txt_failed)
             return
 
         filtered = filter_item_text(screenshot_np)
-        text = pytesseract.image_to_string(filtered, config="--psm 6", lang="eng").title()
+        text = smart_title_case(pytesseract.image_to_string(filtered, config="--psm 6", lang="eng"))
 
         if c.DEBUGGING:
             cv2.imshow("Filtered Snippet", filtered)
@@ -404,14 +462,14 @@ def capture_layout():
     cropped = screenshot.crop((left, top, right, bottom))
 
     # Run OCR on the cropped region
-    text = pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6').title()
+    text = smart_title_case(pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6'))
     if c.DEBUGGING:
         print("OCR Text:\n", text)
 
     # Search for layout keyword
     found_layout = None
     for keyword in c.layout_keywords:
-        if keyword.title() in text:
+        if smart_title_case(keyword) in text:
             found_layout = keyword
             blueprint_layout = keyword
             break
