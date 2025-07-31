@@ -305,15 +305,15 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                 writer.writerow([
                     user.poe_league, user.poe_user,
                     blueprint_layout, blueprint_area_level,
-                    isTrinket(term_title, item_type),
-                    isReplacement(term_title, item_type),
-                    isReplica(term_title, item_type),
-                    isExperimental(term_title, item_type),
-                    isEnchant(term_title, item_type),
-                    isEnchant(term_title, item_type),
-                    isScarab(term_title, item_type),
-                    isCurrency(term_title, item_type),
-                    "" if stack_size == 0 else stack_size,
+                    addIfTrinket(term_title, item_type),
+                    addIfReplacement(term_title, item_type),
+                    addIfReplica(term_title, item_type),
+                    addIfExperimental(term_title, item_type),
+                    addIfEnchant(term_title, item_type),
+                    addIfEnchant(term_title, item_type),
+                    addIfScarab(term_title, item_type),
+                    addIfCurrency(term_title, item_type),
+                    stack_size if (int(stack_size) > 0 and isCurrencyOrScarab(term_title, item_type)) else "",
                     "",
                     False,
                     timestamp
@@ -429,26 +429,29 @@ def capture_snippet():
 
     root.mainloop()
 
-def isTrinket(term, type):
+def addIfTrinket(term, type):
     return term if type == "Trinket" else ""
 
-def isReplacement(term, type):
+def addIfReplacement(term, type):
     return term if type == "Replacement" else ""
 
-def isReplica(term, type):
+def addIfReplica(term, type):
     return term if type == "Replica" else ""
 
-def isExperimental(term, type):
+def addIfExperimental(term, type):
     return term if type == "Experimental" else ""
 
-def isEnchant(term, type):
+def addIfEnchant(term, type):
     return term if type == "Enchants" else ""
 
-def isScarab(term, type):
+def addIfScarab(term, type):
     return term if type == "Scarab" else ""
 
-def isCurrency(term, type):
+def addIfCurrency(term, type):
     return term if type == "Currency" else ""
+
+def isCurrencyOrScarab(term, type):
+    return type == "Currency" or type == "Scarab"
 
 def capture_layout():
     global blueprint_area_level
