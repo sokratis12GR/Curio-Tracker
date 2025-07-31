@@ -16,6 +16,10 @@ Example Usages of the tool:
 It will save the data in a .csv file (saves/matches.csv) like the following (supported by google sheets, excel and so on)
 <img width="1754" height="908" alt="image" src="https://github.com/user-attachments/assets/7dddb6e3-2cf8-4b3c-8af6-3f6dcb57014e" />
 
+Example import in google sheets:
+<img width="1874" height="910" alt="image" src="https://github.com/user-attachments/assets/71a1b61d-236d-48a1-b864-5f03c52e383a" />
+
+
 # SETUP
 
 ## Download the ZIP of this repository
