@@ -276,6 +276,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
             if c.DEBUGGING:
                 print(f"Ratio for {matched_term}: {ratio[0]}/{ratio[1]}")
         else:
+            stack_size = 0
             if c.DEBUGGING:
                 print("[Currency Ratio] None found.")
 
