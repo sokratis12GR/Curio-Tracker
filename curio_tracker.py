@@ -138,7 +138,7 @@ def filter_item_text(image_np):
     return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
 
 def extract_currency_value(text, matched_term, term_types):
-    if term_types.get(matched_term) != "Currency":
+    if term_types.get(matched_term) != "Currency" and term_types.get(matched_term) != "Currency":
         return None
 
     # Split text into lines
@@ -167,29 +167,52 @@ def extract_currency_value(text, matched_term, term_types):
 #################################################
 # Check if a term or combo term is in the text. # 
 #################################################
-
-def is_term_match(term, text, use_fuzzy=True):
+def is_term_match(term, text, use_fuzzy=False):
     def clean_word(word):
         return smart_title_case(word.strip(string.punctuation))
 
-    if ";" in term:
-        part1, part2 = [p.strip() for p in term.split(";", 1)]
-        pattern = rf"(?i){re.escape(part1)}[\s\S]{{0,100}}?{re.escape(part2)}"
-        return bool(re.search(pattern, text))
-    else:
-        pattern = rf"\b{re.escape(term)}\b"
-        if re.search(pattern, text, re.IGNORECASE):
-            return True
-        if use_fuzzy:
-            words = [clean_word(w) for w in text.split()]
-            term_clean = smart_title_case(term)
+    def find_piece_positions(piece):
+        piece_title = smart_title_case(piece)
+        positions = []
+
+        # exact whole-word matches
+        pattern = rf"\b{re.escape(piece_title)}\b"
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            positions.append(m.start())
+
+        if use_fuzzy: ### VERY INACCURATE, NEEDS MORE TESTING
+            # tokenize to approximate fuzzy candidates
+            word_pattern = r"\b[\w%']+\b"
+            tokens = [(m.group(0), m.start()) for m in re.finditer(word_pattern, text)]
             max_len_diff = 2
-            candidates = [w for w in words if abs(len(w) - len(term_clean)) <= max_len_diff]
-            close = get_close_matches(term_clean, candidates, n=1, cutoff=0.83)
+            candidates = [w for w, _ in tokens if abs(len(w) - len(piece_title)) <= max_len_diff]
+            close = get_close_matches(piece_title, candidates, n=1, cutoff=0.83)
             if close:
-                print(f"[Fuzzy match] Term: '{term}' ≈ '{close[0]}'")
-                return True
-    return False
+                best = close[0]
+                for tok, pos in tokens:
+                    if smart_title_case(tok) == smart_title_case(best):
+                        print(f"[Fuzzy match] Term piece: '{piece}' ≈ '{tok}'")
+                        positions.append(pos)
+        return positions
+
+    raw_term = next((k for k in term_types if smart_title_case(k) == term), None)
+    term_type = term_types.get(raw_term, "")
+    term_type_cmp = term_type.lower() if isinstance(term_type, str) else ""
+
+    ### MATCHES FOR HANDLING ENCHANTS BY SPLITTING ON ; AND CHECKING IF THE COMBO FOLLOWS LINE ORDER CORRECTLY.
+    if ";" in term and term_type_cmp == "enchants":
+        part1, part2 = [p.strip() for p in term.split(";", 1)]
+        pos1 = find_piece_positions(part1)
+        pos2 = find_piece_positions(part2)
+        if not pos1 or not pos2:
+            return False
+        for indexX in pos1:
+            for indexY in pos2:
+                if indexY > indexX:
+                    return True
+        return False
+    else:
+        return bool(find_piece_positions(term))
 
 
 def is_duplicate_recent_entry(value,path=csv_file_path):
@@ -214,29 +237,51 @@ def is_duplicate_recent_entry(value,path=csv_file_path):
 # Gets all matched terms from the list          # 
 #################################################
 def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
-
-    matched = []
     global non_dup_count
 
+    all_candidates = []
     terms_source = term_types.keys() if use_fuzzy else all_terms
 
     for term in terms_source:
         term_title = smart_title_case(term)
         if is_term_match(term_title, text, use_fuzzy=use_fuzzy):
             duplicate = is_duplicate_recent_entry(term_title)
-            if allow_dupes or not duplicate:
-                matched.append((term_title, duplicate))
-                if not duplicate or allow_dupes:
-                    non_dup_count += 1
-            else:
-                # If duplicates not allowed and duplicate found, still append with flag
-                matched.append((term_title, True))
+            all_candidates.append((term_title, duplicate))
+
+    #########################################################################################
+    # SPECIFICALLY FOR ENCHANTS TO NOT COUNT TWICE FOR MATCHES i.e                          #
+    # "8% Increased Explicit Ailment Modifier Magnitudes" and                               #
+    # "8% Increased Explicit Ailment Modifier Magnitudes; Has 1 White Socket"               #
+    # if it contains "Has 1 White Socket" it will write it/save it as the 2nd one instead   #
+    #########################################################################################
+    suppress_parts = set()
+    full_enchant_terms = set()
+    for term_title, _ in all_candidates:
+        if ";" in term_title and term_types.get(term_title, "").lower() == "enchants":
+            part1, part2 = [smart_title_case(p.strip()) for p in term_title.split(";", 1)]
+            suppress_parts.add(part1)
+            suppress_parts.add(part2)
+            full_enchant_terms.add(term_title)
+
+    matched = []
+    for term_title, duplicate in all_candidates:
+        if term_title in suppress_parts and term_title not in full_enchant_terms:
+            continue
+
+        if allow_dupes or not duplicate:
+            matched.append((term_title, duplicate))
+            if not duplicate or allow_dupes:
+                non_dup_count += 1
+        else:
+            matched.append((term_title, True))  # keep the duplicate flag
     return matched
 
 def process_text(text, allow_dupes=False):
     results = []
     matched_terms = get_matched_terms(text, allow_dupes=allow_dupes)
 
+
+    #### DUPE CHECKING 
     for term_title, duplicate in matched_terms:
         if duplicate and not allow_dupes:
             results.append(f"{term_title} (Duplicate - Skipping)")
@@ -267,7 +312,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
     global stack_size
     write_header = not os.path.isfile(csv_file_path)
 
-    matched_terms = get_matched_terms(text, allow_dupes=allow_dupes, use_fuzzy=True)
+    matched_terms = get_matched_terms(text, allow_dupes=allow_dupes, use_fuzzy=False)
     
     for matched_term, duplicate in matched_terms:
         ratio = extract_currency_value(smart_title_case(text), matched_term, term_types)
