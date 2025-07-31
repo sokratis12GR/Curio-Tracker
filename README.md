@@ -17,7 +17,7 @@ It will save the data in a .csv file (saves/matches.csv) like the following (sup
 <img width="1754" height="908" alt="image" src="https://github.com/user-attachments/assets/7dddb6e3-2cf8-4b3c-8af6-3f6dcb57014e" />
 
 Example import in google sheets:
-<img width="1874" height="910" alt="image" src="https://github.com/user-attachments/assets/71a1b61d-236d-48a1-b864-5f03c52e383a" />
+<img width="1882" height="815" alt="image" src="https://github.com/user-attachments/assets/bbdb43bf-6688-495a-af2c-2f9a173c4116" />
 
 
 # SETUP
