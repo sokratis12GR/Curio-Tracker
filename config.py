@@ -51,7 +51,9 @@ csv_value_header = "Value"
 file_name = "AllValid.csv"
 target_application = "Path of Exile"
 not_found_target_txt = "❌ Path of Exile window not found."
-
+not_found_target_snippet_txt = "❌ Path of Exile window not found. Exiting snippet."
+snippet_txt_too_small = "⚠️ Selected region is too small or invalid."
+snippet_txt_failed = "⚠️ Screenshot capture failed."
 
 ## Matches Info
 matches_found = "✅ Matches found:"
