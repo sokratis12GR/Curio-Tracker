@@ -1,3 +1,21 @@
+# Curio Tracker
+
+This tool allows you to quickly take a screenshot of the grand heist curio displays and save them as rewards data so that you can quickly analyze the kind of loot you found during your runs.
+
+F5 - Captures the current layout (i.e layout: Prohibited Library, ilvl: 83), should always start with this when entering the Grand Heist as it will make every reward saved bound to that layout and ilvl.
+
+F2 - Screen capture the entire screen, it will take a screenshot of the current screen, read the text on it and save the data in a .csv output, it reads duplicates (in the last 60 seconds) and doesn't save them in the file.
+
+F4 - Provides you with a small snippet tool in case you like to manually take a screenshot of the item name/enchant and allows for duplicate values so if a wing had 2 or more of the same reward this is recommended.
+
+F3 - Well every tool needs a way to exit it, so this is all it does, closes the tool.
+
+Example Usages of the tool:
+<img width="1008" height="929" alt="image" src="https://github.com/user-attachments/assets/29c2f1b4-f185-4708-94b9-229a71b55de6" />
+
+It will save the data in a .csv file (saves/matches.csv) like the following (supported by google sheets, excel and so on)
+<img width="1754" height="908" alt="image" src="https://github.com/user-attachments/assets/7dddb6e3-2cf8-4b3c-8af6-3f6dcb57014e" />
+
 # SETUP
 
 ## Download the ZIP of this repository
