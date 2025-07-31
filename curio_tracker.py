@@ -138,7 +138,7 @@ def filter_item_text(image_np):
     return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
 
 def extract_currency_value(text, matched_term, term_types):
-    if term_types.get(matched_term) != "Currency" and term_types.get(matched_term) != "Currency":
+    if term_types.get(matched_term) != "Currency" and term_types.get(matched_term) != "Scarab":
         return None
 
     # Split text into lines
