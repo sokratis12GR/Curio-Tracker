@@ -451,6 +451,8 @@ def isCurrency(term, type):
     return term if type == "Currency" else ""
 
 def capture_layout():
+    global blueprint_area_level
+    global blueprint_layout
     screenshot = pyautogui.screenshot()
     full_width, full_height = screenshot.size
 
@@ -482,6 +484,8 @@ def capture_layout():
     # Report results
     # if c.DEBUGGING:
     if found_layout and area_level:
+        blueprint_area_level = area_level
+        blueprint_layout = found_layout 
         print("========== Result ==========")
         print(f"Layout: {found_layout}")
         print(f"Area Level: {area_level}")
