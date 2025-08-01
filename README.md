@@ -10,8 +10,12 @@ F4 - Provides you with a small snippet tool in case you like to manually take a 
 
 F3 - Well every tool needs a way to exit it, so this is all it does, closes the tool.
 
-Example Usages of the tool:
+### Example Usages of the tool:
 <img width="1008" height="929" alt="image" src="https://github.com/user-attachments/assets/29c2f1b4-f185-4708-94b9-229a71b55de6" />
+
+### Example using 0.1.5:
+<img width="1101" height="422" alt="image" src="https://github.com/user-attachments/assets/ca88c399-75a3-4832-808d-f94fb675b548" />
+
 
 It will save the data in a .csv file (saves/matches.csv) like the following (supported by google sheets, excel and so on)
 <img width="1754" height="908" alt="image" src="https://github.com/user-attachments/assets/7dddb6e3-2cf8-4b3c-8af6-3f6dcb57014e" />
