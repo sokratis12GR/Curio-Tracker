@@ -14,14 +14,13 @@ F3 - Well every tool needs a way to exit it, so this is all it does, closes the 
 <img width="1008" height="929" alt="image" src="https://github.com/user-attachments/assets/29c2f1b4-f185-4708-94b9-229a71b55de6" />
 
 ### Example using 0.1.5:
-<img width="1101" height="422" alt="image" src="https://github.com/user-attachments/assets/ca88c399-75a3-4832-808d-f94fb675b548" />
-
+<img width="1104" height="655" alt="image" src="https://github.com/user-attachments/assets/8f0b766a-2ec3-49a3-9dd8-b98171fd88d5" />
 
 It will save the data in a .csv file (saves/matches.csv) like the following (supported by google sheets, excel and so on)
-<img width="1754" height="908" alt="image" src="https://github.com/user-attachments/assets/7dddb6e3-2cf8-4b3c-8af6-3f6dcb57014e" />
+<img width="1277" height="739" alt="image" src="https://github.com/user-attachments/assets/b06361f1-4ef5-4cdb-841c-e41cb623a158" />
 
 Example import in google sheets:
-<img width="1882" height="815" alt="image" src="https://github.com/user-attachments/assets/bbdb43bf-6688-495a-af2c-2f9a173c4116" />
+<img width="1380" height="797" alt="image" src="https://github.com/user-attachments/assets/64adad67-726d-4186-81fe-2c90ef85c4b9" />
 
 
 # SETUP
