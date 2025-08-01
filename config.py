@@ -7,7 +7,6 @@ CSV_DEBUGGING = False
 # Defaykt values of blueprint layouts
 default_bp_lvl = "83"
 default_bp_area = "Prohibited Library"
-default_bp_area = "Records Office"
 
 layout_keywords = [
     "Bunker", "Records Office", "Mansion", "Smuggler's Den", "Underbelly",
