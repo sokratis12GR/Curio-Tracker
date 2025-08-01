@@ -15,6 +15,7 @@ layout_keywords = [
 TOP_RIGHT_CUT_WIDTH = 170
 TOP_RIGHT_CUT_HEIGHT = 100
 
+
 # Keys / Strings / Locations / Texts
 
 ## Logging
@@ -53,7 +54,8 @@ snippet_txt_too_small = "⚠️ Selected region is too small or invalid."
 snippet_txt_failed = "⚠️ Screenshot capture failed."
 
 ## Matches Info
-matches_found = "✅ Matches found:"
+matches_found = "✅ Matches found: "
+stack_size_found = " - Stack Size: {}"
 matches_not_found = "❌ No matches found."
 
 
