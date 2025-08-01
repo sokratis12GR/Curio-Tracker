@@ -31,7 +31,7 @@ csv_file_path = c.csv_file_path
 blueprint_area_level = c.default_bp_lvl
 blueprint_layout = c.default_bp_area
 
-stack_size = 0
+stack_sizes = {}
 
 non_dup_count = 0
 
@@ -54,7 +54,7 @@ def smart_title_case(text):
     # Apply smart title casing to each word
     return re.sub(r"\b\w+'?s?\b", lambda m: fix_word(m.group(0)), text)
 
-# Updated category imports
+# Loads all of the item types and items that can be found in heists.
 def load_csv_with_types(file_path):
     term_types = {}
     with open(file_path, newline='', encoding='utf-8-sig') as csvfile:
@@ -277,16 +277,31 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
     return matched
 
 def process_text(text, allow_dupes=False):
+    global stack_sizes
     results = []
     matched_terms = get_matched_terms(text, allow_dupes=allow_dupes)
 
+    for term_title, duplicate in matched_terms:
+        ratio = extract_currency_value(smart_title_case(text), term_title, term_types)
+        if ratio:
+            stack_size = f"{ratio[0]}"
+            stack_sizes[term_title] = stack_size
+            if c.DEBUGGING:
+                print(f"Ratio for {term_title}: {ratio[0]}/{ratio[1]}")
+        else:
+            stack_size = 0
+            stack_sizes[term_title] = stack_size  # Save 0 if no ratio found
+            if c.DEBUGGING:
+                print("[Currency Ratio] None found.")
 
     #### DUPE CHECKING 
     for term_title, duplicate in matched_terms:
+        stack_size = int(stack_sizes.get(term_title))
+        stack_size_txt = (c.stack_size_found.format(stack_size) if stack_size > 0 else "")
         if duplicate and not allow_dupes:
-            results.append(f"{term_title} (Duplicate - Skipping)")
+            results.append(f"{term_title} (Duplicate - Skipping)" + stack_size_txt)
         else:
-            results.append(term_title)
+            results.append(term_title + stack_size_txt)
 
     if c.DEBUGGING:
         highlighted = smart_title_case(text)
@@ -309,21 +324,10 @@ def process_text(text, allow_dupes=False):
 
 
 def write_csv_entry(text, timestamp, allow_dupes=False):
-    global stack_size
+    global stack_sizes
     write_header = not os.path.isfile(csv_file_path)
 
     matched_terms = get_matched_terms(text, allow_dupes=allow_dupes, use_fuzzy=False)
-    
-    for matched_term, duplicate in matched_terms:
-        ratio = extract_currency_value(smart_title_case(text), matched_term, term_types)
-        if ratio:
-            stack_size = f"{ratio[0]}"
-            if c.DEBUGGING:
-                print(f"Ratio for {matched_term}: {ratio[0]}/{ratio[1]}")
-        else:
-            stack_size = 0
-            if c.DEBUGGING:
-                print("[Currency Ratio] None found.")
 
     process_text(text, allow_dupes)
 
@@ -346,6 +350,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
         for term_title, duplicate in matched_terms:
             item_type = term_types.get(smart_title_case(term_title))  # assuming keys lowercase
             # Only write if allow_dupes or not duplicate
+            stack_size = stack_sizes.get(term_title)
             if allow_dupes or not duplicate:
                 writer.writerow([
                     user.poe_league, user.poe_user,
@@ -379,7 +384,6 @@ def capture_once():
     screenshot_np = np.array(screenshot)
     filtered = filter_item_text(screenshot_np)
     text = smart_title_case(pytesseract.image_to_string(filtered, config="--psm 6", lang="eng"))
-    global stack_size
 
     if c.DEBUGGING:
         cv2.imshow("Filtered Mask", filtered)
@@ -406,7 +410,6 @@ def capture_snippet():
     if bbox is None:
         print(c.not_found_target_snippet_txt)
         exit()
-    global stack_size
 
     root = tk.Tk()
     root.attributes("-alpha", 0.3)
