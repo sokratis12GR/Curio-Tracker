@@ -681,7 +681,7 @@ def capture_layout():
 
     # Search for monster level using regex
     match = re.search(r"Monster Level[: ]+(\d+)", text, re.IGNORECASE)
-    area_level = match.group(1) if match else c.area_level
+    area_level = match.group(1) if match else c.default_bp_lvl
 
     # Report results
     # if c.DEBUGGING:
