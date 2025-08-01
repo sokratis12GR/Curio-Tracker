@@ -67,10 +67,16 @@ def load_csv_with_types(file_path):
                 term_types[term_key] = type_name
     return term_types
 
+def load_body_armors(file_path):
+    body_armors = []
+    with open(file_path, "r", encoding="utf-8") as f:
+        body_armors = f.readlines()
+    return body_armors
+
 term_types = load_csv_with_types(c.file_name)
 all_terms = set(term_types.keys())
-
 seen_matches = set()
+body_armors = load_body_armors(c.file_body_armors)
 
 def get_poe_bbox():
     windows = [w for w in gw.getWindowsWithTitle(c.target_application) if w.visible]
@@ -137,8 +143,109 @@ def filter_item_text(image_np):
 
     return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
 
+
+#####################################
+# helpers for body armour ordering  # 
+#####################################
+def normalize_for_search(s: str) -> str:
+    s = s.replace("—", " ").replace("“", " ").replace("”", " ")
+    s = re.sub(r"[^\w\s%';]", " ", s)  # keep %, ', ; for precise matching
+    s = re.sub(r"\s+", " ", s)
+    return s.strip().lower()
+
+def build_body_armor_regex(body_armors):
+    normalized = []
+    for a in body_armors:
+        norm = normalize_for_search(smart_title_case(a))
+        if norm:
+            normalized.append(re.escape(norm))
+    if not normalized:
+        return None
+    normalized.sort(key=len, reverse=True)
+    return re.compile(r"\b(" + "|".join(normalized) + r")\b", re.IGNORECASE)
+
+body_armor_regex = build_body_armor_regex(body_armors)
+
+def find_first_body_armor_pos(text):
+    norm_text = normalize_for_search(text) 
+    # 1. exact via regex
+    if body_armor_regex:
+        match = body_armor_regex.search(norm_text)
+        if match:
+            if c.DEBUGGING:
+                print(f"[BodyArmor] Exact match '{match.group(1)}' at {match.start()} in normalized text: {norm_text!r}")
+            return match.start()
+
+    # 2. fuzzy fallback: try multi-word body armours first, then single-word
+    tokens = [(tok.group(0), tok.start()) for tok in re.finditer(r"\b[\w%']+\b", norm_text)]
+    token_words = [tok.lower() for tok, _ in tokens]
+    earliest = None
+    for raw in body_armors:
+        armour_title = smart_title_case(raw).strip()
+        norm_name = normalize_for_search(armour_title)
+        parts = norm_name.split()
+        if not parts:
+            continue
+
+        if len(parts) == 1:
+            # single-word fuzzy: match against tokens
+            close = get_close_matches(parts[0], token_words, n=1, cutoff=0.8)
+            if close:
+                best = close[0]
+                for tok, pos in tokens:
+                    if tok.lower() == best:
+                        if earliest is None or pos < earliest:
+                            earliest = pos
+                            if c.DEBUGGING:
+                                print(f"[BodyArmor] Fuzzy single-word match '{armour_title}' ≈ '{tok}' at {pos}")
+                        break
+        else:
+            # multi-word: find a sequence where each part fuzzily matches successive tokens
+            for i in range(len(tokens) - len(parts) + 1):
+                match = True
+                for offset, part in enumerate(parts):
+                    tok = tokens[i + offset][0].lower()
+                    if not get_close_matches(part, [tok], n=1, cutoff=0.7):
+                        match = False
+                        break
+                if match:
+                    pos = tokens[i][1]
+                    if earliest is None or pos < earliest:
+                        earliest = pos
+                        if c.DEBUGGING:
+                            seq = " ".join(tokens[i + j][0] for j in range(len(parts)))
+                            print(f"[BodyArmor] Fuzzy multi-word match '{armour_title}' ≈ '{seq}' at {pos}")
+                    break  # stop after first sequence for this armour
+    return earliest
+
+def find_first_enchant_piece_pos(term_title, text):
+    # take the part before ';'
+    part1 = term_title.split(";", 1)[0].strip()
+    # normalize both piece and text the same way
+    norm_piece = normalize_for_search(smart_title_case(part1))
+    norm_text = normalize_for_search(text)
+    # simple whole-word search
+    pattern = rf"\b{re.escape(norm_piece)}\b"
+    m = re.search(pattern, norm_text, re.IGNORECASE)
+    return m.start() if m else None
+
+MAX_DISTANCE = 200 # To play around and see if body armors would need more positions
+
+def is_armor_enchant_by_body_armor_order(term_title, text):
+    first_body = find_first_body_armor_pos(text)
+    first_enchant = find_first_enchant_piece_pos(term_title, text)
+    if c.DEBUGGING:
+        print(f"[OrderCheck] body_pos={first_body}, enchant_pos={first_enchant}, term='{term_title}'")
+    if first_body is not None and first_enchant is not None:
+        distance = first_enchant - first_body
+        return 0 <= distance <= MAX_DISTANCE
+    return False
+
+####################################################################
+# Checks for a match of x/y and if currency applies the stack size # 
+####################################################################
 def extract_currency_value(text, matched_term, term_types):
-    if term_types.get(matched_term) != "Currency" and term_types.get(matched_term) != "Scarab":
+    if term_types.get(matched_term) != c.CURRENCY_TYPE and term_types.get(matched_term) != c.SCARAB_TYPE:
         return None
 
     # Split text into lines
@@ -147,7 +254,7 @@ def extract_currency_value(text, matched_term, term_types):
     # Find the line index where matched_term appears (case insensitive)
     idx = None
     for i, line in enumerate(lines):
-        if matched_term.lower() in line.lower():
+        if matched_term.title() in line.title():
             idx = i
             break
 
@@ -168,20 +275,38 @@ def extract_currency_value(text, matched_term, term_types):
 # Check if a term or combo term is in the text. # 
 #################################################
 def is_term_match(term, text, use_fuzzy=False):
-    def clean_word(word):
-        return smart_title_case(word.strip(string.punctuation))
+    def normalize_lines(text):
+        return [normalize_for_search(line) for line in text.splitlines()]
 
+    raw_term = next((k for k in term_types if smart_title_case(k) == term), None)
+    term_type = term_types.get(raw_term, "")
+    term_type_cmp = smart_title_case(term_type) if isinstance(term_type, str) else ""
+
+    # Handle enchant combo terms
+    if ";" in term and term_type_cmp in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE):
+        part1, part2 = [normalize_for_search(p.strip()) for p in term.split(";", 1)]
+        norm_lines = normalize_lines(text)
+
+        # Try to find part1 followed by part2 within N lines
+        for i in range(len(norm_lines)):
+            if part1 in norm_lines[i]:
+                for j in range(1, 3):  # allow match across next 2 lines
+                    if i + j < len(norm_lines) and part2 in norm_lines[i + j]:
+                        if c.DEBUGGING:
+                            print(f"[EnchantCombo] Found '{part1}' then '{part2}' on lines {i} and {i+j}")
+                        return True
+        return False
+
+    # Standard term matching
     def find_piece_positions(piece):
         piece_title = smart_title_case(piece)
         positions = []
 
-        # exact whole-word matches
         pattern = rf"\b{re.escape(piece_title)}\b"
         for m in re.finditer(pattern, text, re.IGNORECASE):
             positions.append(m.start())
 
-        if use_fuzzy: ### VERY INACCURATE, NEEDS MORE TESTING
-            # tokenize to approximate fuzzy candidates
+        if use_fuzzy:
             word_pattern = r"\b[\w%']+\b"
             tokens = [(m.group(0), m.start()) for m in re.finditer(word_pattern, text)]
             max_len_diff = 2
@@ -191,28 +316,12 @@ def is_term_match(term, text, use_fuzzy=False):
                 best = close[0]
                 for tok, pos in tokens:
                     if smart_title_case(tok) == smart_title_case(best):
-                        print(f"[Fuzzy match] Term piece: '{piece}' ≈ '{tok}'")
+                        if c.DEBUGGING:
+                            print(f"[Fuzzy match] Term piece: '{piece}' ≈ '{tok}'")
                         positions.append(pos)
         return positions
 
-    raw_term = next((k for k in term_types if smart_title_case(k) == term), None)
-    term_type = term_types.get(raw_term, "")
-    term_type_cmp = term_type.lower() if isinstance(term_type, str) else ""
-
-    ### MATCHES FOR HANDLING ENCHANTS BY SPLITTING ON ; AND CHECKING IF THE COMBO FOLLOWS LINE ORDER CORRECTLY.
-    if ";" in term and term_type_cmp == "enchants":
-        part1, part2 = [p.strip() for p in term.split(";", 1)]
-        pos1 = find_piece_positions(part1)
-        pos2 = find_piece_positions(part2)
-        if not pos1 or not pos2:
-            return False
-        for indexX in pos1:
-            for indexY in pos2:
-                if indexY > indexX:
-                    return True
-        return False
-    else:
-        return bool(find_piece_positions(term))
+    return bool(find_piece_positions(term))
 
 
 def is_duplicate_recent_entry(value,path=csv_file_path):
@@ -257,16 +366,19 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
     suppress_parts = set()
     full_enchant_terms = set()
     for term_title, _ in all_candidates:
-        if ";" in term_title and term_types.get(term_title, "").lower() == "enchants":
+        if ";" in term_title and ((term_types.get(term_title) in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE))):
             part1, part2 = [smart_title_case(p.strip()) for p in term_title.split(";", 1)]
             suppress_parts.add(part1)
             suppress_parts.add(part2)
             full_enchant_terms.add(term_title)
 
+    if c.DEBUGGING and term_title in suppress_parts and term_title not in full_enchant_terms:
+        print(f"[Suppress] Skipping sub-part match: {term_title}")
+    
     matched = []
     for term_title, duplicate in all_candidates:
         if term_title in suppress_parts and term_title not in full_enchant_terms:
-            continue
+            continue 
 
         if allow_dupes or not duplicate:
             matched.append((term_title, duplicate))
@@ -276,10 +388,12 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
             matched.append((term_title, True))  # keep the duplicate flag
     return matched
 
-def process_text(text, allow_dupes=False):
+def process_text(text, allow_dupes=False, matched_terms=None):
     global stack_sizes
     results = []
-    matched_terms = get_matched_terms(text, allow_dupes=allow_dupes)
+
+    if matched_terms is None:
+        matched_terms = get_matched_terms(text, allow_dupes=allow_dupes)
 
     for term_title, duplicate in matched_terms:
         ratio = extract_currency_value(smart_title_case(text), term_title, term_types)
@@ -324,12 +438,12 @@ def process_text(text, allow_dupes=False):
 
 
 def write_csv_entry(text, timestamp, allow_dupes=False):
-    global stack_sizes
+    global stack_sizes, body_armors
     write_header = not os.path.isfile(csv_file_path)
 
     matched_terms = get_matched_terms(text, allow_dupes=allow_dupes, use_fuzzy=False)
 
-    process_text(text, allow_dupes)
+    process_text(text, allow_dupes, matched_terms)
 
 
     with open(csv_file_path, "a", newline='', encoding="utf-8") as csvfile:
@@ -348,10 +462,27 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
             ])
 
         for term_title, duplicate in matched_terms:
-            item_type = term_types.get(smart_title_case(term_title))  # assuming keys lowercase
-            # Only write if allow_dupes or not duplicate
+            item_type = term_types.get(smart_title_case(term_title)) 
             stack_size = stack_sizes.get(term_title)
+
+            weapon_enchant_flag = ""
+            armor_enchant_flag = ""
+
+            is_enchant_combo = item_type in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE)
+
+
+            if is_enchant_combo:
+                if is_armor_enchant_by_body_armor_order(term_title, text):
+                    armor_enchant_flag = term_title
+                else:
+                    weapon_enchant_flag = term_title
+            else:
+                weapon_enchant_flag = addIfWeaponEnchant(term_title, item_type)
+                armor_enchant_flag = addIfArmorEnchant(term_title, item_type)
+
             if allow_dupes or not duplicate:
+                if c.DEBUGGING:
+                    print(f"[WriteCSV] Writing row for term: {term_title}")
                 writer.writerow([
                     user.poe_league, user.poe_user,
                     blueprint_layout, blueprint_area_level,
@@ -359,10 +490,27 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                     addIfReplacement(term_title, item_type),
                     addIfReplica(term_title, item_type),
                     addIfExperimental(term_title, item_type),
-                    addIfEnchant(term_title, item_type),
-                    addIfEnchant(term_title, item_type),
+                    weapon_enchant_flag,
+                    armor_enchant_flag,
                     addIfScarab(term_title, item_type),
                     addIfCurrency(term_title, item_type),
+                    stack_size if (int(stack_size) > 0 and isCurrencyOrScarab(term_title, item_type)) else "",
+                    "",
+                    False,
+                    timestamp
+                ])
+            if c.DEBUGGING and c.CSV_DEBUGGING and (allow_dupes or not duplicate):
+                writer.writerow([
+                    user.poe_league, user.poe_user,
+                    blueprint_layout, blueprint_area_level,
+                    "Trinket: " + addIfTrinket(term_title, item_type),
+                    "Replacement: " + addIfReplacement(term_title, item_type),
+                    "Replica: " + addIfReplica(term_title, item_type),
+                    "Experimental: " + addIfExperimental(term_title, item_type),
+                    "WeaponEnchant: " + weapon_enchant_flag,
+                    "ArmorEnchant: " + armor_enchant_flag,
+                    "Scarab: " + addIfScarab(term_title, item_type),
+                    "Currency: " + addIfCurrency(term_title, item_type),
                     stack_size if (int(stack_size) > 0 and isCurrencyOrScarab(term_title, item_type)) else "",
                     "",
                     False,
@@ -478,28 +626,31 @@ def capture_snippet():
     root.mainloop()
 
 def addIfTrinket(term, type):
-    return term if type == "Trinket" else ""
+    return term if type == c.TRINKET_TYPE else ""
 
 def addIfReplacement(term, type):
-    return term if type == "Replacement" else ""
+    return term if type == c.REPLACEMENT_TYPE else ""
 
 def addIfReplica(term, type):
-    return term if type == "Replica" else ""
+    return term if type == c.REPLICA_TYPE else ""
 
 def addIfExperimental(term, type):
-    return term if type == "Experimental" else ""
+    return term if type == c.EXPERIMENTAL_TYPE else ""
 
-def addIfEnchant(term, type):
-    return term if type == "Enchants" else ""
+def addIfWeaponEnchant(term, type):
+    return term if type == c.ARMOR_ENCHANT_TYPE else ""
+
+def addIfArmorEnchant(term, type):
+    return term if type == c.WEAPON_ENCHANT_TYPE else ""
 
 def addIfScarab(term, type):
-    return term if type == "Scarab" else ""
+    return term if type == c.SCARAB_TYPE else ""
 
 def addIfCurrency(term, type):
-    return term if type == "Currency" else ""
+    return term if type == c.CURRENCY_TYPE else ""
 
 def isCurrencyOrScarab(term, type):
-    return type == "Currency" or type == "Scarab"
+    return type == c.CURRENCY_TYPE or type == c.SCARAB_TYPE
 
 def capture_layout():
     global blueprint_area_level
@@ -519,18 +670,18 @@ def capture_layout():
     text = smart_title_case(pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6'))
     if c.DEBUGGING:
         print("OCR Text:\n", text)
+        cropped.show()
 
     # Search for layout keyword
     found_layout = None
     for keyword in c.layout_keywords:
         if smart_title_case(keyword) in text:
             found_layout = keyword
-            blueprint_layout = keyword
             break
 
     # Search for monster level using regex
     match = re.search(r"Monster Level[: ]+(\d+)", text, re.IGNORECASE)
-    area_level = match.group(1) if match else "Not found"
+    area_level = match.group(1) if match else c.area_level
 
     # Report results
     # if c.DEBUGGING:
@@ -545,7 +696,7 @@ def capture_layout():
         print("❌ Not found, try again.")
 
 
-# If you dislike F2 and F3 to be capture/exit feel free to change them in (config.py)
+# HOTKEY/KEYBIND HANDLING
 def main():
     print(c.info_show_keys_capture)
     print(c.info_show_keys_snippet)

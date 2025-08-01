@@ -2,6 +2,7 @@ import user_settings as user
 
 # Enable DEBUGGING
 DEBUGGING = False
+CSV_DEBUGGING = False
 
 # Defaykt values of blueprint layouts
 default_bp_lvl = "83"
@@ -15,6 +16,15 @@ layout_keywords = [
 TOP_RIGHT_CUT_WIDTH = 170
 TOP_RIGHT_CUT_HEIGHT = 100
 
+# Type constants
+TRINKET_TYPE = "Trinket"
+REPLACEMENT_TYPE = "Replacement"
+REPLICA_TYPE = "Replica"
+EXPERIMENTAL_TYPE = "Experimental"
+WEAPON_ENCHANT_TYPE = "Weapon Enchants"
+ARMOR_ENCHANT_TYPE = "Armor Enchants"
+SCARAB_TYPE = "Scarab"
+CURRENCY_TYPE = "Currency"
 
 # Keys / Strings / Locations / Texts
 
@@ -45,8 +55,9 @@ csv_time_header = "Time"
 csv_type_header = "Type"
 csv_value_header = "Value"
 
-### Input Value fo "Valid Experimental/Replicas/Scarabs/Currencies/Enchants/Replacements"
-file_name = "AllValid.csv"
+### Input Value fo "Trinket/Replacement/Replica/Experimental/Weapon Enchants/Armor Enchants/Scarab/Currency"
+file_name = "all_valid_heist_terms.csv"
+file_body_armors = "body_armors.txt"
 target_application = "Path of Exile"
 not_found_target_txt = "❌ Path of Exile window not found."
 not_found_target_snippet_txt = "❌ Path of Exile window not found. Exiting snippet."
