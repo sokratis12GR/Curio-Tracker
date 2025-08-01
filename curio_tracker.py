@@ -245,31 +245,41 @@ def is_armor_enchant_by_body_armor_order(term_title, text):
 # Checks for a match of x/y and if currency applies the stack size # 
 ####################################################################
 def extract_currency_value(text, matched_term, term_types):
-    if term_types.get(matched_term) != c.CURRENCY_TYPE and term_types.get(matched_term) != c.SCARAB_TYPE:
+    if term_types.get(matched_term) not in {c.CURRENCY_TYPE, c.SCARAB_TYPE}:
         return None
 
-    # Split text into lines
     lines = text.splitlines()
-
-    # Find the line index where matched_term appears (case insensitive)
-    idx = None
-    for i, line in enumerate(lines):
-        if matched_term.title() in line.title():
-            idx = i
-            break
-
+    idx = next((i for i, line in enumerate(lines) if matched_term.title() in line.title()), None)
     if idx is None:
-        return None  # term not found in text lines
+        return None
 
-    # Look for ratio pattern in next few lines (say next 2 lines)
-    for j in range(idx + 1, min(idx + 3, len(lines))):
+    # Try to find "x/y" in current and next 2 lines
+    for j in range(idx, min(idx + 3, len(lines))):
         match = re.search(r"\b(\d+)\s*/\s*(\d+)\b", lines[j])
         if match:
-            current = int(match.group(1))
-            maximum = int(match.group(2))
-            return (current, maximum)
+            raw_current = match.group(1)
+            raw_maximum = match.group(2)
 
-    return None
+            try:
+                current = int(raw_current)
+                maximum = int(raw_maximum)
+            except ValueError:
+                continue  # skip invalid number strings
+
+            # Accept valid values like 19/20
+            if 0 < current <= maximum <= 20:
+                return (current, maximum)
+
+            # Try to correct OCR errors (e.g. 419/20 → 9/20)
+            if maximum == 20:
+                current = int(str(current)[-1])  # take last digit
+                if current <= 20:
+                    return (current, 20)
+
+            return None  # invalid even after fix
+
+    # Fallback: pattern not found at all
+    return (1, 20)
 
 #################################################
 # Check if a term or combo term is in the text. # 
@@ -603,8 +613,18 @@ def capture_snippet():
 
         filtered = filter_item_text(screenshot_np)
         text = smart_title_case(pytesseract.image_to_string(filtered, config="--psm 6", lang="eng"))
+        
+        h, w, _ = filtered.shape
+
 
         if c.DEBUGGING:
+            boxes = pytesseract.image_to_boxes(filtered)
+            for b in boxes.splitlines():
+                b = b.split()
+                char, x1, y1, x2, y2 = b[0], int(b[1]), int(b[2]), int(b[3]), int(b[4])
+                
+                cv2.rectangle(filtered, (x1, h - y1), (x2, h - y2), (0, 255, 0), 1)
+                cv2.putText(filtered, char, (x1, h - y1 + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
             cv2.imshow("Filtered Snippet", filtered)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
