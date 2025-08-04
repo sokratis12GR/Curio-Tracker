@@ -23,7 +23,7 @@ Example import in google sheets:
 <img width="1380" height="797" alt="image" src="https://github.com/user-attachments/assets/64adad67-726d-4186-81fe-2c90ef85c4b9" />
 
 
-# SETUP
+# SETUP (Step by Step)
 
 ## Download the ZIP of this repository
 #### By clicking the green "<> Code" btn.
@@ -34,27 +34,30 @@ Example import in google sheets:
 
 Once downloaded, extract in a folder of preference, to continue follow the next steps.
 
-## Python 
+## 1. Python 
 This program runs on python, you will need to have it on your system, you can get it via the following link: https://www.python.org/downloads/
 
-**Important**: During installation, check the box `"Add Python to PATH"`
+### 1.1 **Important**: During installation
+Check the box `"Add Python to PATH"`
 
-### Python Libraries
+### 1.2 Python Libraries
 
 To use the tool we will need to download some libraries, run the following command in cmd (make sure the prior step is followed):
 > pip install keyboard pyautogui opencv-python numpy pytesseract pillow pygetwindow termcolor
 
-## Tesseract OCR
+## 2. Tesseract OCR
 We will need the OCR to capture the screen and read the text from the captured image.
 
 To download it use the following link: https://github.com/tesseract-ocr/tesseract/releases/tag/5.5.0 and get the `.exe` file from "Assets", **install it inside a folder by itself**.
 
 Once installed replace the following in the script with your installation path of Tesseract-OCR located in the `user_settings.py` file.
 
+### 2.1 Set the OCR path in the user_settngs.py
+
 Open with a text editor and search for `tesseract_path = r"D:\Dev\Tesseract-OCR\tesseract.exe"`:
 > `tesseract_path = r"YOUR/PATH/TO/tesseract.exe"`
 
-## CONFIG (TL;DR) `user_settings.py`
+## 3. CONFIG (TL;DR) `user_settings.py`
 Update the following entries
 
 `poe_league = "3.26"` to the current league
