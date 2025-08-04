@@ -300,18 +300,23 @@ def is_term_match(term, text, use_fuzzy=False):
 
     # Handle enchant combo terms
     if ";" in term and term_type_cmp in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE):
-        part1, part2 = [normalize_for_search(p.strip()) for p in term.split(";", 1)]
+        part1_raw, part2_raw = [p.strip() for p in term.split(";", 1)]
+        part1 = normalize_for_search(smart_title_case(part1_raw))
+        part2 = normalize_for_search(smart_title_case(part2_raw))
         norm_lines = normalize_lines(text)
 
-        # Try to find part1 followed by part2 within N lines
-        for i in range(len(norm_lines)):
-            if part1 in norm_lines[i]:
-                for j in range(1, 3):  # allow match across next 2 lines
-                    if i + j < len(norm_lines) and part2 in norm_lines[i + j]:
-                        if c.DEBUGGING:
-                            print(f"[EnchantCombo] Found '{part1}' then '{part2}' on lines {i} and {i+j}")
-                        return True
-        return False
+        def find_combo(p1, p2):
+            for i in range(len(norm_lines)):
+                if p1 in norm_lines[i]:
+                    for j in range(1, 3):  # allow match across next 2 lines
+                        if i + j < len(norm_lines) and p2 in norm_lines[i + j]:
+                            if c.DEBUGGING:
+                                print(f"[EnchantCombo] Found '{p1}' then '{p2}' on lines {i} and {i+j}")
+                            return True
+            return False
+
+        # Try original and flipped order
+        return find_combo(part1, part2) or find_combo(part2, part1)
 
     # Standard term matching
     def find_piece_positions(piece):
