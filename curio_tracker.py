@@ -54,6 +54,11 @@ def smart_title_case(text):
     # Apply smart title casing to each word
     return re.sub(r"\b\w+'?s?\b", lambda m: fix_word(m.group(0)), text)
 
+
+def get_resource_path(filename):
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, filename)
+
 # Loads all of the item types and items that can be found in heists.
 def load_csv_with_types(file_path):
     term_types = {}
@@ -73,10 +78,10 @@ def load_body_armors(file_path):
         body_armors = f.readlines()
     return body_armors
 
-term_types = load_csv_with_types(c.file_name)
+term_types = load_csv_with_types(get_resource_path(c.file_name))
 all_terms = set(term_types.keys())
 seen_matches = set()
-body_armors = load_body_armors(c.file_body_armors)
+body_armors = load_body_armors(get_resource_path(c.file_body_armors))
 
 def get_poe_bbox():
     windows = [w for w in gw.getWindowsWithTitle(c.target_application) if w.visible]
