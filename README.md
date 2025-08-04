@@ -34,13 +34,19 @@ Example import in google sheets:
 
 Once downloaded, extract in a folder of preference, to continue follow the next steps.
 
-## 1. Python 
-This program runs on python, you will need to have it on your system, you can get it via the following link: https://www.python.org/downloads/
+## 1. Python
 
-### 1.1 **Important**: During installation
+## 1. Python 
+This program runs on python, you will need to have it on your system, you can get it via the following ways:
+
+### 1.1 Run `setup.bat` (Skip to 2. if all correctly installed)
+
+### 1.1 (Alternative): Go to https://www.python.org/downloads/ and install latest
+
+### 1.2 **Important**: During installation
 Check the box `"Add Python to PATH"`
 
-### 1.2 Python Libraries
+### 1.3 Python Libraries
 
 To use the tool we will need to download some libraries, run the following command in cmd (make sure the prior step is followed):
 > pip install keyboard pyautogui opencv-python numpy pytesseract pillow pygetwindow termcolor
