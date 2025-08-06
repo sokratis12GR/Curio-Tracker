@@ -658,7 +658,7 @@ def capture_snippet():
     root.mainloop()
 
 def addIfTrinket(term, type):
-    return term if type == c.TRINKET_TYPE else ""
+    return c.trinket_data_name if type == c.TRINKET_TYPE else ""
 
 def addIfReplacement(term, type):
     return term if type == c.REPLACEMENT_TYPE else ""
