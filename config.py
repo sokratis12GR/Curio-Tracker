@@ -56,6 +56,7 @@ csv_value_header = "Value"
 
 ### Input Value fo "Trinket/Replacement/Replica/Experimental/Weapon Enchants/Armor Enchants/Scarab/Currency"
 file_name = "all_valid_heist_terms.csv"
+trinket_data_name = "Thief's Trinket"
 file_body_armors = "body_armors.txt"
 target_application = "Path of Exile"
 not_found_target_txt = "❌ Path of Exile window not found."
