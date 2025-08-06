@@ -683,19 +683,40 @@ def addIfCurrency(term, type):
 def isCurrencyOrScarab(term, type):
     return type == c.CURRENCY_TYPE or type == c.SCARAB_TYPE
 
+def get_top_right_layout(screen_width, screen_height, aspect_ratio):
+    aspect_ratio = c.TOP_RIGHT_CUT_WIDTH / c.TOP_RIGHT_CUT_HEIGHT
+    total_area = screen_width * screen_height
+    target_area = total_area * 0.01  # 1% of screen
+
+    region_height = math.sqrt(target_area / aspect_ratio)
+    region_width = region_height * aspect_ratio
+
+    region_width = int(region_width)
+    region_height = int(region_height)
+
+    left = screen_width - region_width
+    top = 0
+    right = screen_width
+    bottom = region_height
+
+    return (left, top, right, bottom)
+
+
 def capture_layout():
     global blueprint_area_level
     global blueprint_layout
+    global attempt
+    
     screenshot = pyautogui.screenshot()
     full_width, full_height = screenshot.size
 
     # Define the top-right crop region
-    left = full_width - c.TOP_RIGHT_CUT_WIDTH
-    top = 0
-    right = full_width
-    bottom = c.TOP_RIGHT_CUT_HEIGHT
+    # left = full_width - c.TOP_RIGHT_CUT_WIDTH
+    # top = 0
+    # right = full_width
+    # bottom = c.TOP_RIGHT_CUT_HEIGHT
 
-    cropped = screenshot.crop((left, top, right, bottom))
+    cropped = screenshot.crop(get_top_right_layout(full_width, full_height))
 
     # Run OCR on the cropped region
     text = smart_title_case(pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6'))
@@ -719,12 +740,14 @@ def capture_layout():
     if found_layout and area_level:
         blueprint_area_level = area_level
         blueprint_layout = found_layout 
-        print("========== Result ==========")
+        print("\n========== Result ==========")
         print(f"Layout: {found_layout}")
         print(f"Area Level: {area_level}")
-        print("="*27)
+        print("="*28)
+        attempt = 1
     else:
-        print("❌ Not found, try again.")
+        print(f"âŒ Not found, try again. Attempt: #{attempt}", end="\r")
+        attempt += 1
 
 
 # HOTKEY/KEYBIND HANDLING
