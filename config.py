@@ -1,4 +1,30 @@
-import user_settings as user
+import os
+import sys
+import configparser
+
+######################################################################
+# LOADS THE SETTINGS VALUES SET IN USER_SETTINGS.INI                 #
+######################################################################
+def load_settings():
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.argv[0])))
+    settings_path = os.path.join(base_path, 'user_settings.ini')
+
+    if not os.path.exists(settings_path):
+        raise FileNotFoundError(f"Settings file not found at {settings_path}")
+
+    settings = configparser.ConfigParser()
+    settings.read(settings_path)
+    return settings
+
+settings = load_settings()
+
+poe_league = settings['DEFAULT'].get('poe_league')
+poe_user = settings['DEFAULT'].get('poe_user')
+capture_key = settings['DEFAULT'].get('capture_key')
+exit_key = settings['DEFAULT'].get('exit_key')
+layout_capture_key = settings['DEFAULT'].get('layout_capture_key')
+snippet_key = settings['DEFAULT'].get('snippet_key')
+enable_debugging_key = settings['DEFAULT'].get('enable_debugging_key')
 
 # Enable DEBUGGING
 DEBUGGING = False
@@ -65,7 +91,7 @@ snippet_txt_too_small = "⚠️ Selected region is too small or invalid."
 snippet_txt_failed = "⚠️ Screenshot capture failed."
 
 ## Matches Info
-matches_found = "✅ Matches found: "
+matches_found = "\n✅ Matches found: "
 stack_size_found = " - Stack Size: {}"
 matches_not_found = "❌ No matches found."
 
@@ -73,15 +99,15 @@ matches_not_found = "❌ No matches found."
 ## Capturing / Exiting
 
 
-info_show_keys_capture = "🖼️ Press {} to capture All Curios on Screen w/o duplicates.".format(user.capture_key.upper())
-info_show_keys_snippet = "✂️ Press {} to snippet a region to capture w/ duplicates.".format(user.snippet_key.upper())
-info_show_keys_layout = "🗺️ Press {} to set current layout (type, alvl) data.".format(user.layout_capture_key.upper())
-info_show_keys_exit = "❌ Press {} to exit the script.\n".format(user.exit_key.upper())
+info_show_keys_capture = "🖼️ Press {} to capture All Curios on Screen w/o duplicates.".format(capture_key.upper())
+info_show_keys_snippet = "✂️ Press {} to snippet a region to capture w/ duplicates.".format(snippet_key.upper())
+info_show_keys_layout = "🗺️ Press {} to set current layout (type, alvl) data.".format(layout_capture_key.upper())
+info_show_keys_exit = "❌ Press {} to exit the script.\n".format(exit_key.upper())
 
 
-capturing_prompt = "📸 Capturing screen..."
-layout_prompt = "📸 Capturing layout..."
-exiting_prompt = "👋 Exiting."
+capturing_prompt = "\n📸 Capturing screen..."
+layout_prompt = "\n📸 Capturing layout..."
+exiting_prompt = "\n👋 Exiting."
 
 # Time Duplicate values checker:
 time_column_index = 15 # 16th column of the .csv file contains the time var

@@ -1,0 +1,1 @@
+pyinstaller curio_tracker.spec

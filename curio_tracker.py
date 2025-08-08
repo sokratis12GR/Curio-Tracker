@@ -10,6 +10,7 @@ import pygetwindow as gw
 import re
 import string
 import csv
+import ctypes
 import time
 import math
 import sys
@@ -19,10 +20,16 @@ from datetime import datetime, timedelta
 import config as c
 from datetime import datetime
 from termcolor import colored
-import user_settings as user
 
-# Set path to tesseract executable (Check README)
-pytesseract.pytesseract.tesseract_cmd = user.tesseract_path
+def set_tesseract_path():
+    if hasattr(sys, '_MEIPASS'):
+        tesseract_bin = os.path.join(sys._MEIPASS, 'tesseract.exe')
+    else:
+        tesseract_bin = os.path.join('tesseract', 'tesseract.exe')
+
+    pytesseract.pytesseract.tesseract_cmd = tesseract_bin
+
+set_tesseract_path()
 
 os.makedirs(c.logs_dir, exist_ok=True)
 os.makedirs(c.saves_dir, exist_ok=True)
@@ -36,6 +43,34 @@ blueprint_layout = c.default_bp_area
 stack_sizes = {}
 
 non_dup_count = 0
+attempt = 1
+
+######################################################################
+# Get console window handle. As well as a helper to bring it forward #
+######################################################################
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+
+SW_RESTORE = 9
+
+def bring_console_to_front():
+    hwnd = kernel32.GetConsoleWindow()
+    if hwnd == 0:
+        print("No console window found.")
+        return False
+
+    # Get thread IDs
+    foreground_hwnd = user32.GetForegroundWindow()
+    current_thread_id = kernel32.GetCurrentThreadId()
+    foreground_thread_id = user32.GetWindowThreadProcessId(foreground_hwnd, 0)
+
+    # Attach input threads so SetForegroundWindow works
+    user32.AttachThreadInput(foreground_thread_id, current_thread_id, True)
+    user32.ShowWindow(hwnd, SW_RESTORE)
+    user32.SetForegroundWindow(hwnd)
+    user32.AttachThreadInput(foreground_thread_id, current_thread_id, False)
+
+    return True
 
 ####################################################################
 # Fixes title case issues like checking for items with apostrophes #
@@ -411,7 +446,7 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
     return matched
 
 def process_text(text, allow_dupes=False, matched_terms=None):
-    global stack_sizes
+    global stack_sizes, attempt
     results = []
 
     if matched_terms is None:
@@ -454,8 +489,14 @@ def process_text(text, allow_dupes=False, matched_terms=None):
         print(c.matches_found, results)
         if non_dup_count % 5 == 0:
             print("=" * 27)
+        attempt = 1
     else:
-        print(c.matches_not_found)
+        status = f"{c.matches_not_found} Attempt: #{attempt}"
+        sys.stdout.write('\r' + status + ' ' * 10)  # clear leftover chars
+        sys.stdout.flush()
+        attempt += 1
+
+    
 
 
 
@@ -506,7 +547,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                 if c.DEBUGGING:
                     print(f"[WriteCSV] Writing row for term: {term_title}")
                 writer.writerow([
-                    user.poe_league, user.poe_user,
+                    c.poe_league, c.poe_user,
                     blueprint_layout, blueprint_area_level,
                     addIfTrinket(term_title, item_type),
                     addIfReplacement(term_title, item_type),
@@ -523,7 +564,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                 ])
             if c.DEBUGGING and c.CSV_DEBUGGING and (allow_dupes or not duplicate):
                 writer.writerow([
-                    user.poe_league, user.poe_user,
+                    c.poe_league, c.poe_user,
                     blueprint_layout, blueprint_area_level,
                     "Trinket: " + addIfTrinket(term_title, item_type),
                     "Replacement: " + addIfReplacement(term_title, item_type),
@@ -567,6 +608,7 @@ def capture_once():
 
     os.makedirs(c.saves_dir, exist_ok=True)
     write_csv_entry(text, timestamp)
+    bring_console_to_front()
   
 
 #####################################################
@@ -656,6 +698,7 @@ def capture_snippet():
     canvas.bind("<ButtonRelease-1>", on_mouse_up)
 
     root.mainloop()
+    bring_console_to_front()
 
 def addIfTrinket(term, type):
     return c.trinket_data_name if type == c.TRINKET_TYPE else ""
@@ -684,7 +727,7 @@ def addIfCurrency(term, type):
 def isCurrencyOrScarab(term, type):
     return type == c.CURRENCY_TYPE or type == c.SCARAB_TYPE
 
-def get_top_right_layout(screen_width, screen_height, aspect_ratio):
+def get_top_right_layout(screen_width, screen_height):
     aspect_ratio = c.TOP_RIGHT_CUT_WIDTH / c.TOP_RIGHT_CUT_HEIGHT
     total_area = screen_width * screen_height
     target_area = total_area * 0.01  # 1% of screen
@@ -704,9 +747,7 @@ def get_top_right_layout(screen_width, screen_height, aspect_ratio):
 
 
 def capture_layout():
-    global blueprint_area_level
-    global blueprint_layout
-    global attempt
+    global blueprint_area_level, blueprint_layout, attempt
     
     screenshot = pyautogui.screenshot()
     full_width, full_height = screenshot.size
@@ -738,17 +779,22 @@ def capture_layout():
 
     # Report results
     # if c.DEBUGGING:
+
     if found_layout and area_level:
         blueprint_area_level = area_level
-        blueprint_layout = found_layout 
+        blueprint_layout = found_layout
         print("\n========== Result ==========")
         print(f"Layout: {found_layout}")
         print(f"Area Level: {area_level}")
         print("="*28)
         attempt = 1
     else:
-        print(f"âŒ Not found, try again. Attempt: #{attempt}", end="\r")
+        status = f"❌ Not found, try again. Attempt: #{attempt}"
+        sys.stdout.write('\r' + status + ' ' * 20)
+        sys.stdout.flush()
         attempt += 1
+
+    bring_console_to_front()
 
 
 # HOTKEY/KEYBIND HANDLING
@@ -760,15 +806,15 @@ def main():
     exit_event = threading.Event()
 
     def handle_capture():
-        print(c.capturing_prompt)
+        validateAttempt(c.capturing_prompt)
         capture_once()
 
     def handle_snippet():
-        print(c.capturing_prompt)
+        validateAttempt(c.capturing_prompt)
         capture_snippet()
 
     def handle_layout_capture():
-        print(c.layout_prompt)
+        validateAttempt(c.layout_prompt)
         capture_layout()
 
     def handle_exit():
@@ -781,11 +827,11 @@ def main():
         print("Debugging: {}".format("Enabled" if c.DEBUGGING else "Disabled"))
 
     # Register global hotkeys
-    keyboard.add_hotkey(user.capture_key, handle_capture)
-    keyboard.add_hotkey(user.layout_capture_key, handle_layout_capture)
-    keyboard.add_hotkey(user.exit_key, handle_exit)
-    keyboard.add_hotkey(user.snippet_key, handle_snippet)
-    keyboard.add_hotkey(user.enable_debugging_key, handle_debugging)
+    keyboard.add_hotkey(c.capture_key, handle_capture)
+    keyboard.add_hotkey(c.layout_capture_key, handle_layout_capture)
+    keyboard.add_hotkey(c.exit_key, handle_exit)
+    keyboard.add_hotkey(c.snippet_key, handle_snippet)
+    keyboard.add_hotkey(c.enable_debugging_key, handle_debugging)
 
     # Keep the program running
     print("Listening for keybinds... Press your exit key to stop.")
@@ -796,6 +842,12 @@ def main():
     except KeyboardInterrupt:
         print("Interrupted by user. Exiting.")
         keyboard.unhook_all_hotkeys()
+
+
+def validateAttempt(print_text):
+    global attempt
+    if attempt == 1:
+        print(print_text)
 
 
 if __name__ == "__main__":
