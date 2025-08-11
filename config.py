@@ -6,8 +6,14 @@ import configparser
 # LOADS THE SETTINGS VALUES SET IN USER_SETTINGS.INI                 #
 ######################################################################
 def load_settings():
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.argv[0])))
-    settings_path = os.path.join(base_path, 'user_settings.ini')
+    if getattr(sys, 'frozen', False):
+        # Running as a bundled exe
+        base_path = os.path.dirname(sys.executable)
+    else:
+        # Running normally
+        base_path = os.path.abspath(".")
+
+    settings_path = os.path.join(base_path, "user_settings.ini")
 
     if not os.path.exists(settings_path):
         raise FileNotFoundError(f"Settings file not found at {settings_path}")
