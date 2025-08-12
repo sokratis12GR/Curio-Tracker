@@ -62,9 +62,7 @@ Temporarily: For currencies the stack sizes is not always correctly captured, it
 ## 1. Python 
 This program runs on python, you will need to have it on your system, you can get it via the following ways:
 
-### 1.a Run `setup.bat` (Skip to 2. if all correctly installed)
-
-### 1.b (Alternative): Go to https://www.python.org/downloads/ and install latest
+### 1: Go to https://www.python.org/downloads/ and install latest
 
 #### 1.1 **Important**: During installation
 Check the box `"Add Python to PATH"`
@@ -94,6 +92,10 @@ Afterwards just type `py curio_tracker.py`
 
 Otherwise can use `py PATH/TO/CURIO/TRACKER/curio_tracker.py`
 
-# Appreciate any feedback ^^
+# Troubleshooting
+In case the app crashes or has an error image, please do not hesitate to create an issue ticket at [Create Issue](https://github.com/sokratis12GR/Curio-Tracker/issues/new).
+- Provide a screenshot, or a detailed explanation of the issue
+
+***Appreciate any feedback ^^***
 
 
