@@ -1,8 +1,0 @@
-keyboard
-pyautogui
-opencv-python
-numpy
-pytesseract
-pillow
-pygetwindow
-termcolor
