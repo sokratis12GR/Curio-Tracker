@@ -32,10 +32,32 @@ Go to releases https://github.com/sokratis12GR/Curio-Tracker/releases, download 
 #### By clicking the green "<> Code" btn.
 <img width="376" height="333" alt="image" src="https://github.com/user-attachments/assets/080c3f2e-2f20-4771-93fa-89688b696749" />
 
-#### Or via the releases page download the '.zip' folder and extract it at an accessible location:
+#### Or via the releases page download the 'Curio-Tracker-V#.#.#.zip' folder and extract it at an accessible location:
 
+Once downloaded, continue follow the CONFIG SETUP steps.
 
-Once downloaded, extract in a folder of preference, to continue follow the next steps.
+# CONFIG SETUP `user_settings.ini`
+Update the following entries
+
+`poe_league = 3.26` to the current league
+
+`poe_user = sokratis12GR` to the player that's running the blueprints
+
+### Keybinds
+If you dislike the current set of keys used, you can change them here just type in the key you want to use instead of the 'f2-5' keys
+```
+capture_key = f2
+exit_key = f3
+snippet_key = f4
+layout_capture_key = f5
+```
+
+# Usage (.EXE)
+
+Once config is setup, run the executable and enjoy recording data, the keybinds and everything will always be shown on launch, to reset the 5 wings separator could restart the tool.
+Temporarily: For currencies the stack sizes is not always correctly captured, it may require an additional edit every so often.
+
+# DEV/TESTING SETUP VIA PYTHON
 
 ## 1. Python 
 This program runs on python, you will need to have it on your system, you can get it via the following ways:
@@ -57,36 +79,21 @@ We will need the OCR to capture the screen and read the text from the captured i
 
 To download it use the following link: https://github.com/tesseract-ocr/tesseract/releases/tag/5.5.0 and get the `.exe` file from "Assets", **install it inside a folder located inside the directory of this script called `tesseract` by itself**.
 
-Once installed replace the following in the script with your installation path of Tesseract-OCR located in the `user_settings.py` file.
-
-# CONFIG SETUP `user_settings.ini`
-Update the following entries
-
-`poe_league = 3.26` to the current league
-
-`poe_user = sokratis12GR` to the player that's running the blueprints
-
-### Keybinds
-If you dislike the current set of keys used, you can change them here just type in the key you want to use instead of the 'f2-5' keys
-```
-capture_key = f2
-exit_key = f3
-snippet_key = f4
-layout_capture_key = f5
-```
+Once installed replace the following in the script with your installation path of Tesseract-OCR located in the `user_settings.init` file.
 
 # DEBUGGING
 By default the debugging of the tool is set to `False`, could be changed to `True` via a keybind `enable_debugging_key = ctrl+alt+d`
 What it does it logs all characters found on screen into a file in /logs and then it also shows a popup of what was screencaptured at the moment alongside the keywords and so on.
 
-# Usage
+
+# DEV/TESTING USAGE
 
 To use simply open cmd via the location of the script by right clicking the folder and selecting the following option:
 <img width="264" height="35" alt="image" src="https://github.com/user-attachments/assets/315ab833-0e31-4582-b218-74933a05d6a9" />
-
 Afterwards just type `py curio_tracker.py`
 
 Otherwise can use `py PATH/TO/CURIO/TRACKER/curio_tracker.py`
 
 # Appreciate any feedback ^^
+
 
