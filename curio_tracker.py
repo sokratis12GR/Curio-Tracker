@@ -25,11 +25,12 @@ import shutil
 def set_tesseract_path():
     tesseract_bin = None
 
+    # 1. Attempt to find from PATH
     path_from_system = shutil.which("tesseract")
     if path_from_system and os.path.isfile(path_from_system):
         tesseract_bin = path_from_system
 
-    # 2. If using PyInstaller bundled executable
+    # 2. If not in PATH, attempt PyInstaller bundled executable
     if not tesseract_bin and hasattr(sys, "_MEIPASS"):
         bundled_path = os.path.join(sys._MEIPASS, "tesseract", "tesseract.exe")
         if os.path.isfile(bundled_path):
@@ -647,7 +648,8 @@ def capture_once():
 
     os.makedirs(c.saves_dir, exist_ok=True)
     write_csv_entry(text, timestamp)
-    bring_console_to_front()
+    if c.ALWAYS_SHOW_CONSOLE:
+        bring_console_to_front()
   
 
 #####################################################
@@ -737,7 +739,8 @@ def capture_snippet():
     canvas.bind("<ButtonRelease-1>", on_mouse_up)
 
     root.mainloop()
-    bring_console_to_front()
+    if c.ALWAYS_SHOW_CONSOLE:
+        bring_console_to_front()
 
 def addIfTrinket(term, type):
     return c.trinket_data_name if type == c.TRINKET_TYPE else ""
@@ -833,7 +836,8 @@ def capture_layout():
         sys.stdout.flush()
         attempt += 1
 
-    bring_console_to_front()
+    if c.ALWAYS_SHOW_CONSOLE:
+        bring_console_to_front()
 
 
 # HOTKEY/KEYBIND HANDLING

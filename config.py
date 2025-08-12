@@ -32,10 +32,12 @@ layout_capture_key = settings['DEFAULT'].get('layout_capture_key')
 snippet_key = settings['DEFAULT'].get('snippet_key')
 enable_debugging_key = settings['DEFAULT'].get('enable_debugging_key')
 pytesseract_path = settings['DEFAULT'].get('pytesseract_path')
+show_console_on_capture = settings['DEFAULT'].get('show_console_on_capture')
 
 # Enable DEBUGGING
 DEBUGGING = False
 CSV_DEBUGGING = False
+ALWAYS_SHOW_CONSOLE = show_console_on_capture
 
 # Defaykt values of blueprint layouts
 default_bp_lvl = "83"

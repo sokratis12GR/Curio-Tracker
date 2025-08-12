@@ -29,7 +29,8 @@ python_dlls = glob.glob(os.path.join(dll_dir, 'python3*.dll'))
 
 if python_dlls:
     python_dll_path = python_dlls[0]
-
+else:
+    python_dll_path = os.path.join(sys.base_prefix, "python313.dll")
 
 # ---- Binaries to bundle ----
 binaries = [
@@ -94,12 +95,14 @@ exe = EXE(
     a.binaries,            
     a.datas,             
     [],
-    name='curio_tracker-0.1.6.7',
+    name='Curio Tracker',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     console=True,
+    icon='icon.ico',
+    version='version.txt',
     onefile=True,          
     exclude_binaries=False # ensure binaries are packed in exe
 )
