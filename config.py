@@ -31,6 +31,7 @@ exit_key = settings['DEFAULT'].get('exit_key')
 layout_capture_key = settings['DEFAULT'].get('layout_capture_key')
 snippet_key = settings['DEFAULT'].get('snippet_key')
 enable_debugging_key = settings['DEFAULT'].get('enable_debugging_key')
+pytesseract_path = settings['DEFAULT'].get('pytesseract_path')
 
 # Enable DEBUGGING
 DEBUGGING = False

@@ -20,14 +20,53 @@ from datetime import datetime, timedelta
 import config as c
 from datetime import datetime
 from termcolor import colored
+import shutil
 
 def set_tesseract_path():
-    if hasattr(sys, '_MEIPASS'):
-        tesseract_bin = os.path.join(sys._MEIPASS, 'tesseract.exe')
-    else:
-        tesseract_bin = os.path.join('tesseract', 'tesseract.exe')
+    tesseract_bin = None
 
+    path_from_system = shutil.which("tesseract")
+    if path_from_system and os.path.isfile(path_from_system):
+        tesseract_bin = path_from_system
+
+    # 2. If using PyInstaller bundled executable
+    if not tesseract_bin and hasattr(sys, "_MEIPASS"):
+        bundled_path = os.path.join(sys._MEIPASS, "tesseract", "tesseract.exe")
+        if os.path.isfile(bundled_path):
+            tesseract_bin = bundled_path
+
+    # 3. Local dev fallback
+    if not tesseract_bin:
+        dev_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "tesseract",
+            "tesseract.exe"
+        )
+        if os.path.isfile(dev_path):
+            tesseract_bin = dev_path
+
+    # 4. Last fallback: hardcoded/config path
+    if not tesseract_bin or not os.path.isfile(tesseract_bin):
+        tesseract_bin = os.path.normpath(c.pytesseract_path)
+
+    # --- Apply and verify ---
     pytesseract.pytesseract.tesseract_cmd = tesseract_bin
+    print("[DEBUG] Tesseract binary set to:", tesseract_bin)
+
+    tesseract_dir = os.path.dirname(tesseract_bin)
+    tessdata_dir = os.path.join(tesseract_dir, "tessdata")
+
+    if os.path.isdir(tessdata_dir):
+        os.environ["TESSDATA_PREFIX"] = tessdata_dir
+        print("[DEBUG] TESSDATA_PREFIX set to:", tessdata_dir)
+        eng_path = os.path.join(tessdata_dir, "eng.traineddata")
+        if os.path.isfile(eng_path):
+            print("[DEBUG] eng.traineddata found:", eng_path)
+        else:
+            print("[ERROR] eng.traineddata NOT found in tessdata!")
+    else:
+        print("[ERROR] tessdata directory not found at:", tessdata_dir)
+
 
 set_tesseract_path()
 
