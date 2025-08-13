@@ -1,6 +1,6 @@
 import threading
 import tkinter as tk
-import keyboard
+from pynput import keyboard
 import pyautogui
 import cv2
 import numpy as np
@@ -21,55 +21,11 @@ import config as c
 from datetime import datetime
 from termcolor import colored
 import shutil
-
-def set_tesseract_path():
-    tesseract_bin = None
-
-    # 1. Attempt to find from PATH
-    path_from_system = shutil.which("tesseract")
-    if path_from_system and os.path.isfile(path_from_system):
-        tesseract_bin = path_from_system
-
-    # 2. If not in PATH, attempt PyInstaller bundled executable
-    if not tesseract_bin and hasattr(sys, "_MEIPASS"):
-        bundled_path = os.path.join(sys._MEIPASS, "tesseract", "tesseract.exe")
-        if os.path.isfile(bundled_path):
-            tesseract_bin = bundled_path
-
-    # 3. Local dev fallback
-    if not tesseract_bin:
-        dev_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "tesseract",
-            "tesseract.exe"
-        )
-        if os.path.isfile(dev_path):
-            tesseract_bin = dev_path
-
-    # 4. Last fallback: hardcoded/config path
-    if not tesseract_bin or not os.path.isfile(tesseract_bin):
-        tesseract_bin = os.path.normpath(c.pytesseract_path)
-
-    # --- Apply and verify ---
-    pytesseract.pytesseract.tesseract_cmd = tesseract_bin
-    print("[DEBUG] Tesseract binary set to:", tesseract_bin)
-
-    tesseract_dir = os.path.dirname(tesseract_bin)
-    tessdata_dir = os.path.join(tesseract_dir, "tessdata")
-
-    if os.path.isdir(tessdata_dir):
-        os.environ["TESSDATA_PREFIX"] = tessdata_dir
-        print("[DEBUG] TESSDATA_PREFIX set to:", tessdata_dir)
-        eng_path = os.path.join(tessdata_dir, "eng.traineddata")
-        if os.path.isfile(eng_path):
-            print("[DEBUG] eng.traineddata found:", eng_path)
-        else:
-            print("[ERROR] eng.traineddata NOT found in tessdata!")
-    else:
-        print("[ERROR] tessdata directory not found at:", tessdata_dir)
+import ocr_utils as utils
+from collections import defaultdict
 
 
-set_tesseract_path()
+utils.set_tesseract_path()
 
 os.makedirs(c.logs_dir, exist_ok=True)
 os.makedirs(c.saves_dir, exist_ok=True)
@@ -84,52 +40,7 @@ stack_sizes = {}
 
 non_dup_count = 0
 attempt = 1
-
-######################################################################
-# Get console window handle. As well as a helper to bring it forward #
-######################################################################
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
-
-SW_RESTORE = 9
-
-def bring_console_to_front():
-    hwnd = kernel32.GetConsoleWindow()
-    if hwnd == 0:
-        print("No console window found.")
-        return False
-
-    # Get thread IDs
-    foreground_hwnd = user32.GetForegroundWindow()
-    current_thread_id = kernel32.GetCurrentThreadId()
-    foreground_thread_id = user32.GetWindowThreadProcessId(foreground_hwnd, 0)
-
-    # Attach input threads so SetForegroundWindow works
-    user32.AttachThreadInput(foreground_thread_id, current_thread_id, True)
-    user32.ShowWindow(hwnd, SW_RESTORE)
-    user32.SetForegroundWindow(hwnd)
-    user32.AttachThreadInput(foreground_thread_id, current_thread_id, False)
-
-    return True
-
-####################################################################
-# Fixes title case issues like checking for items with apostrophes #
-####################################################################
-def smart_title_case(text):
-    text = text.replace("’", "'").replace("‘", "'").replace("`", "'")
-    text = re.sub(r"(')S\b", r"\1s", text)
-
-    def fix_word(word):
-        if word.lower().endswith("'s") and len(word) > 2:
-            base = word[:-2]
-            suffix = word[-2:]
-            # Capitalize first letter of base, lowercase rest, suffix lowercase
-            return base[:1].upper() + base[1:].lower() + suffix.lower()
-        else:
-            return word[:1].upper() + word[1:].lower()
-
-    # Apply smart title casing to each word
-    return re.sub(r"\b\w+'?s?\b", lambda m: fix_word(m.group(0)), text)
+listener_ref = None
 
 
 def get_resource_path(filename):
@@ -145,7 +56,7 @@ def load_csv_with_types(file_path):
         for row in reader:
             if len(row) >= 2:
                 raw_term, type_name = row[0].strip(), row[1].strip()
-                term_key = smart_title_case(raw_term)
+                term_key = utils.smart_title_case(raw_term)
                 term_types[term_key] = type_name
     return term_types
 
@@ -167,11 +78,12 @@ def get_poe_bbox():
         return None
     win = windows[0]
     return (win.left, win.top, win.left + win.width, win.top + win.height)
+
 #############################################################
 # Saves the information on the screen based on colors       #
 # which is afterwards extracted as text                     #
 #############################################################
-def filter_item_text(image_np):
+def filter_item_text(image_np, fullscreen=False):
     img_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
@@ -222,106 +134,10 @@ def filter_item_text(image_np):
         cv2.drawContours(debug_image, contours, -1, (0, 0, 255), 1)  # Red outline        
         cv2.imwrite('ocr_debug_highlighted.png', debug_image)
 
+    filtered = cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
 
-    return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
+    return filtered
 
-
-#####################################
-# helpers for body armour ordering  # 
-#####################################
-def normalize_for_search(s: str) -> str:
-    s = s.replace("—", " ").replace("“", " ").replace("”", " ")
-    s = re.sub(r"[^\w\s%';]", " ", s)  # keep %, ', ; for precise matching
-    s = re.sub(r"\s+", " ", s)
-    return s.strip().lower()
-
-def build_body_armor_regex(body_armors):
-    normalized = []
-    for a in body_armors:
-        norm = normalize_for_search(smart_title_case(a))
-        if norm:
-            normalized.append(re.escape(norm))
-    if not normalized:
-        return None
-    normalized.sort(key=len, reverse=True)
-    return re.compile(r"\b(" + "|".join(normalized) + r")\b", re.IGNORECASE)
-
-body_armor_regex = build_body_armor_regex(body_armors)
-
-def find_first_body_armor_pos(text):
-    norm_text = normalize_for_search(text) 
-    # 1. exact via regex
-    if body_armor_regex:
-        match = body_armor_regex.search(norm_text)
-        if match:
-            if c.DEBUGGING:
-                print(f"[BodyArmor] Exact match '{match.group(1)}' at {match.start()} in normalized text: {norm_text!r}")
-            return match.start()
-
-    # 2. fuzzy fallback: try multi-word body armours first, then single-word
-    tokens = [(tok.group(0), tok.start()) for tok in re.finditer(r"\b[\w%']+\b", norm_text)]
-    token_words = [tok.lower() for tok, _ in tokens]
-    earliest = None
-    for raw in body_armors:
-        armour_title = smart_title_case(raw).strip()
-        norm_name = normalize_for_search(armour_title)
-        parts = norm_name.split()
-        if not parts:
-            continue
-
-        if len(parts) == 1:
-            # single-word fuzzy: match against tokens
-            close = get_close_matches(parts[0], token_words, n=1, cutoff=0.8)
-            if close:
-                best = close[0]
-                for tok, pos in tokens:
-                    if tok.lower() == best:
-                        if earliest is None or pos < earliest:
-                            earliest = pos
-                            if c.DEBUGGING:
-                                print(f"[BodyArmor] Fuzzy single-word match '{armour_title}' ≈ '{tok}' at {pos}")
-                        break
-        else:
-            # multi-word: find a sequence where each part fuzzily matches successive tokens
-            for i in range(len(tokens) - len(parts) + 1):
-                match = True
-                for offset, part in enumerate(parts):
-                    tok = tokens[i + offset][0].lower()
-                    if not get_close_matches(part, [tok], n=1, cutoff=0.7):
-                        match = False
-                        break
-                if match:
-                    pos = tokens[i][1]
-                    if earliest is None or pos < earliest:
-                        earliest = pos
-                        if c.DEBUGGING:
-                            seq = " ".join(tokens[i + j][0] for j in range(len(parts)))
-                            print(f"[BodyArmor] Fuzzy multi-word match '{armour_title}' ≈ '{seq}' at {pos}")
-                    break  # stop after first sequence for this armour
-    return earliest
-
-def find_first_enchant_piece_pos(term_title, text):
-    # take the part before ';'
-    part1 = term_title.split(";", 1)[0].strip()
-    # normalize both piece and text the same way
-    norm_piece = normalize_for_search(smart_title_case(part1))
-    norm_text = normalize_for_search(text)
-    # simple whole-word search
-    pattern = rf"\b{re.escape(norm_piece)}\b"
-    m = re.search(pattern, norm_text, re.IGNORECASE)
-    return m.start() if m else None
-
-MAX_DISTANCE = 200 # To play around and see if body armors would need more positions
-
-def is_armor_enchant_by_body_armor_order(term_title, text):
-    first_body = find_first_body_armor_pos(text)
-    first_enchant = find_first_enchant_piece_pos(term_title, text)
-    if c.DEBUGGING:
-        print(f"[OrderCheck] body_pos={first_body}, enchant_pos={first_enchant}, term='{term_title}'")
-    if first_body is not None and first_enchant is not None:
-        distance = first_enchant - first_body
-        return 0 <= distance <= MAX_DISTANCE
-    return False
 
 ####################################################################
 # Checks for a match of x/y and if currency applies the stack size # 
@@ -335,50 +151,66 @@ def extract_currency_value(text, matched_term, term_types):
     if idx is None:
         return None
 
-    # Try to find "x/y" in current and next 2 lines
+    valid_max_values = {20, 30, 40}
+
+    # OCR digit normalizer
+    def normalize_ocr_text(text):
+        replace_map = {
+            'O': '0', 'o': '0',
+            'I': '1', 'l': '1', '!': '1', 'i': '1',
+            'B': '8',
+            'S': '5', 's': '5',
+            'g': '9', 'q': '9',
+            '\\': '/', '-': '/', '|': '/',  
+        }
+        return ''.join(replace_map.get(c, c) for c in text)
+
+    # Search current and next 2 lines
     for j in range(idx, min(idx + 3, len(lines))):
-        match = re.search(r"\b(\d+)\s*/\s*(\d+)\b", lines[j])
+        line = lines[j]
+        line = normalize_ocr_text(line)
+
+        # Match flexible patterns like 19/20, 19 / 20, 19|20, etc.
+        match = re.search(r"\b(\d{1,3})\s*[/|\\\-]\s*(\d{2})\b", line)
         if match:
-            raw_current = match.group(1)
-            raw_maximum = match.group(2)
+            raw_current, raw_max = match.groups()
 
             try:
                 current = int(raw_current)
-                maximum = int(raw_maximum)
+                maximum = int(raw_max)
             except ValueError:
-                continue  # skip invalid number strings
+                continue
 
-            # Accept valid values like 19/20
-            if 0 < current <= maximum <= 20:
+            if maximum in valid_max_values and 0 <= current <= maximum:
                 return (current, maximum)
 
-            # Try to correct OCR errors (e.g. 419/20 → 9/20)
-            if maximum == 20:
-                current = int(str(current)[-1])  # take last digit
-                if current <= 20:
-                    return (current, 20)
+            # Fallback fix: take last digit of current if it's obviously wrong
+            if maximum in valid_max_values:
+                current_last = int(str(current)[-1])
+                if current_last <= maximum:
+                    return (current_last, maximum)
 
-            return None  # invalid even after fix
-
-    # Fallback: pattern not found at all
     return (1, 20)
+
+
+
 
 #################################################
 # Check if a term or combo term is in the text. # 
 #################################################
 def is_term_match(term, text, use_fuzzy=False):
     def normalize_lines(text):
-        return [normalize_for_search(line) for line in text.splitlines()]
+        return [utils.normalize_for_search(line) for line in text.splitlines()]
 
-    raw_term = next((k for k in term_types if smart_title_case(k) == term), None)
+    raw_term = next((k for k in term_types if utils.smart_title_case(k) == term), None)
     term_type = term_types.get(raw_term, "")
-    term_type_cmp = smart_title_case(term_type) if isinstance(term_type, str) else ""
+    term_type_cmp = utils.smart_title_case(term_type) if isinstance(term_type, str) else ""
 
     # Handle enchant combo terms
     if ";" in term and term_type_cmp in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE):
         part1_raw, part2_raw = [p.strip() for p in term.split(";", 1)]
-        part1 = normalize_for_search(smart_title_case(part1_raw))
-        part2 = normalize_for_search(smart_title_case(part2_raw))
+        part1 = utils.normalize_for_search(utils.smart_title_case(part1_raw))
+        part2 = utils.normalize_for_search(utils.smart_title_case(part2_raw))
         norm_lines = normalize_lines(text)
 
         def find_combo(p1, p2):
@@ -396,7 +228,7 @@ def is_term_match(term, text, use_fuzzy=False):
 
     # Standard term matching
     def find_piece_positions(piece):
-        piece_title = smart_title_case(piece)
+        piece_title = utils.smart_title_case(piece)
         positions = []
 
         pattern = rf"\b{re.escape(piece_title)}\b"
@@ -412,7 +244,7 @@ def is_term_match(term, text, use_fuzzy=False):
             if close:
                 best = close[0]
                 for tok, pos in tokens:
-                    if smart_title_case(tok) == smart_title_case(best):
+                    if utils.smart_title_case(tok) == utils.smart_title_case(best):
                         if c.DEBUGGING:
                             print(f"[Fuzzy match] Term piece: '{piece}' ≈ '{tok}'")
                         positions.append(pos)
@@ -449,8 +281,8 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
     terms_source = term_types.keys() if use_fuzzy else all_terms
 
     for term in terms_source:
-        term_title = smart_title_case(term)
-        if is_term_match(term_title, text, use_fuzzy=use_fuzzy):
+        term_title = utils.smart_title_case(term)
+        if is_term_match(term_title, text, use_fuzzy):
             duplicate = is_duplicate_recent_entry(term_title)
             all_candidates.append((term_title, duplicate))
 
@@ -464,7 +296,7 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
     full_enchant_terms = set()
     for term_title, _ in all_candidates:
         if ";" in term_title and ((term_types.get(term_title) in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE))):
-            part1, part2 = [smart_title_case(p.strip()) for p in term_title.split(";", 1)]
+            part1, part2 = [utils.smart_title_case(p.strip()) for p in term_title.split(";", 1)]
             suppress_parts.add(part1)
             suppress_parts.add(part2)
             full_enchant_terms.add(term_title)
@@ -472,17 +304,45 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
     if c.DEBUGGING and term_title in suppress_parts and term_title not in full_enchant_terms:
         print(f"[Suppress] Skipping sub-part match: {term_title}")
     
-    matched = []
+    ############################################################
+    # Group candidates by term type and filter by match length #
+    ############################################################
+    by_type = defaultdict(list)
     for term_title, duplicate in all_candidates:
+        t_type_key = term_types.get(term_title, "")
+        by_type[t_type_key].append((term_title, duplicate))
+
+    final_matches = []
+
+    for t_type, candidates in by_type.items():
+        # Sort by length descending
+        sorted_terms = sorted(candidates, key=lambda x: len(x[0]), reverse=True)
+        selected_terms = []
+        seen = set()
+
+        for term_title, duplicate in sorted_terms:
+            if any(term_title in existing for existing in seen):
+                continue  # skip if it's a substring of a longer term already added
+            seen.add(term_title)
+            selected_terms.append((term_title, duplicate))
+
+        final_matches.extend(selected_terms)
+
+    #######################################
+    # Final filtering of suppressed terms #
+    #######################################
+    matched = []
+    for term_title, duplicate in final_matches:
         if term_title in suppress_parts and term_title not in full_enchant_terms:
-            continue 
+            continue
 
         if allow_dupes or not duplicate:
             matched.append((term_title, duplicate))
             if not duplicate or allow_dupes:
                 non_dup_count += 1
         else:
-            matched.append((term_title, True))  # keep the duplicate flag
+            matched.append((term_title, True))
+
     return matched
 
 def process_text(text, allow_dupes=False, matched_terms=None):
@@ -490,34 +350,40 @@ def process_text(text, allow_dupes=False, matched_terms=None):
     results = []
 
     if matched_terms is None:
-        matched_terms = get_matched_terms(text, allow_dupes=allow_dupes)
+        matched_terms = get_matched_terms(text, allow_dupes)
 
     for term_title, duplicate in matched_terms:
-        ratio = extract_currency_value(smart_title_case(text), term_title, term_types)
+        ratio = extract_currency_value(text, term_title, term_types)
+        
         if ratio:
             stack_size = f"{ratio[0]}"
             stack_sizes[term_title] = stack_size
             if c.DEBUGGING:
                 print(f"Ratio for {term_title}: {ratio[0]}/{ratio[1]}")
         else:
-            stack_size = 0
-            stack_sizes[term_title] = stack_size  # Save 0 if no ratio found
+            stack_size = 1
+            stack_sizes[term_title] = stack_size
             if c.DEBUGGING:
                 print("[Currency Ratio] None found.")
 
+
+
+
+
     #### DUPE CHECKING 
     for term_title, duplicate in matched_terms:
+        item_type = term_types.get(utils.smart_title_case(term_title)) 
         stack_size = int(stack_sizes.get(term_title))
-        stack_size_txt = (c.stack_size_found.format(stack_size) if stack_size > 0 else "")
+        stack_size_txt = (c.stack_size_found.format(stack_size) if (int(stack_size) > 0 and utils.isCurrencyOrScarab(term_title, item_type)) else "")
         if duplicate and not allow_dupes:
-            results.append(f"{term_title} (Duplicate - Skipping)" + stack_size_txt)
+            results.append(f"{term_title} (Duplicate - Skipping)")
         else:
             results.append(term_title + stack_size_txt)
 
     if c.DEBUGGING:
-        highlighted = smart_title_case(text)
+        highlighted = utils.smart_title_case(text)
         for term in sorted(all_terms, key=len, reverse=True):
-            pattern = rf"(?i)\b({re.escape(smart_title_case(term))})\b"
+            pattern = rf"(?i)\b({re.escape(utils.smart_title_case(term))})\b"
             highlighted = re.sub(
                 pattern,
                 lambda m: colored(m.group(1), "green", attrs=["bold"]),
@@ -536,15 +402,11 @@ def process_text(text, allow_dupes=False, matched_terms=None):
         sys.stdout.flush()
         attempt += 1
 
-    
-
-
-
 def write_csv_entry(text, timestamp, allow_dupes=False):
     global stack_sizes, body_armors
     write_header = not os.path.isfile(csv_file_path)
 
-    matched_terms = get_matched_terms(text, allow_dupes=allow_dupes, use_fuzzy=False)
+    matched_terms = get_matched_terms(text, allow_dupes)
 
     process_text(text, allow_dupes, matched_terms)
 
@@ -565,7 +427,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
             ])
 
         for term_title, duplicate in matched_terms:
-            item_type = term_types.get(smart_title_case(term_title)) 
+            item_type = term_types.get(utils.smart_title_case(term_title)) 
             stack_size = stack_sizes.get(term_title)
 
             weapon_enchant_flag = ""
@@ -575,13 +437,13 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
 
 
             if is_enchant_combo:
-                if is_armor_enchant_by_body_armor_order(term_title, text):
+                if utils.is_armor_enchant_by_body_armor_order(term_title, text, body_armors):
                     armor_enchant_flag = term_title
                 else:
                     weapon_enchant_flag = term_title
             else:
-                weapon_enchant_flag = addIfWeaponEnchant(term_title, item_type)
-                armor_enchant_flag = addIfArmorEnchant(term_title, item_type)
+                weapon_enchant_flag = utils.addIfWeaponEnchant(term_title, item_type)
+                armor_enchant_flag = utils.addIfArmorEnchant(term_title, item_type)
 
             if allow_dupes or not duplicate:
                 if c.DEBUGGING:
@@ -589,15 +451,15 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                 writer.writerow([
                     c.poe_league, c.poe_user,
                     blueprint_layout, blueprint_area_level,
-                    addIfTrinket(term_title, item_type),
-                    addIfReplacement(term_title, item_type),
-                    addIfReplica(term_title, item_type),
-                    addIfExperimental(term_title, item_type),
+                    utils.addIfTrinket(term_title, item_type),
+                    utils.addIfReplacement(term_title, item_type),
+                    utils.addIfReplica(term_title, item_type),
+                    utils.addIfExperimental(term_title, item_type),
                     weapon_enchant_flag,
                     armor_enchant_flag,
-                    addIfScarab(term_title, item_type),
-                    addIfCurrency(term_title, item_type),
-                    stack_size if (int(stack_size) > 0 and isCurrencyOrScarab(term_title, item_type)) else "",
+                    utils.addIfScarab(term_title, item_type),
+                    utils.addIfCurrency(term_title, item_type),
+                    stack_size if (int(stack_size) > 0 and utils.isCurrencyOrScarab(term_title, item_type)) else "",
                     "",
                     False,
                     timestamp
@@ -606,15 +468,15 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                 writer.writerow([
                     c.poe_league, c.poe_user,
                     blueprint_layout, blueprint_area_level,
-                    "Trinket: " + addIfTrinket(term_title, item_type),
-                    "Replacement: " + addIfReplacement(term_title, item_type),
-                    "Replica: " + addIfReplica(term_title, item_type),
-                    "Experimental: " + addIfExperimental(term_title, item_type),
+                    "Trinket: " + utils.addIfTrinket(term_title, item_type),
+                    "Replacement: " + utils.addIfReplacement(term_title, item_type),
+                    "Replica: " + utils.addIfReplica(term_title, item_type),
+                    "Experimental: " + utils.addIfExperimental(term_title, item_type),
                     "WeaponEnchant: " + weapon_enchant_flag,
                     "ArmorEnchant: " + armor_enchant_flag,
-                    "Scarab: " + addIfScarab(term_title, item_type),
-                    "Currency: " + addIfCurrency(term_title, item_type),
-                    stack_size if (int(stack_size) > 0 and isCurrencyOrScarab(term_title, item_type)) else "",
+                    "Scarab: " + utils.addIfScarab(term_title, item_type),
+                    "Currency: " + utils.addIfCurrency(term_title, item_type),
+                    stack_size if (int(stack_size) > 0 and utils.isCurrencyOrScarab(term_title, item_type)) else "",
                     "",
                     False,
                     timestamp
@@ -631,25 +493,37 @@ def capture_once():
     bbox = get_poe_bbox()
     if not bbox:
         return
+
     screenshot = ImageGrab.grab(bbox=bbox)
     screenshot_np = np.array(screenshot)
+
+    # print(find_lock_regions_and_ocr(screenshot_np))
+
     filtered = filter_item_text(screenshot_np)
-    text = smart_title_case(pytesseract.image_to_string(filtered, config="--psm 6", lang="eng"))
+
+
+    # OCR
+    full_text = pytesseract.image_to_string(
+        filtered,
+        config="--psm 6",
+        lang="eng"
+    )
+    full_text = utils.smart_title_case(full_text)
+
+
+
+    # text = smart_title_case(pytesseract.image_to_string(filtered, config="--psm 6", lang="eng"))
 
     if c.DEBUGGING:
         cv2.imshow("Filtered Mask", filtered)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    if c.DEBUGGING:
-        os.makedirs(c.logs_dir, exist_ok=True)
-        with open(f"{c.logs_dir}/ocr_poe_{timestamp}.txt", "w", encoding="utf-8") as f:
-            f.write(text)
 
     os.makedirs(c.saves_dir, exist_ok=True)
-    write_csv_entry(text, timestamp)
+    write_csv_entry(full_text, timestamp, allow_dupes=False)
     if c.ALWAYS_SHOW_CONSOLE:
-        bring_console_to_front()
+        utils.bring_console_to_front()
   
 
 #####################################################
@@ -707,7 +581,22 @@ def capture_snippet():
             return
 
         filtered = filter_item_text(screenshot_np)
-        text = smart_title_case(pytesseract.image_to_string(filtered, config="--psm 6", lang="eng"))
+
+
+        scale_factor = 2
+        filtered = cv2.resize(
+            filtered,
+            (filtered.shape[1] * scale_factor, filtered.shape[0] * scale_factor),
+            interpolation=cv2.INTER_LANCZOS4
+        )
+        
+        full_text = pytesseract.image_to_string(
+            filtered,
+            config="--psm 6",  # normal block of text
+            lang="eng"
+        )
+        full_text = utils.smart_title_case(full_text)
+
         
         h, w, _ = filtered.shape
 
@@ -729,10 +618,10 @@ def capture_snippet():
         if c.DEBUGGING:
             os.makedirs(c.logs_dir, exist_ok=True)
             with open(f"{c.logs_dir}/ocr_snippet_{timestamp}.txt", "w", encoding="utf-8") as f:
-                f.write(text)
+                f.write(full_text)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        write_csv_entry(text, timestamp, allow_dupes=True)
+        write_csv_entry(full_text, timestamp, allow_dupes=True)
 
     canvas.bind("<Button-1>", on_mouse_down)
     canvas.bind("<B1-Motion>", on_mouse_drag)
@@ -740,70 +629,24 @@ def capture_snippet():
 
     root.mainloop()
     if c.ALWAYS_SHOW_CONSOLE:
-        bring_console_to_front()
+        utils.bring_console_to_front()
 
-def addIfTrinket(term, type):
-    return c.trinket_data_name if type == c.TRINKET_TYPE else ""
-
-def addIfReplacement(term, type):
-    return term if type == c.REPLACEMENT_TYPE else ""
-
-def addIfReplica(term, type):
-    return term if type == c.REPLICA_TYPE else ""
-
-def addIfExperimental(term, type):
-    return term if type == c.EXPERIMENTAL_TYPE else ""
-
-def addIfWeaponEnchant(term, type):
-    return term if type == c.ARMOR_ENCHANT_TYPE else ""
-
-def addIfArmorEnchant(term, type):
-    return term if type == c.WEAPON_ENCHANT_TYPE else ""
-
-def addIfScarab(term, type):
-    return term if type == c.SCARAB_TYPE else ""
-
-def addIfCurrency(term, type):
-    return term if type == c.CURRENCY_TYPE else ""
-
-def isCurrencyOrScarab(term, type):
-    return type == c.CURRENCY_TYPE or type == c.SCARAB_TYPE
-
-def get_top_right_layout(screen_width, screen_height):
-    aspect_ratio = c.TOP_RIGHT_CUT_WIDTH / c.TOP_RIGHT_CUT_HEIGHT
-    total_area = screen_width * screen_height
-    target_area = total_area * 0.01  # 1% of screen
-
-    region_height = math.sqrt(target_area / aspect_ratio)
-    region_width = region_height * aspect_ratio
-
-    region_width = int(region_width)
-    region_height = int(region_height)
-
-    left = screen_width - region_width
-    top = 0
-    right = screen_width
-    bottom = region_height
-
-    return (left, top, right, bottom)
-
-
+#####################################################
+# Captures the a snippet of the top right corner of #
+# the screen, afterwards OCR reads the texts and    #
+# checks for matches between layouts and saves the  #
+# monster level as area level                       #
+#####################################################
 def capture_layout():
     global blueprint_area_level, blueprint_layout, attempt
     
     screenshot = pyautogui.screenshot()
     full_width, full_height = screenshot.size
 
-    # Define the top-right crop region
-    # left = full_width - c.TOP_RIGHT_CUT_WIDTH
-    # top = 0
-    # right = full_width
-    # bottom = c.TOP_RIGHT_CUT_HEIGHT
-
-    cropped = screenshot.crop(get_top_right_layout(full_width, full_height))
+    cropped = screenshot.crop(utils.get_top_right_layout(full_width, full_height))
 
     # Run OCR on the cropped region
-    text = smart_title_case(pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6'))
+    text = utils.smart_title_case(pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6'))
     if c.DEBUGGING:
         print("OCR Text:\n", text)
         cropped.show()
@@ -811,7 +654,7 @@ def capture_layout():
     # Search for layout keyword
     found_layout = None
     for keyword in c.layout_keywords:
-        if smart_title_case(keyword) in text:
+        if utils.smart_title_case(keyword) in text:
             found_layout = keyword
             break
 
@@ -837,11 +680,59 @@ def capture_layout():
         attempt += 1
 
     if c.ALWAYS_SHOW_CONSOLE:
-        bring_console_to_front()
+        utils.bring_console_to_front()
+
+###############################################
+# HOTKEY/KEYBIND HANDLING                     #
+###############################################
+def parse_hotkey(hotkey_str):
+    keys = set()
+    for part in hotkey_str.lower().split('+'):
+        part = part.strip()
+
+        # Modifiers
+        if part == 'ctrl':
+            keys.add(keyboard.Key.ctrl)
+        elif part == 'shift':
+            keys.add(keyboard.Key.shift)
+        elif part == 'alt':
+            keys.add(keyboard.Key.alt)
+
+        # Function keys (f1..f12)
+        elif part.startswith('f') and part[1:].isdigit():
+            try:
+                keys.add(getattr(keyboard.Key, part))
+            except AttributeError:
+                raise ValueError(f"Unsupported function key: {part}")
+
+        # Single printable key (letters, numbers, symbols)
+        elif len(part) == 1:
+            keys.add(part.lower())
+
+        else:
+            raise ValueError(f"Unknown key: {part}")
+
+    combo = frozenset(keys)
+    if not combo:
+        raise ValueError(f"Hotkey '{hotkey_str}' parsed to an empty set!")
+    return combo
+
+hotkeys = {
+    'capture': parse_hotkey(c.capture_key),
+    'layout_capture': parse_hotkey(c.layout_capture_key),
+    'snippet': parse_hotkey(c.snippet_key),
+    'exit': parse_hotkey(c.exit_key),
+    'debug': parse_hotkey(c.enable_debugging_key),
+}
 
 
-# HOTKEY/KEYBIND HANDLING
+hotkey_sets = list(hotkeys.values())
+if len(hotkey_sets) != len(set(hotkey_sets)):
+    raise ValueError("Duplicate hotkeys found in configuration. Please ensure all hotkeys are unique.")
+
 def main():
+    global listener_ref
+    
     print(c.info_show_keys_capture)
     print(c.info_show_keys_snippet)
     print(c.info_show_keys_layout)
@@ -863,28 +754,69 @@ def main():
     def handle_exit():
         print(c.exiting_prompt)
         exit_event.set()
-        keyboard.unhook_all_hotkeys()
+        if listener_ref:
+            listener_ref.stop()  # stops pynput listener
 
     def handle_debugging():
         c.DEBUGGING = not c.DEBUGGING
         print("Debugging: {}".format("Enabled" if c.DEBUGGING else "Disabled"))
 
-    # Register global hotkeys
-    keyboard.add_hotkey(c.capture_key, handle_capture)
-    keyboard.add_hotkey(c.layout_capture_key, handle_layout_capture)
-    keyboard.add_hotkey(c.exit_key, handle_exit)
-    keyboard.add_hotkey(c.snippet_key, handle_snippet)
-    keyboard.add_hotkey(c.enable_debugging_key, handle_debugging)
+    # Hotkey -> action mapping
+    actions = {
+        'capture': handle_capture,
+        'layout_capture': handle_layout_capture,
+        'snippet': handle_snippet,
+        'exit': handle_exit,
+        'debug': handle_debugging
+    }
 
-    # Keep the program running
-    print("Listening for keybinds... Press your exit key to stop.")
+
+    # Listener functions
+    pressed_keys = set()
+    fired_combos = set()
+
+    def on_press(key):
+        before_count = len(pressed_keys)
+
+        if isinstance(key, keyboard.Key):
+            pressed_keys.add(key)
+        else:
+            try:
+                pressed_keys.add(key.char.lower())
+            except AttributeError:
+                return
+
+        for name, combo in hotkeys.items():
+            if combo.issubset(pressed_keys) and name not in fired_combos:
+                if len(pressed_keys) > before_count:
+                    fired_combos.add(name)
+                    # Run handler in a separate thread
+                    threading.Thread(target=actions[name], daemon=True).start()
+
+    def on_release(key):
+        if isinstance(key, keyboard.Key):
+            pressed_keys.discard(key)
+        else:
+            try:
+                pressed_keys.remove(key.char.lower())
+            except (AttributeError, KeyError):
+                pass
+
+        # Reset combos when any key in them is released
+        to_remove = {n for n, combo in hotkeys.items() if not combo.issubset(pressed_keys)}
+        fired_combos.difference_update(to_remove)
+    
+    
+    print(c.listening_keybinds_txt)
+    listener_ref = keyboard.Listener(on_press=on_press, on_release=on_release)
+    listener_ref.start()
+
     try:
         while not exit_event.is_set():
-            # Keep looping to allow hotkeys to run in background
             exit_event.wait(0.1)
     except KeyboardInterrupt:
         print("Interrupted by user. Exiting.")
-        keyboard.unhook_all_hotkeys()
+        listener_ref.stop()
 
 
 def validateAttempt(print_text):

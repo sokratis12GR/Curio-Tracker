@@ -20,6 +20,7 @@ datas = [
     ('all_valid_heist_terms.csv', '.'),
     ('body_armors.txt', '.'),
     ('config.py', '.'),
+    ('ocr_utils.py', '.'),
     ('user_settings.ini', '.'),
 ]
 

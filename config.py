@@ -1,6 +1,7 @@
 import os
 import sys
 import configparser
+from pynput import keyboard
 
 ######################################################################
 # LOADS THE SETTINGS VALUES SET IN USER_SETTINGS.INI                 #
@@ -24,15 +25,16 @@ def load_settings():
 
 settings = load_settings()
 
-poe_league = settings['DEFAULT'].get('poe_league')
-poe_user = settings['DEFAULT'].get('poe_user')
-capture_key = settings['DEFAULT'].get('capture_key')
-exit_key = settings['DEFAULT'].get('exit_key')
-layout_capture_key = settings['DEFAULT'].get('layout_capture_key')
-snippet_key = settings['DEFAULT'].get('snippet_key')
-enable_debugging_key = settings['DEFAULT'].get('enable_debugging_key')
+poe_league = settings['User'].get('poe_league')
+poe_user = settings['User'].get('poe_user')
+capture_key = settings['Hotkeys'].get('capture_key')
+exit_key = settings['Hotkeys'].get('exit_key')
+layout_capture_key = settings['Hotkeys'].get('layout_capture_key')
+snippet_key = settings['Hotkeys'].get('snippet_key')
+enable_debugging_key = settings['Hotkeys'].get('debug_key')
 pytesseract_path = settings['DEFAULT'].get('pytesseract_path')
 show_console_on_capture = settings['DEFAULT'].get('show_console_on_capture')
+time_last_dupe_check_seconds = int(settings['DEFAULT'].get('time_last_dupe_check_seconds')) # Checks if a dupe exists in the last 60 seconds
 
 # Enable DEBUGGING
 DEBUGGING = False
@@ -98,6 +100,7 @@ not_found_target_txt = "❌ Path of Exile window not found."
 not_found_target_snippet_txt = "❌ Path of Exile window not found. Exiting snippet."
 snippet_txt_too_small = "⚠️ Selected region is too small or invalid."
 snippet_txt_failed = "⚠️ Screenshot capture failed."
+listening_keybinds_txt = "Listening for keybinds... Press your exit key to stop."
 
 ## Matches Info
 matches_found = "\n✅ Matches found: "
@@ -120,7 +123,6 @@ exiting_prompt = "\n👋 Exiting."
 
 # Time Duplicate values checker:
 time_column_index = 15 # 16th column of the .csv file contains the time var
-time_last_dupe_check_seconds = 60
 
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
 
