@@ -20,7 +20,8 @@ It will save the data in a .csv file (saves/matches.csv) like the following (sup
 <img width="1277" height="739" alt="image" src="https://github.com/user-attachments/assets/b06361f1-4ef5-4cdb-841c-e41cb623a158" />
 
 Example import in google sheets:
-<img width="1380" height="797" alt="image" src="https://github.com/user-attachments/assets/64adad67-726d-4186-81fe-2c90ef85c4b9" />
+<img width="1357" height="677" alt="image" src="https://github.com/user-attachments/assets/fe50a549-d2a0-4ee5-ac95-920426bfba2a" />
+
 
 # SETUP (Quick)
 
@@ -97,5 +98,6 @@ In case the app crashes or has an error image, please do not hesitate to create 
 - Provide a screenshot, or a detailed explanation of the issue
 
 ***Appreciate any feedback ^^***
+
 
 
