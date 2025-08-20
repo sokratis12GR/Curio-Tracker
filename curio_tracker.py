@@ -18,7 +18,6 @@ from difflib import get_close_matches
 import os
 from datetime import datetime, timedelta
 import config as c
-from datetime import datetime
 from termcolor import colored
 import shutil
 import ocr_utils as utils
@@ -71,6 +70,16 @@ all_terms = set(term_types.keys())
 seen_matches = set()
 body_armors = load_body_armors(get_resource_path(c.file_body_armors))
 
+
+def build_enchant_type_lookup(term_types):
+    lookup = defaultdict(set)
+    for raw_term, type_name in term_types.items():
+        norm = utils.normalize_for_search(utils.smart_title_case(raw_term))  # full term
+        lookup[norm].add(type_name)
+    return lookup
+
+enchant_type_lookup = build_enchant_type_lookup(term_types)
+
 def get_poe_bbox():
     windows = [w for w in gw.getWindowsWithTitle(c.target_application) if w.visible]
     if not windows:
@@ -78,7 +87,47 @@ def get_poe_bbox():
         return None
     win = windows[0]
     return (win.left, win.top, win.left + win.width, win.top + win.height)
+#############################################################################
+# Runs OCR on the given image array and returns title-cased text.           #
+#                                                                           #
+#    Args:                                                                  #
+#        image_np (np.ndarray): The image as a NumPy array (RGB).           #
+#        scale (int): Scale factor for resizing before OCR.                 #
+#        psm (int): Page segmentation mode for Tesseract.                   #
+#        lang (str): Language for Tesseract OCR.                            #
+#        apply_filter (bool): Whether to run filter_item_text() first.      #
+#                                                                           #
+#    Returns:                                                               #
+#        str: The OCR'd text in smart title case.                           #
+#############################################################################
+def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
+    if apply_filter:
+        image_np_filtered = filter_item_text(image_np)
+    else:
+        image_np_filtered = image_np
 
+    if scale != 1:
+        image_np_filtered = cv2.resize(
+            image_np_filtered,
+            (int(image_np_filtered.shape[1]) * scale, int(image_np_filtered.shape[0]) * scale),
+            interpolation=cv2.INTER_LANCZOS4
+        )
+
+    text = pytesseract.image_to_string(
+        image_np_filtered,
+        config=f"--psm {psm}",
+        lang=lang
+    )
+
+    if c.DEBUGGING:
+        print("Filtered image stats:", image_np_filtered.min(), image_np_filtered.max())
+        cv2.namedWindow("Filtered Mask", cv2.WINDOW_NORMAL)
+        cv2.imshow("Filtered Mask", image_np_filtered)
+        cv2.moveWindow("Filtered Mask", 100, 100)  # Put window at x=100, y=100 on screen
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return utils.smart_title_case(text), image_np
 #############################################################
 # Saves the information on the screen based on colors       #
 # which is afterwards extracted as text                     #
@@ -307,41 +356,71 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
     ############################################################
     # Group candidates by term type and filter by match length #
     ############################################################
-    by_type = defaultdict(list)
-    for term_title, duplicate in all_candidates:
-        t_type_key = term_types.get(term_title, "")
-        by_type[t_type_key].append((term_title, duplicate))
-
+    sorted_terms = sorted(all_candidates, key=lambda x: len(x[0]), reverse=True)
     final_matches = []
+    seen = set()
 
-    for t_type, candidates in by_type.items():
-        # Sort by length descending
-        sorted_terms = sorted(candidates, key=lambda x: len(x[0]), reverse=True)
-        selected_terms = []
-        seen = set()
+    for term_title, duplicate in sorted_terms:
+        # Skip shorter terms already covered by a longer kept match
+        if any(term_title in existing for existing in seen):
+            continue  # do not add it at all
 
-        for term_title, duplicate in sorted_terms:
-            if any(term_title in existing for existing in seen):
-                continue  # skip if it's a substring of a longer term already added
-            seen.add(term_title)
-            selected_terms.append((term_title, duplicate))
-
-        final_matches.extend(selected_terms)
+        seen.add(term_title)
+        final_matches.append((term_title, duplicate))
 
     #######################################
     # Final filtering of suppressed terms #
     #######################################
     matched = []
+
     for term_title, duplicate in final_matches:
         if term_title in suppress_parts and term_title not in full_enchant_terms:
             continue
 
+        armor_flag = False
+        weapon_flag = False
+
+        item_type = term_types.get(term_title)
+        base_part = term_title.split(";", 1)[0].strip()
+        norm_key = utils.normalize_for_search(utils.smart_title_case(base_part))
+        possible_types = enchant_type_lookup.get(norm_key, [])
+
+        # Only assign flags if item_type is an enchant type
+        if item_type in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE):
+            if possible_types:
+                if all(t == c.ARMOR_ENCHANT_TYPE for t in possible_types):
+                    armor_flag = True
+                elif all(t == c.WEAPON_ENCHANT_TYPE for t in possible_types):
+                    weapon_flag = True
+                else:
+                    # Term exists in both armor and weapon types
+                    # Use proximity logic to disambiguate
+                    if utils.is_armor_enchant_by_body_armor_order(term_title, text, body_armors, enchant_type_lookup):
+                        armor_flag = True
+                    else:
+                        weapon_flag = True
+        else:
+            # For non-enchant types, force flags false
+            armor_flag = False
+            weapon_flag = False
+
+        # Append result, respecting duplicate flags and allowance
         if allow_dupes or not duplicate:
-            matched.append((term_title, duplicate))
             if not duplicate or allow_dupes:
                 non_dup_count += 1
+            matched.append({
+                "term": term_title,
+                "duplicate": False,
+                "armor_enchant_flag": armor_flag,
+                "weapon_enchant_flag": weapon_flag,
+            })
         else:
-            matched.append((term_title, True))
+            matched.append({
+                "term": term_title,
+                "duplicate": True,
+                "armor_enchant_flag": armor_flag,
+                "weapon_enchant_flag": weapon_flag,
+            })
 
     return matched
 
@@ -352,9 +431,16 @@ def process_text(text, allow_dupes=False, matched_terms=None):
     if matched_terms is None:
         matched_terms = get_matched_terms(text, allow_dupes)
 
-    for term_title, duplicate in matched_terms:
+    for match in matched_terms:
+        term_title = match["term"]
+        duplicate = match["duplicate"]
+        armor_flag = match["armor_enchant_flag"]
+        weapon_flag = match["weapon_enchant_flag"]
+
+        item_type = term_types.get(utils.smart_title_case(term_title))
+
+        # Extract stack size / currency ratio
         ratio = extract_currency_value(text, term_title, term_types)
-        
         if ratio:
             stack_size = f"{ratio[0]}"
             stack_sizes[term_title] = stack_size
@@ -366,19 +452,18 @@ def process_text(text, allow_dupes=False, matched_terms=None):
             if c.DEBUGGING:
                 print("[Currency Ratio] None found.")
 
+        stack_size_txt = (
+            c.stack_size_found.format(stack_size)
+            if int(stack_size) > 0 and utils.is_currency_or_scarab(term_title, item_type)
+            else ""
+        )
 
-
-
-
-    #### DUPE CHECKING 
-    for term_title, duplicate in matched_terms:
-        item_type = term_types.get(utils.smart_title_case(term_title)) 
-        stack_size = int(stack_sizes.get(term_title))
-        stack_size_txt = (c.stack_size_found.format(stack_size) if (int(stack_size) > 0 and utils.isCurrencyOrScarab(term_title, item_type)) else "")
+        # Format result
+        type = c.ARMOR_ENCHANT_TYPE if armor_flag else c.WEAPON_ENCHANT_TYPE if weapon_flag else item_type
         if duplicate and not allow_dupes:
-            results.append(f"{term_title} (Duplicate - Skipping)")
+            results.append(f"{type}: {term_title} (Duplicate - Skipping)")
         else:
-            results.append(term_title + stack_size_txt)
+            results.append(f"{type}: {term_title}{stack_size_txt}")
 
     if c.DEBUGGING:
         highlighted = utils.smart_title_case(text)
@@ -407,9 +492,30 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
     write_header = not os.path.isfile(csv_file_path)
 
     matched_terms = get_matched_terms(text, allow_dupes)
-
     process_text(text, allow_dupes, matched_terms)
 
+    def format_row(term_title, item_type, stack_size, prefix=""):
+        # Helper to format each field with optional prefix (for debug)
+        def maybe_add(fn):
+            val = fn(term_title, item_type)
+            return f"{prefix}{val}" if val else ""
+
+        return [
+            c.poe_league, c.poe_user,
+            blueprint_layout, blueprint_area_level,
+            maybe_add(utils.add_if_trinket),
+            maybe_add(utils.add_if_replacement),
+            maybe_add(utils.add_if_replica),
+            maybe_add(utils.add_if_experimental),
+            maybe_add(utils.add_if_weapon_enchant),
+            maybe_add(utils.add_if_armor_enchant),
+            maybe_add(utils.add_if_scarab),
+            maybe_add(utils.add_if_currency),
+            stack_size if (int(stack_size) > 0 and utils.is_currency_or_scarab(term_title, item_type)) else "",
+            "",
+            False,
+            timestamp
+        ]
 
     with open(csv_file_path, "a", newline='', encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
@@ -426,61 +532,23 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                 c.csv_flag_trinket_header, c.csv_time_header
             ])
 
-        for term_title, duplicate in matched_terms:
-            item_type = term_types.get(utils.smart_title_case(term_title)) 
+        for match in matched_terms:
+            term_title = match["term"]
+            duplicate = match["duplicate"]
+
+            item_type = term_types.get(utils.smart_title_case(term_title))
             stack_size = stack_sizes.get(term_title)
-
-            weapon_enchant_flag = ""
-            armor_enchant_flag = ""
-
-            is_enchant_combo = item_type in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE)
-
-
-            if is_enchant_combo:
-                if utils.is_armor_enchant_by_body_armor_order(term_title, text, body_armors):
-                    armor_enchant_flag = term_title
-                else:
-                    weapon_enchant_flag = term_title
-            else:
-                weapon_enchant_flag = utils.addIfWeaponEnchant(term_title, item_type)
-                armor_enchant_flag = utils.addIfArmorEnchant(term_title, item_type)
 
             if allow_dupes or not duplicate:
                 if c.DEBUGGING:
                     print(f"[WriteCSV] Writing row for term: {term_title}")
-                writer.writerow([
-                    c.poe_league, c.poe_user,
-                    blueprint_layout, blueprint_area_level,
-                    utils.addIfTrinket(term_title, item_type),
-                    utils.addIfReplacement(term_title, item_type),
-                    utils.addIfReplica(term_title, item_type),
-                    utils.addIfExperimental(term_title, item_type),
-                    weapon_enchant_flag,
-                    armor_enchant_flag,
-                    utils.addIfScarab(term_title, item_type),
-                    utils.addIfCurrency(term_title, item_type),
-                    stack_size if (int(stack_size) > 0 and utils.isCurrencyOrScarab(term_title, item_type)) else "",
-                    "",
-                    False,
-                    timestamp
-                ])
-            if c.DEBUGGING and c.CSV_DEBUGGING and (allow_dupes or not duplicate):
-                writer.writerow([
-                    c.poe_league, c.poe_user,
-                    blueprint_layout, blueprint_area_level,
-                    "Trinket: " + utils.addIfTrinket(term_title, item_type),
-                    "Replacement: " + utils.addIfReplacement(term_title, item_type),
-                    "Replica: " + utils.addIfReplica(term_title, item_type),
-                    "Experimental: " + utils.addIfExperimental(term_title, item_type),
-                    "WeaponEnchant: " + weapon_enchant_flag,
-                    "ArmorEnchant: " + armor_enchant_flag,
-                    "Scarab: " + utils.addIfScarab(term_title, item_type),
-                    "Currency: " + utils.addIfCurrency(term_title, item_type),
-                    stack_size if (int(stack_size) > 0 and utils.isCurrencyOrScarab(term_title, item_type)) else "",
-                    "",
-                    False,
-                    timestamp
-                ])
+
+                # Write main CSV row
+                writer.writerow(format_row(term_title, item_type, stack_size))
+
+                # Write debug row if enabled
+                if c.DEBUGGING and c.CSV_DEBUGGING:
+                    writer.writerow(format_row(term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
 
 
 #####################################################
@@ -493,35 +561,14 @@ def capture_once():
     bbox = get_poe_bbox()
     if not bbox:
         return
-
-    screenshot = ImageGrab.grab(bbox=bbox)
-    screenshot_np = np.array(screenshot)
-
-    # print(find_lock_regions_and_ocr(screenshot_np))
-
-    filtered = filter_item_text(screenshot_np)
+    
+    screenshot_np = np.array(ImageGrab.grab(bbox=bbox))
+    full_text, filtered = ocr_from_image(screenshot_np)
 
 
-    # OCR
-    full_text = pytesseract.image_to_string(
-        filtered,
-        config="--psm 6",
-        lang="eng"
-    )
-    full_text = utils.smart_title_case(full_text)
-
-
-
-    # text = smart_title_case(pytesseract.image_to_string(filtered, config="--psm 6", lang="eng"))
-
-    if c.DEBUGGING:
-        cv2.imshow("Filtered Mask", filtered)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     os.makedirs(c.saves_dir, exist_ok=True)
-    write_csv_entry(full_text, timestamp, allow_dupes=False)
+    write_csv_entry(full_text, utils.now_timestamp(), allow_dupes=False)
     if c.ALWAYS_SHOW_CONSOLE:
         utils.bring_console_to_front()
   
@@ -573,29 +620,13 @@ def capture_snippet():
             return
 
         bbox = (x1, y1, x2, y2)
-        screenshot = ImageGrab.grab(bbox)
-        screenshot_np = np.array(screenshot)
+        screenshot_np = np.array(ImageGrab.grab(bbox))
 
         if screenshot_np is None or screenshot_np.size == 0:
             print(c.snippet_txt_failed)
             return
 
-        filtered = filter_item_text(screenshot_np)
-
-
-        scale_factor = 2
-        filtered = cv2.resize(
-            filtered,
-            (filtered.shape[1] * scale_factor, filtered.shape[0] * scale_factor),
-            interpolation=cv2.INTER_LANCZOS4
-        )
-        
-        full_text = pytesseract.image_to_string(
-            filtered,
-            config="--psm 6",  # normal block of text
-            lang="eng"
-        )
-        full_text = utils.smart_title_case(full_text)
+        full_text, filtered = ocr_from_image(screenshot_np, scale=2)
 
         
         h, w, _ = filtered.shape
