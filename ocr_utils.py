@@ -1,26 +1,13 @@
-import threading
-import tkinter as tk
-import keyboard
-import pyautogui
-import cv2
-import numpy as np
-import pytesseract
-from PIL import ImageGrab
-import pygetwindow as gw
 import re
-import string
-import csv
-import ctypes
-import time
-import math
-import sys
-from difflib import get_close_matches
 import os
-from datetime import datetime, timedelta
-import config as c
-from datetime import datetime
-from termcolor import colored
+import sys
+import math
+import ctypes
+import pytesseract
 import shutil
+from datetime import datetime
+from difflib import get_close_matches
+import config as c
 
 
 ################################################################################
@@ -209,47 +196,78 @@ def find_first_enchant_piece_pos(term_title, text):
 
 MAX_DISTANCE = 200 # To play around and see if body armors would need more positions
 
-def is_armor_enchant_by_body_armor_order(term_title, text, body_armors):
+def is_armor_enchant_by_body_armor_order(term_title, text, body_armors, enchant_type_lookup):
+    base_part = term_title.split(";", 1)[0].strip()
+    norm_key = normalize_for_search(smart_title_case(base_part))
+    types = enchant_type_lookup.get(norm_key, [])
+
+    # Force Armor if ONLY armor types found
+    if types and all(t == c.ARMOR_ENCHANT_TYPE for t in types):
+        if c.DEBUGGING:
+            print(f"[TypeCheck] '{term_title}' only in armor types → Armor Enchant")
+        return True
+
+    # Force Weapon if ONLY weapon types found
+    if types and all(t == c.WEAPON_ENCHANT_TYPE for t in types):
+        if c.DEBUGGING:
+            print(f"[TypeCheck] '{term_title}' only in weapon types → Weapon Enchant")
+        return False
+
+    # If ambiguous (both types), fallback to proximity check
     first_body = find_first_body_armor_pos(text, body_armors)
     first_enchant = find_first_enchant_piece_pos(term_title, text)
-    if c.DEBUGGING:
-        print(f"[OrderCheck] body_pos={first_body}, enchant_pos={first_enchant}, term='{term_title}'")
-    if first_body is not None and first_enchant is not None:
-        distance = first_enchant - first_body
-        return 0 <= distance <= MAX_DISTANCE
-    return False
 
+    if c.DEBUGGING:
+        print(f"[OrderCheck] Ambiguous types for '{term_title}'. body_pos={first_body}, enchant_pos={first_enchant}")
+
+    if first_body is not None and first_enchant is not None:
+        return 0 <= (first_enchant - first_body) <= MAX_DISTANCE
+
+    # Default fallback, treat as weapon if unclear
+    if c.DEBUGGING:
+        print(f"[Fallback] '{term_title}' ambiguous and no body armor nearby, treating as Weapon Enchant")
+    
+    # print(f"Checking term: '{term_title}'")
+    # print(f"Base part: '{base_part}'")
+    # print(f"Normalized key: '{norm_key}'")
+    # print(f"Types from lookup: {types}")
+
+    return False
+    
+
+def now_timestamp():
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
 #####################################################################
 # Utility functions for confirming type, used for the csv recording #
 #####################################################################
-def addIfTrinket(term, type):
-    return term if type == c.TRINKET_TYPE else ""
+def add_if_trinket(term, type_):
+    return c.trinket_data_name if type_ == c.TRINKET_TYPE else ""
 
-def addIfReplacement(term, type):
-    return term if type == c.REPLACEMENT_TYPE else ""
+def add_if_replacement(term, type_):
+    return term if type_ == c.REPLACEMENT_TYPE else ""
 
-def addIfReplica(term, type):
-    return term if type == c.REPLICA_TYPE else ""
+def add_if_replica(term, type_):
+    return term if type_ == c.REPLICA_TYPE else ""
 
-def addIfExperimental(term, type):
-    return term if type == c.EXPERIMENTAL_TYPE else ""
+def add_if_experimental(term, type_):
+    return term if type_ == c.EXPERIMENTAL_TYPE else ""
 
-def addIfWeaponEnchant(term, type):
-    return term if type == c.ARMOR_ENCHANT_TYPE else ""
+def add_if_weapon_enchant(term, type_):
+    return term if type_ == c.WEAPON_ENCHANT_TYPE else ""
 
-def addIfArmorEnchant(term, type):
-    return term if type == c.WEAPON_ENCHANT_TYPE else ""
+def add_if_armor_enchant(term, type_):
+    return term if type_ == c.ARMOR_ENCHANT_TYPE else ""
 
-def addIfScarab(term, type):
-    return term if type == c.SCARAB_TYPE else ""
+def add_if_scarab(term, type_):
+    return term if type_ == c.SCARAB_TYPE else ""
 
-def addIfCurrency(term, type):
-    return term if type == c.CURRENCY_TYPE else ""
+def add_if_currency(term, type_):
+    return term if type_ == c.CURRENCY_TYPE else ""
 
-def isCurrencyOrScarab(term, type):
-    return type == c.CURRENCY_TYPE or type == c.SCARAB_TYPE
+def is_currency_or_scarab(term, type_):
+    return type_ == c.CURRENCY_TYPE or type_ == c.SCARAB_TYPE
 
 #########################################################################
 # Attempts to get the top right part of the screenshot which contains 	#
