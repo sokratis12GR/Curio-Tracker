@@ -2,44 +2,68 @@ import os
 import sys
 import configparser
 from pynput import keyboard
+from ocr_utils import get_setting, set_setting, write_settings
 
 ######################################################################
 # LOADS THE SETTINGS VALUES SET IN USER_SETTINGS.INI                 #
 ######################################################################
-def load_settings():
-    if getattr(sys, 'frozen', False):
-        # Running as a bundled exe
-        base_path = os.path.dirname(sys.executable)
-    else:
-        # Running normally
-        base_path = os.path.abspath(".")
+# -------------------- Paths --------------------
+APP_NAME = "HeistCurioTracker"
+if getattr(sys, 'frozen', False):
+    # Running as bundled exe
+    base_path = os.path.join(os.getenv('APPDATA'), APP_NAME)
+else:
+    # Running normally
+    base_path = os.path.join(os.path.expanduser("~"), f".{APP_NAME}")
 
-    settings_path = os.path.join(base_path, "user_settings.ini")
+os.makedirs(base_path, exist_ok=True)
 
-    if not os.path.exists(settings_path):
-        raise FileNotFoundError(f"Settings file not found at {settings_path}")
+SETTINGS_PATH = os.path.join(base_path, "user_settings.ini")
 
-    settings = configparser.ConfigParser()
-    settings.read(settings_path)
-    return settings
+# -------------------- Default Settings --------------------
+DEFAULT_SETTINGS = {
+    'User': {
+        'poe_league': '3.26',
+        'poe_user': 'sokratis12GR',
+    },
+    'Hotkeys': {
+        'capture_key': 'f2',
+        'exit_key': 'f3',
+        'layout_capture_key': 'f5',
+        'snippet_key': 'f4',
+        'debug_key': 'ctrl+alt+d'
+    },
+    'DEFAULT': {
+        'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+        'time_last_dupe_check_seconds': '60'
+    }
+}
 
-settings = load_settings()
+# Ensure defaults exist in .ini using ocr_utils
+for section, keys in DEFAULT_SETTINGS.items():
+    for key, value in keys.items():
+        if get_setting(section, key) is None:
+            set_setting(section, key, str(value))
+write_settings()  # persist any new defaults
 
-poe_league = settings['User'].get('poe_league')
-poe_user = settings['User'].get('poe_user')
-capture_key = settings['Hotkeys'].get('capture_key')
-exit_key = settings['Hotkeys'].get('exit_key')
-layout_capture_key = settings['Hotkeys'].get('layout_capture_key')
-snippet_key = settings['Hotkeys'].get('snippet_key')
-enable_debugging_key = settings['Hotkeys'].get('debug_key')
-pytesseract_path = settings['DEFAULT'].get('pytesseract_path')
-show_console_on_capture = settings['DEFAULT'].get('show_console_on_capture')
-time_last_dupe_check_seconds = int(settings['DEFAULT'].get('time_last_dupe_check_seconds')) # Checks if a dupe exists in the last 60 seconds
+settings = DEFAULT_SETTINGS
+
+# Read settings
+poe_league = get_setting('User', 'poe_league')
+poe_user = get_setting('User', 'poe_user')
+
+capture_key = get_setting('Hotkeys', 'capture_key')
+exit_key = get_setting('Hotkeys', 'exit_key')
+layout_capture_key = get_setting('Hotkeys', 'layout_capture_key')
+snippet_key = get_setting('Hotkeys', 'snippet_key')
+enable_debugging_key = get_setting('Hotkeys', 'debug_key')
+
+pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
+time_last_dupe_check_seconds = int(get_setting('DEFAULT', 'time_last_dupe_check_seconds', '60'))
 
 # Enable DEBUGGING
 DEBUGGING = False
 CSV_DEBUGGING = False
-ALWAYS_SHOW_CONSOLE = show_console_on_capture
 
 # Defaykt values of blueprint layouts
 default_bp_lvl = "83"
@@ -95,6 +119,7 @@ csv_value_header = "Value"
 file_name = "all_valid_heist_terms.csv"
 trinket_data_name = "Thief's Trinket"
 file_body_armors = "body_armors.txt"
+file_experimental_items = "experimental_items.csv"
 target_application = "Path of Exile"
 not_found_target_txt = "❌ Path of Exile window not found."
 not_found_target_snippet_txt = "❌ Path of Exile window not found. Exiting snippet."

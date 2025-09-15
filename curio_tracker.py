@@ -1,28 +1,22 @@
-import threading
 import tkinter as tk
-from pynput import keyboard
-import pyautogui
+import csv
+import os
+import re
+import sys
+from datetime import datetime, timedelta
+
 import cv2
 import numpy as np
+import pyautogui
 import pytesseract
-from PIL import ImageGrab
 import pygetwindow as gw
-import re
-import string
-import csv
-import ctypes
-import time
-import math
-import sys
-from difflib import get_close_matches
-import os
-from datetime import datetime, timedelta
-import config as c
+from PIL import ImageGrab
 from termcolor import colored
-import shutil
-import ocr_utils as utils
-from collections import defaultdict
 
+import config as c
+import ocr_utils as utils
+from ocr_utils import load_csv, build_parsed_item, parse_timestamp
+from collections import defaultdict
 
 utils.set_tesseract_path()
 
@@ -34,41 +28,48 @@ csv_file_path = c.csv_file_path
 # default values in case they only run area lvl 83 blueprints
 blueprint_area_level = c.default_bp_lvl
 blueprint_layout = c.default_bp_area
+poe_user = c.poe_user
+league_version = c.poe_league
 
 stack_sizes = {}
 
 non_dup_count = 0
 attempt = 1
 listener_ref = None
-
+parsed_items = []
+experimental_items = {}
 
 def get_resource_path(filename):
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, filename)
 
-# Loads all of the item types and items that can be found in heists.
 def load_csv_with_types(file_path):
-    term_types = {}
-    with open(file_path, newline='', encoding='utf-8-sig') as csvfile:
-        reader = csv.reader(csvfile)
-        next(reader, None)
-        for row in reader:
-            if len(row) >= 2:
-                raw_term, type_name = row[0].strip(), row[1].strip()
-                term_key = utils.smart_title_case(raw_term)
-                term_types[term_key] = type_name
-    return term_types
+    def parser(row):
+        if len(row) >= 2:
+            raw_term, type_name = row[0].strip(), row[1].strip()
+            return utils.smart_title_case(raw_term), type_name
+        return None
+    rows = load_csv(file_path, row_parser=parser)
+    return {term: type_name for term, type_name in rows if term}
 
 def load_body_armors(file_path):
-    body_armors = []
-    with open(file_path, "r", encoding="utf-8") as f:
-        body_armors = f.readlines()
-    return body_armors
+    return [line.strip() for line in open(file_path, encoding="utf-8").readlines()]
+
+def load_experimental_csv(file_path):
+    global experimental_items
+    def parser(row):
+        item_name = utils.smart_title_case(row[0].strip())
+        implicits = [line.strip() for line in row[1].splitlines() if line.strip()]
+        experimental_items[item_name] = implicits
+        return item_name, implicits
+    load_csv(file_path, row_parser=parser)
+    return experimental_items
 
 term_types = load_csv_with_types(get_resource_path(c.file_name))
 all_terms = set(term_types.keys())
 seen_matches = set()
 body_armors = load_body_armors(get_resource_path(c.file_body_armors))
+experimental_items = load_experimental_csv(get_resource_path(c.file_experimental_items))
 
 
 def build_enchant_type_lookup(term_types):
@@ -439,6 +440,7 @@ def process_text(text, allow_dupes=False, matched_terms=None):
 
         item_type = term_types.get(utils.smart_title_case(term_title))
 
+
         # Extract stack size / currency ratio
         ratio = extract_currency_value(text, term_title, term_types)
         if ratio:
@@ -454,7 +456,7 @@ def process_text(text, allow_dupes=False, matched_terms=None):
 
         stack_size_txt = (
             c.stack_size_found.format(stack_size)
-            if int(stack_size) > 0 and utils.is_currency_or_scarab(term_title, item_type)
+            if int(stack_size) > 0 and utils.is_currency_or_scarab(item_type)
             else ""
         )
 
@@ -476,6 +478,9 @@ def process_text(text, allow_dupes=False, matched_terms=None):
             )
         print(highlighted)
 
+    # from gui import update_images
+    # update_images()
+
     if results:
         print(c.matches_found, results)
         if non_dup_count % 5 == 0:
@@ -488,20 +493,19 @@ def process_text(text, allow_dupes=False, matched_terms=None):
         attempt += 1
 
 def write_csv_entry(text, timestamp, allow_dupes=False):
-    global stack_sizes, body_armors
+    global stack_sizes, body_armors, experimental_items, parsed_items
     write_header = not os.path.isfile(csv_file_path)
 
+    parsed_items = []
     matched_terms = get_matched_terms(text, allow_dupes)
     process_text(text, allow_dupes, matched_terms)
 
     def format_row(term_title, item_type, stack_size, prefix=""):
-        # Helper to format each field with optional prefix (for debug)
         def maybe_add(fn):
             val = fn(term_title, item_type)
             return f"{prefix}{val}" if val else ""
-
         return [
-            c.poe_league, c.poe_user,
+            league_version, poe_user,
             blueprint_layout, blueprint_area_level,
             maybe_add(utils.add_if_trinket),
             maybe_add(utils.add_if_replacement),
@@ -511,7 +515,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
             maybe_add(utils.add_if_armor_enchant),
             maybe_add(utils.add_if_scarab),
             maybe_add(utils.add_if_currency),
-            stack_size if (int(stack_size) > 0 and utils.is_currency_or_scarab(term_title, item_type)) else "",
+            stack_size if (int(stack_size) > 0 and utils.is_currency_or_scarab(item_type)) else "",
             "",
             False,
             timestamp
@@ -535,21 +539,147 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
         for match in matched_terms:
             term_title = match["term"]
             duplicate = match["duplicate"]
+            term_smart_title = utils.smart_title_case(term_title)
 
-            item_type = term_types.get(utils.smart_title_case(term_title))
-            stack_size = stack_sizes.get(term_title)
+            item_type = term_types.get(term_smart_title)
+            stack_size = stack_sizes.get(term_title, 1)
 
+            parsed_items.append(
+                build_parsed_item(
+                    term_title=term_title,
+                    item_type=item_type,
+                    duplicate=duplicate,
+                    timestamp=timestamp,
+                    experimental_items=experimental_items,
+                    stack_size=stack_size,
+                    area_level=blueprint_area_level,
+                    blueprint_type=blueprint_layout,
+                    logged_by=poe_user,
+                    league=league_version
+                )
+            )
             if allow_dupes or not duplicate:
                 if c.DEBUGGING:
                     print(f"[WriteCSV] Writing row for term: {term_title}")
-
-                # Write main CSV row
                 writer.writerow(format_row(term_title, item_type, stack_size))
 
-                # Write debug row if enabled
                 if c.DEBUGGING and c.CSV_DEBUGGING:
                     writer.writerow(format_row(term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
 
+#####################################################
+#                                                   #
+# Loads the 5 latest entries within 120 seconds of  #
+# each other in the curio to simulate a wing in a   #
+# grand heist                                       #
+#                                                   #
+#####################################################
+
+def _parse_rows_from_csv(csv_file_path):
+    debug = c.DEBUGGING
+    try:
+        with open(csv_file_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+    except FileNotFoundError:
+        if debug:
+            print(f"[DEBUG] CSV file '{csv_file_path}' not found.")
+        return []
+
+    if not rows and debug:
+        print("[DEBUG] CSV file is empty.")
+    return rows
+
+
+def _parse_items_from_rows(rows):
+    debug = c.DEBUGGING
+    parsed_items = []
+
+    COLUMN_TO_TYPE = {
+        "Trinket": c.TRINKET_TYPE,
+        "Replacement": c.REPLACEMENT_TYPE,
+        "Replica": c.REPLICA_TYPE,
+        "Experimented Base Type": c.EXPERIMENTAL_TYPE,
+        "Weapon Enchantment": c.WEAPON_ENCHANT_TYPE,
+        "Armor Enchantment": c.ARMOR_ENCHANT_TYPE,
+        "Scarab": c.SCARAB_TYPE,
+        "Currency": c.CURRENCY_TYPE,
+    }
+
+    for row_idx, row in enumerate(rows):
+        if debug:
+            print(f"[DEBUG] Processing row {row_idx}: {row}")
+
+        # Grab common metadata from CSV headers
+        league = row.get("League", "")
+        logged_by = row.get("Logged By", "")
+        blueprint_type = row.get("Blueprint Type", "")
+        area_level = row.get("Area Level", "")
+        stack_size = row.get("Stack Size", "")
+        variant = row.get("Variant", "")
+        duplicate = row.get("Flag?", "FALSE").upper() == "TRUE"
+        timestamp = row.get("Time", "")
+
+        for col_name, inferred_type in COLUMN_TO_TYPE.items():
+            value = row.get(col_name)
+            if not value or not value.strip():
+                continue
+
+            term_title = utils.smart_title_case(value.strip())
+            item_type = term_types.get(term_title, inferred_type)
+
+            # Build parsed item directly from CSV header values
+            item = build_parsed_item(
+                term_title=term_title,
+                item_type=item_type,
+                duplicate=duplicate,
+                timestamp=timestamp,
+                experimental_items=experimental_items,
+                rarity=None,
+                league=league,
+                logged_by=logged_by,
+                blueprint_type=blueprint_type,
+                area_level=area_level,
+                stack_size=stack_size,
+            )
+            parsed_items.append(item)
+
+            if debug:
+                print(f"[DEBUG] Added item: {item.itemName.lines[0]}, "
+                      f"duplicate={duplicate}, rarity={item.itemRarity}")
+
+    return parsed_items
+
+
+
+def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
+    rows = _parse_rows_from_csv(c.csv_file_path)
+    if not rows:
+        return []
+
+    last_rows = rows[-max_items:]
+    timestamps = []
+    for row in last_rows:
+        ts_str = row.get(c.csv_time_header)
+        try:
+            ts = datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S") if ts_str else None
+        except Exception:
+            ts = None
+        timestamps.append(ts)
+
+    if not any(timestamps):
+        return _parse_items_from_rows(last_rows)
+
+    newest_ts = max(t for t in timestamps if t is not None)
+    recent_rows = [row for row, ts in zip(last_rows, timestamps)
+                   if ts and (newest_ts - ts) <= timedelta(seconds=within_seconds)]
+
+    return _parse_items_from_rows(recent_rows)
+
+
+# ---------- Load All Items ----------
+def load_all_parsed_items_from_csv():
+    rows = _parse_rows_from_csv(c.csv_file_path)
+    return _parse_items_from_rows(rows)
 
 #####################################################
 # Captures the entire screen, afterwards using      #
@@ -565,36 +695,29 @@ def capture_once():
     screenshot_np = np.array(ImageGrab.grab(bbox=bbox))
     full_text, filtered = ocr_from_image(screenshot_np)
 
-
-
     os.makedirs(c.saves_dir, exist_ok=True)
-    write_csv_entry(full_text, utils.now_timestamp(), allow_dupes=False)
-    if c.ALWAYS_SHOW_CONSOLE:
-        utils.bring_console_to_front()
-  
+    items = write_csv_entry(full_text, utils.now_timestamp(), allow_dupes=False)
+    return items
+
 
 #####################################################
 # Captures the a snippet of the screen, afterwards  #
 # using OCR reads the texts and checks for matches. #
 # If a match is found, it will save it in the .csv  #
 #####################################################
-
-def capture_snippet():
-    bbox = get_poe_bbox()
-    if bbox is None:
-        print(c.not_found_target_snippet_txt)
-        exit()
-
-    root = tk.Tk()
-    root.attributes("-alpha", 0.3)
-    root.attributes("-fullscreen", True)
-    root.attributes("-topmost", True)
-    root.configure(background='black')
+def capture_snippet(root, on_done):
+    items = []
+    # create overlay as a child window, not a new root
+    overlay = tk.Toplevel(root)
+    overlay.attributes("-alpha", 0.3)
+    overlay.attributes("-fullscreen", True)
+    overlay.attributes("-topmost", True)
+    overlay.configure(background='black')
 
     start_x = start_y = end_x = end_y = 0
     rect_id = None
 
-    canvas = tk.Canvas(root, cursor="cross", bg='gray')
+    canvas = tk.Canvas(overlay, cursor="cross", bg='gray')
     canvas.pack(fill=tk.BOTH, expand=True)
 
     def on_mouse_down(event):
@@ -603,15 +726,17 @@ def capture_snippet():
 
     def on_mouse_drag(event):
         nonlocal rect_id
-        canvas.delete(rect_id)
-        rect_id = canvas.create_rectangle(start_x, start_y, event.x, event.y, outline='red', width=2)
+        if rect_id:
+            canvas.delete(rect_id)
+        rect_id = canvas.create_rectangle(start_x, start_y, event.x, event.y,
+                                          outline='red', width=2)
 
     def on_mouse_up(event):
-        nonlocal end_x, end_y
+        nonlocal end_x, end_y, items
         end_x, end_y = event.x, event.y
-        root.quit()
-        root.destroy()
+        overlay.destroy()   # only close the overlay, not the main GUI
 
+        # proceed with bbox / OCR logic...
         x1, y1 = min(start_x, end_x), min(start_y, end_y)
         x2, y2 = max(start_x, end_x), max(start_y, end_y)
 
@@ -621,14 +746,12 @@ def capture_snippet():
 
         bbox = (x1, y1, x2, y2)
         screenshot_np = np.array(ImageGrab.grab(bbox))
-
         if screenshot_np is None or screenshot_np.size == 0:
             print(c.snippet_txt_failed)
             return
 
         full_text, filtered = ocr_from_image(screenshot_np, scale=2)
 
-        
         h, w, _ = filtered.shape
 
 
@@ -652,15 +775,14 @@ def capture_snippet():
                 f.write(full_text)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        write_csv_entry(full_text, timestamp, allow_dupes=True)
+        items = write_csv_entry(full_text, timestamp, allow_dupes=True)
+        on_done(parsed_items) 
 
     canvas.bind("<Button-1>", on_mouse_down)
     canvas.bind("<B1-Motion>", on_mouse_drag)
     canvas.bind("<ButtonRelease-1>", on_mouse_up)
 
-    root.mainloop()
-    if c.ALWAYS_SHOW_CONSOLE:
-        utils.bring_console_to_front()
+    return items
 
 #####################################################
 # Captures the a snippet of the top right corner of #
@@ -710,151 +832,11 @@ def capture_layout():
         sys.stdout.flush()
         attempt += 1
 
-    if c.ALWAYS_SHOW_CONSOLE:
-        utils.bring_console_to_front()
-
-###############################################
-# HOTKEY/KEYBIND HANDLING                     #
-###############################################
-def parse_hotkey(hotkey_str):
-    keys = set()
-    for part in hotkey_str.lower().split('+'):
-        part = part.strip()
-
-        # Modifiers
-        if part == 'ctrl':
-            keys.add(keyboard.Key.ctrl)
-        elif part == 'shift':
-            keys.add(keyboard.Key.shift)
-        elif part == 'alt':
-            keys.add(keyboard.Key.alt)
-
-        # Function keys (f1..f12)
-        elif part.startswith('f') and part[1:].isdigit():
-            try:
-                keys.add(getattr(keyboard.Key, part))
-            except AttributeError:
-                raise ValueError(f"Unsupported function key: {part}")
-
-        # Single printable key (letters, numbers, symbols)
-        elif len(part) == 1:
-            keys.add(part.lower())
-
-        else:
-            raise ValueError(f"Unknown key: {part}")
-
-    combo = frozenset(keys)
-    if not combo:
-        raise ValueError(f"Hotkey '{hotkey_str}' parsed to an empty set!")
-    return combo
-
-hotkeys = {
-    'capture': parse_hotkey(c.capture_key),
-    'layout_capture': parse_hotkey(c.layout_capture_key),
-    'snippet': parse_hotkey(c.snippet_key),
-    'exit': parse_hotkey(c.exit_key),
-    'debug': parse_hotkey(c.enable_debugging_key),
-}
-
-
-hotkey_sets = list(hotkeys.values())
-if len(hotkey_sets) != len(set(hotkey_sets)):
-    raise ValueError("Duplicate hotkeys found in configuration. Please ensure all hotkeys are unique.")
-
-def main():
-    global listener_ref
-    
-    print(c.info_show_keys_capture)
-    print(c.info_show_keys_snippet)
-    print(c.info_show_keys_layout)
-    print(c.info_show_keys_exit)
-    exit_event = threading.Event()
-
-    def handle_capture():
-        validateAttempt(c.capturing_prompt)
-        capture_once()
-
-    def handle_snippet():
-        validateAttempt(c.capturing_prompt)
-        capture_snippet()
-
-    def handle_layout_capture():
-        validateAttempt(c.layout_prompt)
-        capture_layout()
-
-    def handle_exit():
-        print(c.exiting_prompt)
-        exit_event.set()
-        if listener_ref:
-            listener_ref.stop()  # stops pynput listener
-
-    def handle_debugging():
-        c.DEBUGGING = not c.DEBUGGING
-        print("Debugging: {}".format("Enabled" if c.DEBUGGING else "Disabled"))
-
-    # Hotkey -> action mapping
-    actions = {
-        'capture': handle_capture,
-        'layout_capture': handle_layout_capture,
-        'snippet': handle_snippet,
-        'exit': handle_exit,
-        'debug': handle_debugging
-    }
-
-
-    # Listener functions
-    pressed_keys = set()
-    fired_combos = set()
-
-    def on_press(key):
-        before_count = len(pressed_keys)
-
-        if isinstance(key, keyboard.Key):
-            pressed_keys.add(key)
-        else:
-            try:
-                pressed_keys.add(key.char.lower())
-            except AttributeError:
-                return
-
-        for name, combo in hotkeys.items():
-            if combo.issubset(pressed_keys) and name not in fired_combos:
-                if len(pressed_keys) > before_count:
-                    fired_combos.add(name)
-                    # Run handler in a separate thread
-                    threading.Thread(target=actions[name], daemon=True).start()
-
-    def on_release(key):
-        if isinstance(key, keyboard.Key):
-            pressed_keys.discard(key)
-        else:
-            try:
-                pressed_keys.remove(key.char.lower())
-            except (AttributeError, KeyError):
-                pass
-
-        # Reset combos when any key in them is released
-        to_remove = {n for n, combo in hotkeys.items() if not combo.issubset(pressed_keys)}
-        fired_combos.difference_update(to_remove)
-    
-    
-    print(c.listening_keybinds_txt)
-    listener_ref = keyboard.Listener(on_press=on_press, on_release=on_release)
-    listener_ref.start()
-
-    try:
-        while not exit_event.is_set():
-            exit_event.wait(0.1)
-    except KeyboardInterrupt:
-        print("Interrupted by user. Exiting.")
-        listener_ref.stop()
-
 
 def validateAttempt(print_text):
     global attempt
     if attempt == 1:
         print(print_text)
 
-
 if __name__ == "__main__":
-    main()
+    print("Run GUI instead: python gui.py")

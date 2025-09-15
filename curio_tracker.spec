@@ -19,10 +19,24 @@ tesseract_base = os.path.abspath("tesseract")
 datas = [
     ('all_valid_heist_terms.csv', '.'),
     ('body_armors.txt', '.'),
+    ('experimental_items.csv', '.'),
     ('config.py', '.'),
+    ('curio_keybinds.py', '.'),
     ('ocr_utils.py', '.'),
+    ('renderer.py', '.'),
+    ('curio_tracker.py', '.'),
     ('user_settings.ini', '.'),
 ]
+
+# ---- Add all files from /assets ----
+assets_dir = os.path.abspath("assets")
+for root, _, files in os.walk(assets_dir):
+    for f in files:
+        src_file = os.path.join(root, f)
+        rel_path = os.path.relpath(root, assets_dir)
+        # The destination path inside the exe
+        dest_dir = os.path.join("assets", rel_path)
+        datas.append((src_file, dest_dir))
 
 # ---- Find Python DLL dynamically ----
 dll_dir = sysconfig.get_config_var('BINDIR')
@@ -64,7 +78,7 @@ binaries += opencv_libs + pillow_libs + pyautogui_libs
 block_cipher = None
 
 a = Analysis(
-    ['curio_tracker.py'],
+    ['gui.py'],
     pathex=[r"D:\User\Desktop\ScreenToText\dev"],  # your source dir
     binaries=binaries,
     datas=datas,
@@ -96,12 +110,12 @@ exe = EXE(
     a.binaries,            
     a.datas,             
     [],
-    name='Curio Tracker',
+    name='Heist Curio Tracker',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     icon='icon.ico',
     version='version.txt',
     onefile=True,          

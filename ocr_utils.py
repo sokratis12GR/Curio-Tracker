@@ -1,14 +1,16 @@
-import re
 import os
+import re
 import sys
 import math
-import ctypes
-import pytesseract
+import csv
 import shutil
+import ctypes
 from datetime import datetime
 from difflib import get_close_matches
+from types import SimpleNamespace
+import pytesseract
 import config as c
-
+import configparser
 
 ################################################################################
 # Sets the Tesseract OCR location to either PATH, Bundled or User Set Location #
@@ -43,21 +45,66 @@ def set_tesseract_path():
 
     # --- Apply and verify ---
     pytesseract.pytesseract.tesseract_cmd = tesseract_bin
-    print("[DEBUG] Tesseract binary set to:", tesseract_bin)
+    if c.DEBUGGING:
+        print("[DEBUG] Tesseract binary set to:", tesseract_bin)
 
     tesseract_dir = os.path.dirname(tesseract_bin)
     tessdata_dir = os.path.join(tesseract_dir, "tessdata")
 
     if os.path.isdir(tessdata_dir):
         os.environ["TESSDATA_PREFIX"] = tessdata_dir
-        print("[DEBUG] TESSDATA_PREFIX set to:", tessdata_dir)
+        if c.DEBUGGING:
+            print("[DEBUG] TESSDATA_PREFIX set to:", tessdata_dir)
         eng_path = os.path.join(tessdata_dir, "eng.traineddata")
         if os.path.isfile(eng_path):
-            print("[DEBUG] eng.traineddata found:", eng_path)
+            if c.DEBUGGING:
+                print("[DEBUG] eng.traineddata found:", eng_path)
         else:
-            print("[ERROR] eng.traineddata NOT found in tessdata!")
+            if c.DEBUGGING:
+                print("[ERROR] eng.traineddata NOT found in tessdata!")
     else:
         print("[ERROR] tessdata directory not found at:", tessdata_dir)
+
+
+######################################################################
+# Settings file path under %APPDATA%/HeistCurioTracker/              #
+######################################################################
+def get_settings_path():
+    appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+    base = os.path.join(appdata, "HeistCurioTracker")
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "user_settings.ini")
+
+settings_path = get_settings_path()
+settings = configparser.ConfigParser()
+if os.path.exists(settings_path):
+    settings.read(settings_path)
+
+# Ensure default sections exist
+if 'Hotkeys' not in settings:
+    settings['Hotkeys'] = {}
+if 'User' not in settings:
+    settings['User'] = {}
+
+# ---------------- Persistence ----------------
+def write_settings():
+    try:
+        with open(settings_path, 'w') as f:
+            settings.write(f)
+    except Exception:
+        print("[ERROR] Failed to write settings:")
+        print(traceback.format_exc())
+
+def set_setting(section: str, key: str, value: str):
+    if section not in settings:
+        settings[section] = {}
+    settings[section][key] = value
+    write_settings()
+
+def get_setting(section: str, key: str, default=None):
+    if section not in settings:
+        return default
+    return settings[section].get(key, default)
 
 ######################################################################
 # Get console window handle. As well as a helper to bring it forward #
@@ -266,8 +313,18 @@ def add_if_scarab(term, type_):
 def add_if_currency(term, type_):
     return term if type_ == c.CURRENCY_TYPE else ""
 
-def is_currency_or_scarab(term, type_):
+def is_currency_or_scarab(type_):
     return type_ == c.CURRENCY_TYPE or type_ == c.SCARAB_TYPE
+
+def is_unique(type_):
+    return type_ == c.REPLACEMENT_TYPE or type_ == c.REPLICA_TYPE
+
+def is_rare(type_):
+    return type_ == c.TRINKET_TYPE or type_ == c.EXPERIMENTAL_TYPE or type_ == c.ARMOR_ENCHANT_TYPE or type_ == c.WEAPON_ENCHANT_TYPE
+
+def is_enchant(type_):
+    return type_ == c.ARMOR_ENCHANT_TYPE or type_ == c.WEAPON_ENCHANT_TYPE
+
 
 #########################################################################
 # Attempts to get the top right part of the screenshot which contains 	#
@@ -291,3 +348,102 @@ def get_top_right_layout(screen_width, screen_height):
     bottom = region_height
 
     return (left, top, right, bottom)
+
+#########################################################################
+#                                                                       #
+#        Builds the Item for the Image Rendering via CSV / OCR          #
+#                                                                       #
+#########################################################################
+def parse_timestamp(ts_str, fallback_now=True):
+    if not ts_str:
+        return datetime.now() if fallback_now else None
+    try:
+        return datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S")
+    except Exception:
+        return datetime.now() if fallback_now else None
+
+def load_csv(file_path, row_parser=None, skip_header=True):
+    results = []
+    with open(file_path, newline='', encoding='utf-8-sig') as f:
+        reader = csv.reader(f)
+        if skip_header:
+            next(reader, None)
+        for row in reader:
+            results.append(row_parser(row) if row_parser else row)
+    return results
+
+def build_parsed_item(
+    term_title,
+    item_type,
+    duplicate,
+    timestamp,
+    experimental_items,
+    rarity=None,
+    league="",
+    logged_by="",
+    blueprint_type="",
+    area_level="",
+    stack_size=""
+):
+    ts = parse_timestamp(timestamp)
+
+    corrected_name = (
+        "Replica " + term_title if item_type == c.REPLICA_TYPE else
+        "Enchanted Item" if item_type in (c.WEAPON_ENCHANT_TYPE, c.ARMOR_ENCHANT_TYPE) else
+        term_title
+    )
+    corrected_type = (
+        "Replica" if item_type == c.REPLICA_TYPE else
+        "Enchant" if item_type in (c.WEAPON_ENCHANT_TYPE, c.ARMOR_ENCHANT_TYPE) else
+        item_type
+    )
+
+    enchants = []
+    if ";" in term_title and item_type in (c.WEAPON_ENCHANT_TYPE, c.ARMOR_ENCHANT_TYPE):
+        part1, part2 = [smart_title_case(p.strip()) for p in term_title.split(";", 1)]
+        enchants.extend([part1, part2])
+    elif item_type in (c.WEAPON_ENCHANT_TYPE, c.ARMOR_ENCHANT_TYPE):
+        enchants.append(term_title)
+
+    rarity = (
+        rarity or
+        ("Unique" if is_unique(item_type) else
+         "rare" if is_rare(item_type) else
+         "currency" if is_currency_or_scarab(item_type) else
+         "normal")
+    )
+
+    stack_size_str = (
+        stack_size if stack_size and str(stack_size).isdigit() and
+        int(stack_size) > 0 and is_currency_or_scarab(item_type)
+        else ""
+    )
+
+    item_dict = SimpleNamespace(
+        itemClass="",
+        itemRarity=rarity,
+        itemName=SimpleNamespace(lines=[corrected_name]),
+        flavorText={"lines": []},
+        itemLevel=0,
+        affixes=[],
+        runes=[],
+        implicits=[],
+        enchants=enchants,
+        quality=0,
+        type=corrected_type,
+        corrupted=False,
+        stack_size=stack_size_str,
+        duplicate=duplicate,
+        time=ts,
+        league=league,
+        logged_by=logged_by,
+        blueprint_type=blueprint_type,
+        area_level=area_level,
+    )
+
+    if item_type == c.EXPERIMENTAL_TYPE:
+        implicits_lines = experimental_items.get(term_title, [])
+        if implicits_lines:
+            item_dict.implicits.extend(implicits_lines)
+
+    return item_dict
