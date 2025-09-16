@@ -72,3 +72,22 @@ Transfer-attuned Spirit Shield,Sap Enemies when you Block their Damage
 Transformer Staff,"Spend Energy Shield before Mana for Costs of Socketed Skills
 +(66-80) to maximum Energy Shield"
 Void Fangs,Adds (46-63) to (92-113) Chaos Damage
+Manifold Ring,"+1 Prefix Modifier allowed
+-2 Suffix Modifiers allowed
+Implicit Modifiers Cannot Be Changed
+50% increased Prefix Modifier magnitudes"
+Focused Amulet,"-1 Prefix Modifier allowed
+-2 Suffix Modifiers allowed
+Implicit Modifiers Cannot Be Changed
+100% increased Explicit Modifier magnitudes"
+Helical Ring,"-2 Prefix Modifiers allowed
++1 Suffix Modifier allowed
+Implicit Modifiers Cannot Be Changed
+50% increased Suffix Modifier magnitudes"
+Composite Ring,"+3 Prefix Modifiers allowed
+-3 Suffix Modifiers allowed
+Implicit Modifiers Cannot Be Changed"
+Ratcheting Ring,"-3 Prefix Modifiers allowed
++3 Suffix Modifiers allowed
+Implicit Modifiers Cannot Be Changed"
+Mechanical Belt,Has 1 Socket
