@@ -3,6 +3,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 from pynput import keyboard
 import threading
+import time
 import configparser
 import os
 import sys
@@ -238,6 +239,7 @@ def log_to_console(text):
 
 
 
+
 # ----- Global State -----
 recording_index = None
 current_keys = []
@@ -340,7 +342,6 @@ PAD_Y = 10
 
 # ---------- Layout Control ----------
 
-# Fix column weights: debug stays narrow, rest expands
 root.grid_columnconfigure(0, weight=0, minsize=280)  # Left panel (Keybinds)
 root.grid_columnconfigure(1, weight=1)               # Right panel (Tree/Image)
 # ---------- Capture Console (Bottom) ----------
@@ -368,6 +369,11 @@ tree_frame = ttk.Frame(right_frame)
 tree_frame.grid(row=0, column=0, sticky="nsew")
 tree_frame.grid_rowconfigure(0, weight=1)
 tree_frame.grid_columnconfigure(0, weight=1)
+
+# ---------- Virtualized Treeview Globals ----------
+VISIBLE_ROW_BUFFER = 50   # Number of rows rendered at once
+all_items_data = []       # Full list of items to display
+rendered_iids = []        # Currently rendered Treeview row IDs
 
 columns = ("item", "value", "numeric_value", "type", "stack_size", "area_level", 
            "layout", "player", "league", "time")
@@ -471,7 +477,49 @@ def format_chaos_value(value: str) -> str:
         return str(int(f_rounded))  # drop .0
     return str(f_rounded)
 
-def add_item_to_tree(item, historical_counter=None):
+# Track last visible rows
+_last_visible_iids = set()
+
+_last_update = 0
+def update_visible_images(event=None):
+    global _last_visible_iids, _last_update
+    now = time.time()
+    if now - _last_update < 0.1:  # 100ms throttle
+        return
+    _last_update = now
+
+    if not images_visible:
+        return
+
+    first_frac, last_frac = tree.yview()
+    children = tree.get_children()
+    total = len(children)
+    if total == 0:
+        return
+
+    first_idx = int(first_frac * total)
+    last_idx = int(last_frac * total) + 1
+    current_visible = set(children[first_idx:last_idx])
+
+    # Remove images for rows no longer visible
+    for iid in _last_visible_iids - current_visible:
+        if tree.exists(iid):
+            tree.item(iid, image="")
+            image_cache.pop(iid, None)
+
+    # Add images for newly visible rows
+    for iid in current_visible - _last_visible_iids:
+        if iid not in image_cache and tree.exists(iid):
+            pil_img = original_img_cache.get(iid)
+            if pil_img:
+                # Only create PhotoImage now
+                image_cache[iid] = ImageTk.PhotoImage(pil_img)
+                tree.item(iid, image=image_cache[iid])
+
+    _last_visible_iids = current_visible
+
+
+def add_item_to_tree(item, historical_counter=None, render_image=False):
     global sorted_item_keys, item_time_map
 
     item_name_str = get_item_name_str(item)
@@ -481,17 +529,12 @@ def add_item_to_tree(item, historical_counter=None):
         item_key = generate_item_id(item)  # unique for live items
 
     # ---- Render image ----
-    img = render_item(item)
-    img = img.resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT), Image.LANCZOS)
-    img = pad_image(img, left_pad=-20, top_pad=0,
-                    target_width=IMAGE_COL_WIDTH, target_height=ROW_HEIGHT)
-
-    # Store original image for dynamic resizing
-    original_img_cache[item_key] = img.copy()
-
-    # Create PhotoImage for Treeview
-    photo = ImageTk.PhotoImage(img)
-    image_cache[item_key] = photo
+    if item_key not in original_img_cache:
+        img = render_item(item)
+        img = img.resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT), Image.LANCZOS)
+        img = pad_image(img, left_pad=-20, top_pad=0,
+                        target_width=IMAGE_COL_WIDTH, target_height=ROW_HEIGHT)
+        original_img_cache[item_key] = img.copy()
 
     # ---- Item text ----
     if getattr(item, "enchants", None) and len(item.enchants) > 0:
@@ -544,6 +587,8 @@ def add_item_to_tree(item, historical_counter=None):
     divineValue = getattr(item, "divine_value", "")
     stack_size = getattr(item, "stack_size", "")
 
+    item_type = getattr(item, "type", "N/A")
+
     # Convert to floats safely
     try:
         chaos_float = float(chaosValue)
@@ -580,19 +625,23 @@ def add_item_to_tree(item, historical_counter=None):
         display_value = ""  # show nothing if both are 0 or invalid
 
     numeric_value = chaos_float
-
+    stack_size_txt = (
+            stack_size
+            if int(stack_size) > 0 and utils.is_currency_or_scarab(item_type)
+            else ""
+        )
 
     # ---- Insert into Treeview ----
     iid = item_key
     tree.insert(
         "", index,
         iid=iid,
-        image=photo,
+        image="",  
         values=(item_text,
                 display_value,
                 numeric_value,
-                getattr(item, "type", "N/A"),
-                stack_size,
+                item_type,
+                stack_size_txt,
                 getattr(item, "area_level", "83"),
                 getattr(item, "blueprint_type", "Prohibited Library"),
                 getattr(item, "logged_by", ""),
@@ -602,12 +651,129 @@ def add_item_to_tree(item, historical_counter=None):
     )
     all_item_iids.add(iid)
 
+    if render_image:
+        update_visible_images()
+
+
+_last_visible_range = (0, 0)
+
+def render_visible_window():
+    global _last_visible_range
+    if not all_items_data:
+        return
+
+    first_frac, last_frac = tree.yview()
+    total = len(all_items_data)
+    first_idx = int(first_frac * total)
+    last_idx = int(last_frac * total) + 1
+
+    # Only update if the visible range changed
+    if (first_idx, last_idx) == _last_visible_range:
+        return
+    _last_visible_range = (first_idx, last_idx)
+
+    # Clear Treeview temporarily
+    tree.delete(*tree.get_children())
+    sorted_item_keys.clear()
+    all_item_iids.clear()
+    image_cache.clear()
+
+    for i in range(first_idx, last_idx):
+        add_item_to_tree(all_items_data[i], historical_counter=i, render_image=False)
+
+    update_visible_images() 
+
+tree.bind("<Configure>", lambda e: update_visible_images())
+v_scrollbar.config(command=lambda *args: (tree.yview(*args), update_visible_images()))
+tree.bind("<Motion>", lambda e: update_visible_images())
+
 
 def pad_image(img, left_pad=0, top_pad=0, target_width=200, target_height=40):
     # Create new blank image with transparent background
     new_img = Image.new("RGBA", (target_width, target_height), (0, 0, 0, 0))
     new_img.paste(img, (0, 0))
     return new_img
+
+def update_total_items_count():
+    total_items_var.set(f"Total: {len(all_item_iids)}")
+
+# ---------- Load Functions ----------
+def load_all_items_threaded():
+    def worker():
+        all_items = tracker.load_all_parsed_items_from_csv()
+        reverse_load = sort_reverse.get("time", True)
+        if reverse_load:
+            all_items = list(reversed(all_items))
+
+        # Schedule batches to the main thread (Tkinter must only modify widgets in main thread)
+        root.after(0, add_items_in_batches, all_items)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+def add_items_in_batches(items, batch_size=200, start_index=0):
+    end_index = min(start_index + batch_size, len(items))
+    for i in range(start_index, end_index):
+        # Add item but don't render images yet
+        add_item_to_tree(items[i], historical_counter=i, render_image=False)
+
+    if end_index < len(items):
+        # Schedule next batch
+        root.after(15, add_items_in_batches, items, batch_size, end_index)
+    else:
+        update_visible_images()
+        filter_tree_by_time()
+        update_total_items_count()
+
+def load_all_items():
+    tree.delete(*tree.get_children())  # clear all existing items
+    all_items = tracker.load_all_parsed_items_from_csv()
+
+    reverse_load = sort_reverse.get("time", True)
+    if reverse_load:
+        all_items = list(reversed(all_items))
+
+    # Add items in batches (images rendered lazily)
+    add_items_in_batches(all_items)
+
+
+# ----- Load Latest 5 Items -----
+def load_latest_wing():
+    tree.delete(*tree.get_children())  # clear all existing items
+    tracker.parsed_items = tracker.load_recent_parsed_items_from_csv(max_items=5)
+    if not tracker.parsed_items:
+        return
+
+    reverse_load = sort_reverse.get("time", True)
+    items_to_add = list(reversed(tracker.parsed_items)) if reverse_load else tracker.parsed_items
+
+    for i, item in enumerate(items_to_add):
+        add_item_to_tree(item, historical_counter=i, render_image=True)
+
+    filter_tree_by_time()
+    update_total_items_count()
+
+# ----- Load Latest 1 Item -----
+def load_latest_item():
+    tree.delete(*tree.get_children())  # clear current items
+    tracker.parsed_items = tracker.load_recent_parsed_items_from_csv(max_items=1)
+    if not tracker.parsed_items:
+        return
+
+    item = tracker.parsed_items[0]
+    add_item_to_tree(item, historical_counter=i, render_image=True)
+    filter_tree_by_time()
+    update_total_items_count()
+
+# ----- Clear Tree ----- 
+def clear_tree():
+    tree.delete(*tree.get_children())
+    _last_visible_iids.clear()
+    sorted_item_keys.clear()
+    item_time_map.clear()
+    all_item_iids.clear()
+    original_img_cache.clear()
+    image_cache.clear()
+
 
 # ---------- Sorting ----------
 sort_reverse = {"img": False, "item": False, "value": False, "type": True, "stack_size": False, "area_level": False, "layout": False, "player": False, "league": False, "time": True}
@@ -711,38 +877,6 @@ def open_custom_hours_popup():
 
     entry.focus()
     entry.bind("<Return>", lambda e: apply_custom())
-
-# ---------- Load Functions ----------
-def load_all_items():
-    tree.delete(*tree.get_children())  # clear all existing items
-    all_items = tracker.load_all_parsed_items_from_csv()
-
-    # Determine insertion order based on current time sort
-    # True = newest → oldest, False = oldest → newest
-    reverse_load = sort_reverse.get("time", True)
-    if reverse_load:
-        all_items = list(reversed(all_items))
-
-    for i, item in enumerate(all_items):
-        add_item_to_tree(item, historical_counter=i)
-
-    filter_tree_by_time()
-
-
-def load_latest_wing():
-    tree.delete(*tree.get_children())  # clear all existing items
-    tracker.parsed_items = tracker.load_recent_parsed_items_from_csv(max_items=5)
-    if not tracker.parsed_items:
-        return
-
-    reverse_load = sort_reverse.get("time", True)
-    items_to_add = list(reversed(tracker.parsed_items)) if reverse_load else tracker.parsed_items
-
-    for i, item in enumerate(items_to_add):
-        add_item_to_tree(item, historical_counter=i)
-
-    filter_tree_by_time()
-
 
 # Define time filter variable and dropdown
 time_options = [
@@ -871,12 +1005,19 @@ settings_menu.add_command(label="Exit", command=handle_exit)
 
 
 load_latest_btn = ttk.Button(left_frame, text="Load Latest Wing", command=load_latest_wing)
-load_latest_btn.grid(row=EXTRA_BUTTON_INDEX, column=0, columnspan=1, pady=10)
+load_latest_btn.grid(row=EXTRA_BUTTON_INDEX, column=0, pady=10, sticky="ew")
 
-load_all_btn = ttk.Button(left_frame, text="Load All Data", command=load_all_items)
-load_all_btn.grid(row=EXTRA_BUTTON_INDEX, column=1, columnspan=1, pady=10)
+load_all_btn = ttk.Button(left_frame, text="Load All Data", command=load_all_items_threaded)
+load_all_btn.grid(row=EXTRA_BUTTON_INDEX, column=1, pady=10, sticky="ew")
 EXTRA_BUTTON_INDEX += 1
 
+load_latest_1_btn = ttk.Button(left_frame, text="Load Latest 1 Item", command=load_latest_item)
+load_latest_1_btn.grid(row=EXTRA_BUTTON_INDEX, column=0, pady=5, sticky="ew")
+
+clear_tree_btn = ttk.Button(left_frame, text="Clear Tree", command=clear_tree)
+clear_tree_btn.grid(row=EXTRA_BUTTON_INDEX, column=1, pady=5, sticky="ew")
+
+EXTRA_BUTTON_INDEX += 1
 
 # ----- PoE Player Label and Textbox -----
 ttk.Label(left_frame, text="PoE Player:").grid(row=EXTRA_BUTTON_INDEX, column=0, sticky="w", pady=(5, 2))
@@ -1023,9 +1164,17 @@ def search_items(*args):
             matched_count += 1
 
     search_count_var.set(f"Found: {matched_count}")
+    update_total_items_count()
 
 # Live filter: runs automatically when typing
 search_var.trace_add("write", search_items)
+
+EXTRA_BUTTON_INDEX += 1
+
+# --- Total Items Label (under search counter) ---
+total_items_var = tk.StringVar(value="Total: 0")
+total_items_label = ttk.Label(left_frame, textvariable=total_items_var)
+total_items_label.grid(row=EXTRA_BUTTON_INDEX, column=0, columnspan=2, sticky="w", pady=(0, 5))
 
 EXTRA_BUTTON_INDEX += 1
 
