@@ -372,7 +372,6 @@ def build_parsed_item(
         blueprint_type=blueprint_type,
         area_level=area_level,
     )
-
     if item_type == c.EXPERIMENTAL_TYPE:
         implicits_lines = experimental_items.get(term_title, [])
         if implicits_lines:

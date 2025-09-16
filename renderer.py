@@ -197,6 +197,7 @@ def render_item(item):
     # Implicits
     for implicit in getattr(item, "implicits", []):
         draw.text((center_x, y), implicit, font=small_font, fill=COLOR["affix"], anchor="mm")
+        # draw.rectangle([0, y, canvas_w, y + LINE_HEIGHT], outline="red")  # debug box
         y += LINE_HEIGHT
 
     # Enchants
