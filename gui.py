@@ -23,6 +23,8 @@ IMAGE_COL_WIDTH = 200
 ROW_HEIGHT = 40
 original_image_col_width = IMAGE_COL_WIDTH
 
+c.initialize_settings()
+
 def apply_theme():
     global style, header_widgets, item_rows, canvas, content_frame, menu_indices, menu_btn
     if is_dark_mode:
@@ -48,6 +50,16 @@ def apply_theme():
     style.configure("TLabel", background=panel_bg, foreground=fg)
     style.configure("Header.TLabel", background=panel_bg, foreground=fg)
     
+    # ----- LabelFrame (Info panel) -----
+    style.configure("Info.TLabelframe",
+                    background=panel_bg,
+                    borderwidth=1,
+                    relief="groove")
+
+    style.configure("Info.TLabelframe.Label",
+                    background=panel_bg,
+                    foreground=fg)      
+
     # ----- Menu Button -----
     menu_btn.configure(style="MenuButton.TMenubutton")
     style.configure("MenuButton.TMenubutton",
@@ -290,6 +302,7 @@ def open_keybinds_popup():
             btn = popup_buttons[i]
             btn.config(text=default_value)
             curio_keybinds.update_keybind(name, default_value)
+            update_info_labels()
         print("[INFO] Keybinds reset to defaults.")
 
     reset_btn = ttk.Button(frame, text="Reset All Keybinds", command=reset_all)
@@ -301,7 +314,7 @@ def start_recording(index, button_list, popup):
     curio_keybinds.cancel_recording_popup(button_list)
 
     # Start a new recording popup
-    curio_keybinds.start_recording_popup(index, button_list, popup)
+    curio_keybinds.start_recording_popup(index, button_list, popup, update_info_labels)
 
 def toggle_theme_menu():
     toggle_theme()  # reuse your existing function
@@ -328,9 +341,8 @@ PAD_Y = 10
 # ---------- Layout Control ----------
 
 # Fix column weights: debug stays narrow, rest expands
-root.grid_columnconfigure(0, weight=0, minsize=280)  # Debug (fixed width)
-root.grid_columnconfigure(1, weight=0, minsize=200)  # Keybinds
-root.grid_columnconfigure(2, weight=1)  # Image
+root.grid_columnconfigure(0, weight=0, minsize=280)  # Left panel (Keybinds)
+root.grid_columnconfigure(1, weight=1)               # Right panel (Tree/Image)
 # ---------- Capture Console (Bottom) ----------
 # Make sure the window can handle two rows
 root.grid_rowconfigure(0, weight=1)
@@ -339,13 +351,12 @@ root.grid_rowconfigure(1, weight=0)
 root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(2, weight=1)
 
-# ---------- Keybind Panel (Middle) ----------
+# ---------- Frames ----------
 left_frame = ttk.Frame(root)
-left_frame.grid(row=0, column=1, padx=(5, 10), pady=10, sticky="nw")
+left_frame.grid(row=0, column=0, padx=(5, 10), pady=10, sticky="nw")
 
-# --- Right Frame (Images + Metadata Table) ---
 right_frame = ttk.Frame(root)
-right_frame.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
+right_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
 
 # Make right_frame expandable
 right_frame.grid_rowconfigure(0, weight=1)  # tree_frame row grows
@@ -358,10 +369,11 @@ tree_frame.grid(row=0, column=0, sticky="nsew")
 tree_frame.grid_rowconfigure(0, weight=1)
 tree_frame.grid_columnconfigure(0, weight=1)
 
-columns = ("item", "value", "type", "stack_size", "area_level", "layout", "player", "league", "time")
+columns = ("item", "value", "numeric_value", "type", "stack_size", "area_level", 
+           "layout", "player", "league", "time")
 tree = ttk.Treeview(tree_frame, columns=columns, show="tree headings")
-tree["displaycolumns"] = columns
-
+tree["displaycolumns"] = ("item", "value", "type", "stack_size", "area_level",
+                          "layout", "player", "league", "time")
 # Headings
 tree.heading("#0", text="Image")
 tree.heading("item", text="Item / Enchant", command=lambda: sort_tree("item"))
@@ -442,6 +454,23 @@ sorted_item_keys = []  # list of (timestamp, key)
 item_time_map = {}     # key -> datetime
 all_item_iids = set(tree.get_children())  # initially loaded items
 
+def format_chaos_value(value: str) -> str:
+    if not value or value.strip() == "":
+        return "" 
+    
+    try:
+        f = float(value)
+    except ValueError:
+        return ""  
+    
+    # Round to 1 decimal
+    f_rounded = round(f, 1)
+    
+    # Convert to string
+    if f_rounded.is_integer():
+        return str(int(f_rounded))  # drop .0
+    return str(f_rounded)
+
 def add_item_to_tree(item, historical_counter=None):
     global sorted_item_keys, item_time_map
 
@@ -511,6 +540,48 @@ def add_item_to_tree(item, historical_counter=None):
     if not is_dark_mode:
         tag = "light_odd" if row_index % 2 == 0 else "light_even"
 
+    chaosValue = getattr(item, "chaos_value", "")
+    divineValue = getattr(item, "divine_value", "")
+    stack_size = getattr(item, "stack_size", "")
+
+    # Convert to floats safely
+    try:
+        chaos_float = float(chaosValue)
+    except (ValueError, TypeError):
+        chaos_float = 0
+
+    try:
+        divine_float = float(divineValue)
+    except (ValueError, TypeError):
+        divine_float = 0
+
+    try:
+        stack_size = int(stack_size)
+    except (ValueError, TypeError):
+        stack_size = 1
+
+    # Multiply by stack size if more than 1
+    if stack_size > 1:
+        chaos_float *= stack_size
+        divine_float *= stack_size
+
+    # Helper to format numbers: drop .0 for integers
+    def format_value(f):
+        if f.is_integer():
+            return str(int(f))
+        return str(round(f, 1))  # keep 1 decimal
+
+    # Determine display value
+    if divine_float >= 0.5:
+        display_value = f"{format_value(divine_float)} Divines"
+    elif chaos_float > 0:
+        display_value = f"{format_value(chaos_float)} Chaos"
+    else:
+        display_value = ""  # show nothing if both are 0 or invalid
+
+    numeric_value = chaos_float
+
+
     # ---- Insert into Treeview ----
     iid = item_key
     tree.insert(
@@ -518,9 +589,10 @@ def add_item_to_tree(item, historical_counter=None):
         iid=iid,
         image=photo,
         values=(item_text,
-                getattr(item, "value", "N/A"),
+                display_value,
+                numeric_value,
                 getattr(item, "type", "N/A"),
-                getattr(item, "stack_size", ""),
+                stack_size,
                 getattr(item, "area_level", "83"),
                 getattr(item, "blueprint_type", "Prohibited Library"),
                 getattr(item, "logged_by", ""),
@@ -538,15 +610,15 @@ def pad_image(img, left_pad=0, top_pad=0, target_width=200, target_height=40):
     return new_img
 
 # ---------- Sorting ----------
-sort_reverse = {"img": False, "item": False, "value": False, "type": False, "stack_size": False, "area_level": False, "layout": False, "player": False, "league": False, "time": False}
+sort_reverse = {"img": False, "item": False, "value": False, "type": True, "stack_size": False, "area_level": False, "layout": False, "player": False, "league": False, "time": True}
 
 def sort_tree(column):
     children = tree.get_children()
     items = [(tree.set(iid, column), iid) for iid in children]
 
     if column == "value":
-        items.sort(key=lambda x: float(x[0]) if x[0] not in ("N/A", None) else 0,
-                   reverse=sort_reverse[column])
+        items.sort(key=lambda x: float(tree.set(x[1], "numeric_value")), reverse=sort_reverse[column])
+
     elif column == "time":
         from datetime import datetime
         def parse_time(val):
@@ -965,17 +1037,53 @@ def toggle_console():
         console_frame.grid()
         console_toggle_btn.config(text="▼ Console")  # pointing down to collapse
 
-console_toggle_btn = ttk.Button(left_frame, text="▲ Console", width=12, command=toggle_console)
-console_toggle_btn.grid(row=EXTRA_BUTTON_INDEX, column=0, pady=(0,5), sticky="w")
+console_toggle_btn = ttk.Button(toggle_frame, text="▼ Console", width=12, command=toggle_console)
+console_toggle_btn.grid(row=0, column=3, padx=5, sticky="w")
+EXTRA_BUTTON_INDEX += 1
 
-def shift_to_left():
-    left_frame.grid(column=0, row=0, padx=(10, 10), pady=10, sticky="nw")
-    right_frame.grid(column=1, row=0, padx=10, pady=10, sticky="nsew")
+separator = ttk.Separator(left_frame, orient='horizontal')
+separator.grid(row=EXTRA_BUTTON_INDEX, column=0, columnspan=2, sticky="ew", pady=(10, 5))
 
-    # Reconfigure columns
-    root.grid_columnconfigure(0, weight=0, minsize=200)  # Keybinds
-    root.grid_columnconfigure(1, weight=1)               # Image
-    root.grid_columnconfigure(2, weight=0, minsize=0)    # Clear old slot
+EXTRA_BUTTON_INDEX += 1  # move to next row for the search bar
+
+# ---------- Info Panel ----------
+info_frame = ttk.LabelFrame(left_frame, text="Info", style="Info.TLabelframe", padding=(8,4,8,4))
+info_frame.grid(row=EXTRA_BUTTON_INDEX, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+
+row_index = 0
+info_labels = {}  # store references
+
+info_labels['capture'] = ttk.Label(info_frame, text=c.info_show_keys_capture,
+                                   wraplength=220, justify="left", style="TLabel")
+info_labels['capture'].grid(row=row_index, column=0, sticky="w", padx=4, pady=2)
+row_index += 1
+
+info_labels['snippet'] = ttk.Label(info_frame, text=c.info_show_keys_snippet,
+                                   wraplength=220, justify="left", style="TLabel")
+info_labels['snippet'].grid(row=row_index, column=0, sticky="w", padx=4, pady=2)
+row_index += 1
+
+info_labels['layout'] = ttk.Label(info_frame, text=c.info_show_keys_layout,
+                                  wraplength=220, justify="left", style="TLabel")
+info_labels['layout'].grid(row=row_index, column=0, sticky="w", padx=4, pady=2)
+row_index += 1
+
+info_labels['exit'] = ttk.Label(info_frame, text=c.info_show_keys_exit,
+                                wraplength=220, justify="left", style="TLabel")
+info_labels['exit'].grid(row=row_index, column=0, sticky="w", padx=4, pady=2)
+row_index += 1
+
+
+def update_info_labels():
+    info_labels['capture'].config(text=f"Press {curio_keybinds.get_display_hotkey('capture')} to capture all curios on screen (no duplicates).")
+    info_labels['snippet'].config(text=f"Press {curio_keybinds.get_display_hotkey('snippet')} to snippet a region to capture allows duplicates.")
+    info_labels['layout'].config(text=f"Press {curio_keybinds.get_display_hotkey('layout_capture')} to set current layout.")
+    info_labels['exit'].config(text=f"Press {curio_keybinds.get_display_hotkey('exit')} to exit the script.")
+
+update_info_labels()
+
+EXTRA_BUTTON_INDEX += 1
+
 
 curio_keybinds.handlers = {
     'capture': handle_capture,
@@ -991,5 +1099,5 @@ curio_keybinds.start_global_listener()
 
 # ----- Run App -----
 apply_theme()
-shift_to_left()
+# shift_to_left()
 root.mainloop()

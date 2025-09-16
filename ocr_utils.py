@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytesseract
 import config as c
 import configparser
+from settings import get_setting, set_setting, write_settings, initialize_settings
 
 ################################################################################
 # Sets the Tesseract OCR location to either PATH, Bundled or User Set Location #
@@ -64,76 +65,6 @@ def set_tesseract_path():
                 print("[ERROR] eng.traineddata NOT found in tessdata!")
     else:
         print("[ERROR] tessdata directory not found at:", tessdata_dir)
-
-
-######################################################################
-# Settings file path under %APPDATA%/HeistCurioTracker/              #
-######################################################################
-def get_settings_path():
-    appdata = os.getenv('APPDATA') or os.path.expanduser('~')
-    base = os.path.join(appdata, "HeistCurioTracker")
-    os.makedirs(base, exist_ok=True)
-    return os.path.join(base, "user_settings.ini")
-
-settings_path = get_settings_path()
-settings = configparser.ConfigParser()
-if os.path.exists(settings_path):
-    settings.read(settings_path)
-
-# Ensure default sections exist
-if 'Hotkeys' not in settings:
-    settings['Hotkeys'] = {}
-if 'User' not in settings:
-    settings['User'] = {}
-
-# ---------------- Persistence ----------------
-def write_settings():
-    try:
-        with open(settings_path, 'w') as f:
-            settings.write(f)
-    except Exception:
-        print("[ERROR] Failed to write settings:")
-        print(traceback.format_exc())
-
-def set_setting(section: str, key: str, value: str):
-    if section not in settings:
-        settings[section] = {}
-    settings[section][key] = value
-    write_settings()
-
-def get_setting(section: str, key: str, default=None):
-    if section not in settings:
-        return default
-    return settings[section].get(key, default)
-
-######################################################################
-# Get console window handle. As well as a helper to bring it forward #
-######################################################################
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
-
-SW_RESTORE = 9
-
-def bring_console_to_front():
-    hwnd = kernel32.GetConsoleWindow()
-    if hwnd == 0:
-        print("No console window found.")
-        return False
-
-    # Get thread IDs
-    foreground_hwnd = user32.GetForegroundWindow()
-    current_thread_id = kernel32.GetCurrentThreadId()
-    foreground_thread_id = user32.GetWindowThreadProcessId(foreground_hwnd, 0)
-
-    # Attach input threads so SetForegroundWindow works
-    user32.AttachThreadInput(foreground_thread_id, current_thread_id, True)
-    user32.ShowWindow(hwnd, SW_RESTORE)
-    user32.SetForegroundWindow(hwnd)
-    user32.AttachThreadInput(foreground_thread_id, current_thread_id, False)
-
-    return True
-
-
 
 
 ####################################################################
@@ -273,11 +204,6 @@ def is_armor_enchant_by_body_armor_order(term_title, text, body_armors, enchant_
     # Default fallback, treat as weapon if unclear
     if c.DEBUGGING:
         print(f"[Fallback] '{term_title}' ambiguous and no body armor nearby, treating as Weapon Enchant")
-    
-    # print(f"Checking term: '{term_title}'")
-    # print(f"Base part: '{base_part}'")
-    # print(f"Normalized key: '{norm_key}'")
-    # print(f"Types from lookup: {types}")
 
     return False
     
@@ -372,6 +298,8 @@ def load_csv(file_path, row_parser=None, skip_header=True):
             results.append(row_parser(row) if row_parser else row)
     return results
 
+
+
 def build_parsed_item(
     term_title,
     item_type,
@@ -383,7 +311,9 @@ def build_parsed_item(
     logged_by="",
     blueprint_type="",
     area_level="",
-    stack_size=""
+    stack_size="",
+    chaos_value="",
+    divine_value=""
 ):
     ts = parse_timestamp(timestamp)
 
@@ -427,6 +357,8 @@ def build_parsed_item(
         itemLevel=0,
         affixes=[],
         runes=[],
+        chaos_value=chaos_value,
+        divine_value=divine_value,
         implicits=[],
         enchants=enchants,
         quality=0,

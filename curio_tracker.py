@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from datetime import datetime, timedelta
+import math
 
 import cv2
 import numpy as np
@@ -17,11 +18,11 @@ import config as c
 import ocr_utils as utils
 from ocr_utils import load_csv, build_parsed_item, parse_timestamp
 from collections import defaultdict
+from settings import OUTPUT_CURRENCY_CSV
+import curio_currency_fetch as fetch
 
+fetch.run_fetch()
 utils.set_tesseract_path()
-
-os.makedirs(c.logs_dir, exist_ok=True)
-os.makedirs(c.saves_dir, exist_ok=True)
 
 csv_file_path = c.csv_file_path
 
@@ -38,6 +39,7 @@ attempt = 1
 listener_ref = None
 parsed_items = []
 experimental_items = {}
+CURRENCY_DATASET = {}
 
 def get_resource_path(filename):
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -65,6 +67,35 @@ def load_experimental_csv(file_path):
     load_csv(file_path, row_parser=parser)
     return experimental_items
 
+def format_currency_value(value: str) -> str:
+    if not value or value.strip() == "":
+        return ""  # no value
+    try:
+        f = float(value)
+    except ValueError:
+        return ""
+    
+    f_rounded = round(f, 1)
+    return str(int(f_rounded)) if f_rounded.is_integer() else str(f_rounded)
+
+def load_currency_dataset(csv_file_path):
+    global CURRENCY_DATASET
+    CURRENCY_DATASET = {}
+    
+    with open(csv_file_path, newline='', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            term = utils.smart_title_case(row["Name"])
+            chaos_val = format_currency_value(row.get("Chaos Value", ""))
+            divine_val = format_currency_value(row.get("Divine Value", ""))
+
+            # store both in a dictionary per term
+            CURRENCY_DATASET[term] = {
+                "chaos": chaos_val,
+                "divine": divine_val
+            }
+
+load_currency_dataset(OUTPUT_CURRENCY_CSV)
 term_types = load_csv_with_types(get_resource_path(c.file_name))
 all_terms = set(term_types.keys())
 seen_matches = set()
@@ -129,6 +160,7 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
         cv2.destroyAllWindows()
 
     return utils.smart_title_case(text), image_np
+    
 #############################################################
 # Saves the information on the screen based on colors       #
 # which is afterwards extracted as text                     #
@@ -137,56 +169,36 @@ def filter_item_text(image_np, fullscreen=False):
     img_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
-    # Unique: #AF6025
-    lower_orange = np.array([c.replica_l_hue, c.replica_l_sat, c.replica_l_val])
-    upper_orange = np.array([c.replica_u_hue, c.replica_u_sat, c.replica_u_val])
+    color_ranges = {
+        "unique": ([c.replica_l_hue, c.replica_l_sat, c.replica_l_val],
+                   [c.replica_u_hue, c.replica_u_sat, c.replica_u_val]),
+        "rare": ([c.rare_l_hue, c.rare_l_sat, c.rare_l_val],
+                   [c.rare_u_hue, c.rare_u_sat, c.rare_u_val]),
+        "currency": ([c.currency_l_hue, c.currency_l_sat, c.currency_l_val],
+                     [c.currency_u_hue, c.currency_u_sat, c.currency_u_val]),
+        "scarab": ([c.scarab_l_hue, c.scarab_l_sat, c.scarab_l_val],
+                   [c.scarab_u_hue, c.scarab_u_sat, c.scarab_u_val]),
+        "enchant": ([c.enchant_l_hue, c.enchant_l_sat, c.enchant_l_val],
+                    [c.enchant_u_hue, c.enchant_u_sat, c.enchant_u_val]),
+    }
 
-    # Rare: #D9C850
-    lower_yellow = np.array([c.rare_l_hue, c.rare_l_sat, c.rare_l_val])
-    upper_yellow = np.array([c.rare_u_hue, c.rare_u_sat, c.rare_u_val])
+    # Create combined mask
+    combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+    for lo, hi in color_ranges.values():
+        combined_mask |= cv2.inRange(hsv, np.array(lo), np.array(hi))
 
-
-    # Currency: #AA9E82
-    lower_currency = np.array([c.currency_l_hue, c.currency_l_sat, c.currency_l_val])
-    upper_currency = np.array([c.currency_u_hue, c.currency_u_sat, c.currency_u_val])
-
-    # Scarabs (new gray): #B7B8B8
-    lower_scarab = np.array([c.scarab_l_hue, c.scarab_l_sat, c.scarab_l_val])
-    upper_scarab = np.array([c.scarab_u_hue, c.scarab_u_sat, c.scarab_u_val])
-
-    # Enchants (blue-gray): #5C7E9D
-    lower_enchant = np.array([c.enchant_l_hue, c.enchant_l_sat, c.enchant_l_val])
-    upper_enchant = np.array([c.enchant_u_hue, c.enchant_u_sat, c.enchant_u_val])
-    
-    # Create individual masks
-    mask_orange = cv2.inRange(hsv, lower_orange, upper_orange)
-    mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
-    mask_currency = cv2.inRange(hsv, lower_currency, upper_currency)
-    mask_scarab = cv2.inRange(hsv, lower_scarab, upper_scarab)
-    mask_enchant = cv2.inRange(hsv, lower_enchant, upper_enchant)
-
-    # Combine masks
-    combined_mask = (
-        mask_orange |
-        mask_yellow |
-        mask_currency |
-        mask_scarab |
-        mask_enchant
-    )
-
+    # Morphological operations
     kernel = np.ones((1, 1), np.uint8)
-    combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
-    combined_mask = cv2.erode(combined_mask, kernel, iterations=1)
+    combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
 
+    # Debugging overlay
     if c.DEBUGGING:
         contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         debug_image = cv2.bitwise_and(img_bgr, img_bgr, mask=combined_mask)
-        cv2.drawContours(debug_image, contours, -1, (0, 0, 255), 1)  # Red outline        
-        cv2.imwrite('ocr_debug_highlighted.png', debug_image)
+        cv2.drawContours(debug_image, contours, -1, (0, 0, 255), 1)
+        cv2.imwrite("ocr_debug_highlighted.png", debug_image)
 
-    filtered = cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
-
-    return filtered
+    return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
 
 
 ####################################################################
@@ -242,6 +254,31 @@ def extract_currency_value(text, matched_term, term_types):
 
     return (1, 20)
 
+# def get_best_value(term: str, chaos_threshold: float = 200):
+#     data = CURRENCY_DATASET.get(term)
+#     if not data:
+#         return ""
+
+#     chaos_val = data.get("chaos")
+#     divine_val = data.get("divine")
+
+#     try:
+#         chaos_float = float(chaos_val) if chaos_val not in ("", None) else None
+#     except ValueError:
+#         chaos_float = None
+
+#     try:
+#         divine_float = float(divine_val) if divine_val not in ("", None) else None
+#     except ValueError:
+#         divine_float = None
+
+#     # Choose which value to display
+#     if chaos_float is not None and (chaos_float <= chaos_threshold or divine_float is None):
+#         return f"{chaos_val} Chaos"
+#     elif divine_float is not None:
+#         return f"{divine_val} Divine"
+#     else:
+#         return ""
 
 
 
@@ -543,6 +580,9 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
 
             item_type = term_types.get(term_smart_title)
             stack_size = stack_sizes.get(term_title, 1)
+            estimated_value = CURRENCY_DATASET.get(term_title, {})
+            chaos_est = estimated_value.get("chaos")
+            divine_est = estimated_value.get("divine")
 
             parsed_items.append(
                 build_parsed_item(
@@ -555,7 +595,9 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                     area_level=blueprint_area_level,
                     blueprint_type=blueprint_layout,
                     logged_by=poe_user,
-                    league=league_version
+                    league=league_version,
+                    chaos_value=chaos_est,
+                    divine_value=divine_est,
                 )
             )
             if allow_dupes or not duplicate:
@@ -626,6 +668,9 @@ def _parse_items_from_rows(rows):
 
             term_title = utils.smart_title_case(value.strip())
             item_type = term_types.get(term_title, inferred_type)
+            estimated_value = CURRENCY_DATASET.get(term_title, {})
+            chaos_est = estimated_value.get("chaos")
+            divine_est = estimated_value.get("divine")
 
             # Build parsed item directly from CSV header values
             item = build_parsed_item(
@@ -640,6 +685,8 @@ def _parse_items_from_rows(rows):
                 blueprint_type=blueprint_type,
                 area_level=area_level,
                 stack_size=stack_size,
+                chaos_value=chaos_est,
+                divine_value=divine_est,
             )
             parsed_items.append(item)
 

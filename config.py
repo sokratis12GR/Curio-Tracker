@@ -2,7 +2,6 @@ import os
 import sys
 import configparser
 from pynput import keyboard
-from ocr_utils import get_setting, set_setting, write_settings
 
 ######################################################################
 # LOADS THE SETTINGS VALUES SET IN USER_SETTINGS.INI                 #
@@ -39,33 +38,55 @@ DEFAULT_SETTINGS = {
     }
 }
 
-# Ensure defaults exist in .ini using ocr_utils
-for section, keys in DEFAULT_SETTINGS.items():
-    for key, value in keys.items():
-        if get_setting(section, key) is None:
-            set_setting(section, key, str(value))
-write_settings()  # persist any new defaults
+capture_key = None
+exit_key = None
+layout_capture_key = None
+snippet_key = None
+enable_debugging_key = None
+pytesseract_path = None
+time_last_dupe_check_seconds = None
+info_show_keys_capture = None
+info_show_keys_snippet = None
+info_show_keys_layout = None
+info_show_keys_exit  = None
+
+def initialize_settings():
+    global capture_key, exit_key, layout_capture_key, snippet_key, enable_debugging_key
+    global pytesseract_path, time_last_dupe_check_seconds
+    from settings import get_setting, set_setting, write_settings
+
+    # Ensure defaults exist
+    for section, keys in DEFAULT_SETTINGS.items():
+        for key, value in keys.items():
+            if get_setting(section, key) is None:
+                set_setting(section, key, str(value))
+    write_settings()
+
+    # Assign module-level variables
+    capture_key = get_setting('Hotkeys', 'capture_key')
+    exit_key = get_setting('Hotkeys', 'exit_key')
+    layout_capture_key = get_setting('Hotkeys', 'layout_capture_key')
+    snippet_key = get_setting('Hotkeys', 'snippet_key')
+    enable_debugging_key = get_setting('Hotkeys', 'debug_key')
+    pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
+    time_last_dupe_check_seconds = int(get_setting('DEFAULT', 'time_last_dupe_check_seconds', '60'))
+    info_show_keys_capture = "Press {} to capture all curios on screen no duplicates.".format(capture_key.upper())
+    info_show_keys_snippet = "Press {} to snippet a region to capture allows duplicates.".format(snippet_key.upper())
+    info_show_keys_layout = "Press {} to set current layout.".format(layout_capture_key.upper())
+    info_show_keys_exit = "Press {} to exit the script.".format(exit_key.upper())
 
 settings = DEFAULT_SETTINGS
 
-# Read settings
-poe_league = get_setting('User', 'poe_league')
-poe_user = get_setting('User', 'poe_user')
-
-capture_key = get_setting('Hotkeys', 'capture_key')
-exit_key = get_setting('Hotkeys', 'exit_key')
-layout_capture_key = get_setting('Hotkeys', 'layout_capture_key')
-snippet_key = get_setting('Hotkeys', 'snippet_key')
-enable_debugging_key = get_setting('Hotkeys', 'debug_key')
-
-pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
-time_last_dupe_check_seconds = int(get_setting('DEFAULT', 'time_last_dupe_check_seconds', '60'))
 
 # Enable DEBUGGING
 DEBUGGING = False
 CSV_DEBUGGING = False
 
-# Defaykt values of blueprint layouts
+poe_league = "3.26"
+poe_user = "sokratis12GR"
+
+
+# Default values of blueprint layouts
 default_bp_lvl = "83"
 default_bp_area = "Prohibited Library"
 
@@ -133,15 +154,6 @@ stack_size_found = " - Stack Size: {}"
 matches_not_found = "❌ No matches found."
 
 
-## Capturing / Exiting
-
-
-info_show_keys_capture = "🖼️ Press {} to capture All Curios on Screen w/o duplicates.".format(capture_key.upper())
-info_show_keys_snippet = "✂️ Press {} to snippet a region to capture w/ duplicates.".format(snippet_key.upper())
-info_show_keys_layout = "🗺️ Press {} to set current layout (type, alvl) data.".format(layout_capture_key.upper())
-info_show_keys_exit = "❌ Press {} to exit the script.\n".format(exit_key.upper())
-
-
 capturing_prompt = "\n📸 Capturing screen..."
 layout_prompt = "\n📸 Capturing layout..."
 exiting_prompt = "\n👋 Exiting."
@@ -200,3 +212,4 @@ enchant_l_val = 70 # 70
 enchant_u_hue = 130 #130
 enchant_u_sat = 90 #90
 enchant_u_val = 255 #240
+

@@ -44,7 +44,6 @@ def update_keybind(name, combo_str):
         return False
 
 def get_display_hotkey(name):
-    """Get the hotkey string to display"""
     ini_name = f"{name}_key" if name != "debug" else "debug_key"
     default = next((d for (_, d, n) in keybinds if n == name), "")
     return get_setting('Hotkeys', ini_name, default)
@@ -97,7 +96,7 @@ def init_from_settings():
     print("[INFO] Keybinds loaded from settings.")
 
 # ---------------- Recording listener ----------------
-def start_recording_popup(index, button_list, root):
+def start_recording_popup(index, button_list, root, update_info_labels):
     global _recording_listener, _recording_index, _current_keys, _global_listener
     with _lock:
         if _recording_index is not None:
@@ -128,6 +127,7 @@ def start_recording_popup(index, button_list, root):
                 btn = button_list[_recording_index]
                 btn.after(0, lambda b=btn, t=combo_str: b.config(text=t))
                 update_keybind(keybinds[_recording_index][2], combo_str)
+                update_info_labels()
             _current_keys.clear()
             _recording_index = None
             start_global_listener()
