@@ -21,11 +21,14 @@ datas = [
     ('body_armors.txt', '.'),
     ('experimental_items.csv', '.'),
     ('config.py', '.'),
+    ('curio_currency_fetch.py', '.'),
     ('curio_keybinds.py', '.'),
     ('ocr_utils.py', '.'),
     ('renderer.py', '.'),
     ('curio_tracker.py', '.'),
     ('user_settings.ini', '.'),
+    ('themes.py', '.'),
+    ('toasts.py', '.'),
 ]
 
 # ---- Add all files from /assets ----

@@ -76,6 +76,18 @@ def update_lock():
     except Exception as e:
         print(f"[WARN] Failed to update lock file: {e}")
 
+def normalize_name_for_lookup(name: str) -> str:
+    if not name:
+        return name
+
+    normalized = name
+    normalized = normalized.replace(" Of The ", " of the ")
+    normalized = normalized.replace(" Of ", " of ")
+    normalized = normalized.replace("-Attuned", "-attuned")
+    normalized = normalized.replace("Three-Step", "Three-step")
+
+    return normalized
+
 # === FETCH FUNCTION ===
 def fetch_all_items():
     all_rows = []
@@ -110,15 +122,18 @@ def fetch_all_items():
         if csv_type not in VALID_TYPES:
             continue
 
+        lookup_name = normalize_name_for_lookup(csv_name)
+
         line = None
 
         if csv_type in ("Replica", "Replacement"):
             # find all matching variants
             if csv_type == "Replica":
-                search_name = f"Replica {csv_name}"
-                candidates = [l for l in all_lines if l.get("name") == search_name]
+                search_name = f"Replica {lookup_name}"
             else:
-                candidates = [l for l in all_lines if l.get("name") == csv_name]
+                search_name = lookup_name
+
+            candidates = [l for l in all_lines if l.get("name") == search_name]
 
             if candidates:
                 # Exclude lines with 6 links

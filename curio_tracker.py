@@ -254,33 +254,6 @@ def extract_currency_value(text, matched_term, term_types):
 
     return (1, 20)
 
-# def get_best_value(term: str, chaos_threshold: float = 200):
-#     data = CURRENCY_DATASET.get(term)
-#     if not data:
-#         return ""
-
-#     chaos_val = data.get("chaos")
-#     divine_val = data.get("divine")
-
-#     try:
-#         chaos_float = float(chaos_val) if chaos_val not in ("", None) else None
-#     except ValueError:
-#         chaos_float = None
-
-#     try:
-#         divine_float = float(divine_val) if divine_val not in ("", None) else None
-#     except ValueError:
-#         divine_float = None
-
-#     # Choose which value to display
-#     if chaos_float is not None and (chaos_float <= chaos_threshold or divine_float is None):
-#         return f"{chaos_val} Chaos"
-#     elif divine_float is not None:
-#         return f"{divine_val} Divine"
-#     else:
-#         return ""
-
-
 
 #################################################
 # Check if a term or combo term is in the text. # 
@@ -339,24 +312,34 @@ def is_term_match(term, text, use_fuzzy=False):
 
     return bool(find_piece_positions(term))
 
+recent_terms = []
 
-def is_duplicate_recent_entry(value,path=csv_file_path):
+def is_duplicate_recent_entry(value, path=csv_file_path):
     current_time = datetime.now()
-    if not os.path.exists(path):
-        return False
-    with open(path, newline='') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if len(row) <= c.time_column_index:
-                continue  # skip rows with missing timestamp
-            try:
-                entry_time = datetime.strptime(row[c.time_column_index], "%Y-%m-%d_%H-%M-%S")
-                if (current_time - entry_time) < timedelta(seconds=c.time_last_dupe_check_seconds):
-                    if value in row:
-                        return True  # Found a duplicate in recent entry
-            except ValueError:
-                continue  # invalid timestamp format
+
+    for term, ts in recent_terms:
+        if term == value and (current_time - ts).total_seconds() < c.time_last_dupe_check_seconds:
+            return True
+
+    # Check CSV for older duplicates
+    if os.path.exists(path):
+        with open(path, newline='') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) <= c.time_column_index:
+                    continue
+                try:
+                    entry_time = datetime.strptime(row[c.time_column_index], "%Y-%m-%d_%H-%M-%S")
+                    if (current_time - entry_time).total_seconds() < c.time_last_dupe_check_seconds:
+                        if value in row:
+                            return True
+                except ValueError:
+                    continue
+
     return False
+
+def mark_term_as_captured(value):
+    recent_terms.append((value, datetime.now()))
 
 #################################################
 # Gets all matched terms from the list          # 
@@ -444,8 +427,7 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
 
         # Append result, respecting duplicate flags and allowance
         if allow_dupes or not duplicate:
-            if not duplicate or allow_dupes:
-                non_dup_count += 1
+            non_dup_count += 1
             matched.append({
                 "term": term_title,
                 "duplicate": False,
@@ -537,11 +519,12 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
     matched_terms = get_matched_terms(text, allow_dupes)
     process_text(text, allow_dupes, matched_terms)
 
-    def format_row(term_title, item_type, stack_size, prefix=""):
+    def format_row(record_number, term_title, item_type, stack_size, prefix=""):
         def maybe_add(fn):
             val = fn(term_title, item_type)
             return f"{prefix}{val}" if val else ""
         return [
+            record_number,
             league_version, poe_user,
             blueprint_layout, blueprint_area_level,
             maybe_add(utils.add_if_trinket),
@@ -563,6 +546,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
 
         if write_header:
             writer.writerow([
+                c.csv_record_header,
                 c.csv_league_header, c.csv_loggedby_header,
                 c.csv_blueprint_header, c.csv_area_level_header,
                 c.csv_trinket_header, c.csv_replacement_header,
@@ -574,6 +558,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
             ])
 
         for match in matched_terms:
+
             term_title = match["term"]
             duplicate = match["duplicate"]
             term_smart_title = utils.smart_title_case(term_title)
@@ -583,38 +568,54 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
             estimated_value = CURRENCY_DATASET.get(term_title, {})
             chaos_est = estimated_value.get("chaos")
             divine_est = estimated_value.get("divine")
-
-            parsed_items.append(
-                build_parsed_item(
-                    term_title=term_title,
-                    item_type=item_type,
-                    duplicate=duplicate,
-                    timestamp=timestamp,
-                    experimental_items=experimental_items,
-                    stack_size=stack_size,
-                    area_level=blueprint_area_level,
-                    blueprint_type=blueprint_layout,
-                    logged_by=poe_user,
-                    league=league_version,
-                    chaos_value=chaos_est,
-                    divine_value=divine_est,
-                )
-            )
             if allow_dupes or not duplicate:
+                record_number = get_next_record_number()
+                mark_term_as_captured(term_title)
+
+                item = parsed_items.append(
+                    build_parsed_item(
+                        record=record_number,
+                        term_title=term_title,
+                        item_type=item_type,
+                        duplicate=duplicate,
+                        timestamp=timestamp,
+                        experimental_items=experimental_items,
+                        stack_size=stack_size,
+                        area_level=blueprint_area_level,
+                        blueprint_type=blueprint_layout,
+                        logged_by=poe_user,
+                        league=league_version,
+                        chaos_value=chaos_est,
+                        divine_value=divine_est,
+                    )
+                )
+                
                 if c.DEBUGGING:
-                    print(f"[WriteCSV] Writing row for term: {term_title}")
-                writer.writerow(format_row(term_title, item_type, stack_size))
+                    print(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
+
+                writer.writerow(format_row(record_number, term_title, item_type, stack_size))
 
                 if c.DEBUGGING and c.CSV_DEBUGGING:
-                    writer.writerow(format_row(term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
+                    writer.writerow(format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
 
-#####################################################
-#                                                   #
-# Loads the 5 latest entries within 120 seconds of  #
-# each other in the curio to simulate a wing in a   #
-# grand heist                                       #
-#                                                   #
-#####################################################
+LAST_RECORD_NUMBER = 0
+
+def get_next_record_number():
+    global LAST_RECORD_NUMBER
+    if LAST_RECORD_NUMBER == 0:
+        try:
+            with open(csv_file_path, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if len(rows) <= 1:
+                    LAST_RECORD_NUMBER = 0
+                else:
+                    last_row = rows[-1]
+                    LAST_RECORD_NUMBER = int(last_row[0]) if last_row[0].isdigit() else 0
+        except FileNotFoundError:
+            LAST_RECORD_NUMBER = 0
+    LAST_RECORD_NUMBER += 1
+    return LAST_RECORD_NUMBER
 
 def _parse_rows_from_csv(csv_file_path):
     debug = c.DEBUGGING
@@ -627,10 +628,45 @@ def _parse_rows_from_csv(csv_file_path):
             print(f"[DEBUG] CSV file '{csv_file_path}' not found.")
         return []
 
-    if not rows and debug:
-        print("[DEBUG] CSV file is empty.")
+    if not rows:
+        if debug:
+            print("[DEBUG] CSV file is empty.")
+        return []
+
+    # Ensure every row has a Record #
+    if "Record #" not in rows[0]:
+        if debug:
+            print("[DEBUG] Adding missing 'Record #' column to rows")
+        for i, row in enumerate(rows, start=1):
+            row["Record #"] = str(i)
+
     return rows
 
+def upgrade_csv_with_record_numbers(file_path):
+    if not os.path.exists(file_path):
+        # CSV doesn't exist, nothing to upgrade
+        print(f"[INFO] CSV file '{file_path}' not found. Skipping upgrade.")
+        return
+    
+    with open(file_path, "r", encoding="utf-8") as f:
+        reader = list(csv.reader(f))
+    if not reader:
+        return
+    
+    header = reader[0]
+    if "Record #" not in header:
+        header = ["Record #"] + header
+        upgraded_rows = [header]
+        for i, row in enumerate(reader[1:], start=1):
+            upgraded_rows.append([str(i)] + row)
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerows(upgraded_rows)
+        print(f"[INFO] Upgraded CSV with Record # → {file_path}")
+
+def init_csv():
+    # Ensure the CSV file has Record # permanently
+    upgrade_csv_with_record_numbers(c.csv_file_path)
 
 def _parse_items_from_rows(rows):
     debug = c.DEBUGGING
@@ -652,6 +688,7 @@ def _parse_items_from_rows(rows):
             print(f"[DEBUG] Processing row {row_idx}: {row}")
 
         # Grab common metadata from CSV headers
+        record_number = row.get("Record #")
         league = row.get("League", "")
         logged_by = row.get("Logged By", "")
         blueprint_type = row.get("Blueprint Type", "")
@@ -674,6 +711,7 @@ def _parse_items_from_rows(rows):
 
             # Build parsed item directly from CSV header values
             item = build_parsed_item(
+                record=record_number,
                 term_title=term_title,
                 item_type=item_type,
                 duplicate=duplicate,

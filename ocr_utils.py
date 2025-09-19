@@ -301,6 +301,7 @@ def load_csv(file_path, row_parser=None, skip_header=True):
 
 
 def build_parsed_item(
+    record,
     term_title,
     item_type,
     duplicate,
@@ -371,6 +372,7 @@ def build_parsed_item(
         logged_by=logged_by,
         blueprint_type=blueprint_type,
         area_level=area_level,
+        record_number=record,
     )
     if item_type == c.EXPERIMENTAL_TYPE:
         implicits_lines = experimental_items.get(term_title, [])

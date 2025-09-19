@@ -17,10 +17,10 @@ if os.path.exists(SETTINGS_PATH):
     settings.read(SETTINGS_PATH)
 
 # Ensure default sections exist
-if 'Hotkeys' not in settings:
-    settings['Hotkeys'] = {}
-if 'User' not in settings:
-    settings['User'] = {}
+for section in ("Hotkeys", "User", "Application"):
+    if section not in settings:
+        settings[section] = {}
+
 
 def write_settings():
     try:
@@ -29,16 +29,38 @@ def write_settings():
     except Exception as e:
         print("[ERROR] Failed to write settings:", e)
 
-def set_setting(section: str, key: str, value: str):
+def set_setting(section: str, key: str, value):
     if section not in settings:
         settings[section] = {}
-    settings[section][key] = value
+
+    # Convert value to string
+    if isinstance(value, bool):
+        value_str = "True" if value else "False"
+    elif isinstance(value, (int, float)):
+        value_str = str(value)
+    else:
+        value_str = str(value)
+
+    settings[section][key] = value_str
     write_settings()
 
+
 def get_setting(section: str, key: str, default=None):
-    if section not in settings:
+    if section not in settings or key not in settings[section]:
         return default
-    return settings[section].get(key, default)
+
+    val_str = settings[section][key]
+
+    # Try to detect type
+    if val_str.lower() in ("true", "false"):
+        return val_str.lower() == "true"
+    try:
+        if "." in val_str:
+            return float(val_str)
+        else:
+            return int(val_str)
+    except ValueError:
+        return val_str  # fallback to string
 
 
 def initialize_settings():
@@ -46,5 +68,5 @@ def initialize_settings():
     for section, keys in DEFAULT_SETTINGS.items():
         for key, value in keys.items():
             if get_setting(section, key) is None:
-                set_setting(section, key, str(value))
+                set_setting(section, key, value)
     write_settings()  # persist any new defaults

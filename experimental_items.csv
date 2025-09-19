@@ -35,7 +35,6 @@ Flickerflame Blade,Trigger Level 10 Flame Dash when you use a Socketed Skill
 Foundry Bow,Adds (80-97) to (126-144) Fire Damage
 Geodesic Ring,"+1 Prefix Modifier allowed
 -1 Suffix Modifier allowed
-Implicit Modifiers Cannot Be Changed
 25% increased Prefix Modifier magnitudes"
 Heat-attuned Tower Shield,Scorch Enemies when you Block their Damage
 Hedron Bow,Adds (46-55) to (69-83) Fire Damage
@@ -63,7 +62,6 @@ Reciprocation Staff,"Spend Energy Shield before Mana for Costs of Socketed Skill
 Shadow Fangs,Adds (26-38) to (52-70) Chaos Damage
 Simplex Amulet,"-2 Prefix Modifiers allowed
 -1 Suffix Modifier allowed
-Implicit Modifiers Cannot Be Changed
 100% increased Explicit Modifier magnitudes"
 Solarine Bow,Adds (121-133) to (184-197) Fire Damage
 Stabilising Sceptre,Elemental Equilibrium
@@ -74,20 +72,15 @@ Transformer Staff,"Spend Energy Shield before Mana for Costs of Socketed Skills
 Void Fangs,Adds (46-63) to (92-113) Chaos Damage
 Manifold Ring,"+1 Prefix Modifier allowed
 -2 Suffix Modifiers allowed
-Implicit Modifiers Cannot Be Changed
 50% increased Prefix Modifier magnitudes"
 Focused Amulet,"-1 Prefix Modifier allowed
 -2 Suffix Modifiers allowed
-Implicit Modifiers Cannot Be Changed
 100% increased Explicit Modifier magnitudes"
 Helical Ring,"-2 Prefix Modifiers allowed
 +1 Suffix Modifier allowed
-Implicit Modifiers Cannot Be Changed
 50% increased Suffix Modifier magnitudes"
 Composite Ring,"+3 Prefix Modifiers allowed
--3 Suffix Modifiers allowed
-Implicit Modifiers Cannot Be Changed"
+-3 Suffix Modifiers allowed"
 Ratcheting Ring,"-3 Prefix Modifiers allowed
-+3 Suffix Modifiers allowed
-Implicit Modifiers Cannot Be Changed"
++3 Suffix Modifiers allowed"
 Mechanical Belt,Has 1 Socket

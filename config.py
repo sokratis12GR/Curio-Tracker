@@ -115,6 +115,8 @@ saves_dir = "saved"
 csv_file_path = "saved/matches.csv"
 
 ### CSV Header Format -- Adjusted to support the format of the "PoE Curio Case Rates" Project: https://docs.google.com/spreadsheets/d/1dDDMRc3GAE4G0X-lJeLXSHaGtLLNf612nrFiOyCo0Vs/edit?gid=710775455#gid=710775455
+csv_record_header = "Record #"
+
 csv_league_header = "League"
 csv_loggedby_header = "Logged By"
 csv_blueprint_header = "Blueprint Type"
