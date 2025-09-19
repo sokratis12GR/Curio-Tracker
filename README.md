@@ -11,15 +11,25 @@ F4 - Provides you with a small snippet tool in case you like to manually take a 
 F3 - Well every tool needs a way to exit it, so this is all it does, closes the tool.
 
 ### Example Usages of the tool:
-<img width="1913" height="1024" alt="image" src="https://github.com/user-attachments/assets/384261ca-9283-4816-993a-df49c0ab5640" />
-<img width="1904" height="1024" alt="image" src="https://github.com/user-attachments/assets/8294e901-5942-4792-85ef-a929225cebb9" />
+<img width="1919" height="1024" alt="image" src="https://github.com/user-attachments/assets/c6d1ff86-6313-4a88-a5c0-97adc2509689" />
+
+## Toasts when capturing a curio that showcase the captured item(s) in the top right of the screen:
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/343496ad-6b80-4e1d-b11d-80cfa1b08a9a" />
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/ce8faa22-eb30-4c74-8be2-b63939fcd878" />
+
+It will save the data in a `.csv` file (`saves/matches.csv`) like the following (supported by google sheets, excel and so on)
+<img width="1263" height="713" alt="image" src="https://github.com/user-attachments/assets/04e8fd60-4c86-4b40-9ddb-c4471e1fb97e" />
 
 
-It will save the data in a .csv file (saves/matches.csv) like the following (supported by google sheets, excel and so on)
-<img width="1277" height="739" alt="image" src="https://github.com/user-attachments/assets/b06361f1-4ef5-4cdb-841c-e41cb623a158" />
+Example `matches.csv` output:
+<img width="1284" height="766" alt="image" src="https://github.com/user-attachments/assets/5447ab65-7bad-47e1-a058-d5afb381f2b1" />
 
-Example import in google sheets:
-<img width="1357" height="677" alt="image" src="https://github.com/user-attachments/assets/fe50a549-d2a0-4ee5-ac95-920426bfba2a" />
+# Extras
+- Real-time data correction:
+  - Allows deletion of entries via the tree view, just select the item and press the delete btn.
+  - Allows correcting stack size in case an incorrect value was captured via the UI, it saves automatically and updates the estimated value.
+- Economy Support (Estimated Value) - Pulls from poe.ninja the item's estimated value
+- Support for older data sets, automatically converts the old matches.csv versions into an up-to-date supported version.
 
 # SETUP (Quick)
 
@@ -30,6 +40,7 @@ In case the app crashes or has an error image, please do not hesitate to create 
 - Provide a screenshot, or a detailed explanation of the issue
 
 ***Appreciate any feedback ^^***
+
 
 
 
