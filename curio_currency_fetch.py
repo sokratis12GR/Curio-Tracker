@@ -157,16 +157,16 @@ def fetch_all_items():
                 else:
                     line = None
         elif csv_type == "Currency":
-            if csv_name == "Chaos Orb":
+            if lookup_name == "Chaos Orb":
                 chaos_value = 1
                 buying = selling = 1
                 line = {"chaosValue": chaos_value}
             else:
-                line = next((l for l in all_lines if l.get("currencyTypeName") == csv_name), None)
+                line = next((l for l in all_lines if l.get("currencyTypeName") == lookup_name), None)
         elif csv_type == "Experimental":
             base_lines = category_data.get("Base Types", [])
-            if csv_name == "Astrolabe Amulet":
-                candidates = [l for l in base_lines if l.get("name") == csv_name]
+            if lookup_name == "Astrolabe Amulet":
+                candidates = [l for l in base_lines if l.get("name") == lookup_name]
                 chaos_values = [l.get("chaosValue", 0) for l in candidates if isinstance(l.get("chaosValue"), (int, float))]
                 if chaos_values:
                     median_value = sorted(chaos_values)[len(chaos_values)//2]
@@ -177,19 +177,19 @@ def fetch_all_items():
                 def is_influenced(line):
                     variant = line.get("variant")
                     return variant not in [None, ""]
-                candidates = [l for l in base_lines if l.get("name") == csv_name 
+                candidates = [l for l in base_lines if l.get("name") == lookup_name 
                               and l.get("levelRequired") == 84 
                               and not is_influenced(l)]
                 if not candidates:
                     for lvl in [83, 85, 86]:
-                        candidates = [l for l in base_lines if l.get("name") == csv_name 
+                        candidates = [l for l in base_lines if l.get("name") == lookup_name 
                                       and l.get("levelRequired") == lvl 
                                       and not is_influenced(l)]
                         if candidates:
                             break
                 line = candidates[0] if candidates else None
         else:
-            line = next((l for l in all_lines if l.get("name") == csv_name), None)
+            line = next((l for l in all_lines if l.get("name") == lookup_name), None)
 
         chaos_value = exalted_value = divine_value = None
         buying = selling = "N/A"
