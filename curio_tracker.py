@@ -5,14 +5,18 @@ import re
 import sys
 from datetime import datetime, timedelta
 import math
+import ctypes
 
 import cv2
 import numpy as np
 import pyautogui
+from pynput import mouse
 import pytesseract
 import pygetwindow as gw
 from PIL import ImageGrab
 from termcolor import colored
+import win32gui
+import win32con
 
 import config as c
 import ocr_utils as utils
@@ -541,62 +545,68 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
             timestamp
         ]
 
-    with open(csv_file_path, "a", newline='', encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
+    try:
+        with open(csv_file_path, "a", newline='', encoding="utf-8") as csvfile:
+            writer = csv.writer(csvfile)
 
-        if write_header:
-            writer.writerow([
-                c.csv_record_header,
-                c.csv_league_header, c.csv_loggedby_header,
-                c.csv_blueprint_header, c.csv_area_level_header,
-                c.csv_trinket_header, c.csv_replacement_header,
-                c.csv_replica_header, c.csv_experimented_header,
-                c.csv_weapon_enchant_header, c.csv_armor_enchant_trinket_header,
-                c.csv_scarab_trinket_header, c.csv_currency_trinket_header,
-                c.csv_stack_size_trinket_header, c.csv_variant_trinket_header,
-                c.csv_flag_trinket_header, c.csv_time_header
-            ])
+            if write_header:
+                writer.writerow([
+                    c.csv_record_header,
+                    c.csv_league_header, c.csv_loggedby_header,
+                    c.csv_blueprint_header, c.csv_area_level_header,
+                    c.csv_trinket_header, c.csv_replacement_header,
+                    c.csv_replica_header, c.csv_experimented_header,
+                    c.csv_weapon_enchant_header, c.csv_armor_enchant_trinket_header,
+                    c.csv_scarab_trinket_header, c.csv_currency_trinket_header,
+                    c.csv_stack_size_trinket_header, c.csv_variant_trinket_header,
+                    c.csv_flag_trinket_header, c.csv_time_header
+                ])
 
-        for match in matched_terms:
+            for match in matched_terms:
 
-            term_title = match["term"]
-            duplicate = match["duplicate"]
-            term_smart_title = utils.smart_title_case(term_title)
+                term_title = match["term"]
+                duplicate = match["duplicate"]
+                term_smart_title = utils.smart_title_case(term_title)
 
-            item_type = term_types.get(term_smart_title)
-            stack_size = stack_sizes.get(term_title, 1)
-            estimated_value = CURRENCY_DATASET.get(term_title, {})
-            chaos_est = estimated_value.get("chaos")
-            divine_est = estimated_value.get("divine")
-            if allow_dupes or not duplicate:
-                record_number = get_next_record_number()
-                mark_term_as_captured(term_title)
+                item_type = term_types.get(term_smart_title)
+                stack_size = stack_sizes.get(term_title, 1)
+                estimated_value = CURRENCY_DATASET.get(term_title, {})
+                chaos_est = estimated_value.get("chaos")
+                divine_est = estimated_value.get("divine")
+                if allow_dupes or not duplicate:
+                    record_number = get_next_record_number()
+                    mark_term_as_captured(term_title)
 
-                item = parsed_items.append(
-                    build_parsed_item(
-                        record=record_number,
-                        term_title=term_title,
-                        item_type=item_type,
-                        duplicate=duplicate,
-                        timestamp=timestamp,
-                        experimental_items=experimental_items,
-                        stack_size=stack_size,
-                        area_level=blueprint_area_level,
-                        blueprint_type=blueprint_layout,
-                        logged_by=poe_user,
-                        league=league_version,
-                        chaos_value=chaos_est,
-                        divine_value=divine_est,
+                    item = parsed_items.append(
+                        build_parsed_item(
+                            record=record_number,
+                            term_title=term_title,
+                            item_type=item_type,
+                            duplicate=duplicate,
+                            timestamp=timestamp,
+                            experimental_items=experimental_items,
+                            stack_size=stack_size,
+                            area_level=blueprint_area_level,
+                            blueprint_type=blueprint_layout,
+                            logged_by=poe_user,
+                            league=league_version,
+                            chaos_value=chaos_est,
+                            divine_value=divine_est,
+                        )
                     )
-                )
-                
-                if c.DEBUGGING:
-                    print(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
+                    
+                    if c.DEBUGGING:
+                        print(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
 
-                writer.writerow(format_row(record_number, term_title, item_type, stack_size))
+                    writer.writerow(format_row(record_number, term_title, item_type, stack_size))
 
-                if c.DEBUGGING and c.CSV_DEBUGGING:
-                    writer.writerow(format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
+                    if c.DEBUGGING and c.CSV_DEBUGGING:
+                        writer.writerow(format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
+    except PermissionError as e:
+        import toasts
+        toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
+        print(f"[ERROR] PermissionError: {e}")
+        return None
 
 LAST_RECORD_NUMBER = 0
 
@@ -771,7 +781,6 @@ def load_all_parsed_items_from_csv():
 # OCR reads the texts and checks for matches.       #
 # If a match is found, it will save it in the .csv  #
 #####################################################
-
 def capture_once():
     bbox = get_poe_bbox()
     if not bbox:
@@ -785,12 +794,23 @@ def capture_once():
     return items
 
 
+
 #####################################################
 # Captures the a snippet of the screen, afterwards  #
 # using OCR reads the texts and checks for matches. #
 # If a match is found, it will save it in the .csv  #
 #####################################################
 def capture_snippet(root, on_done):
+    bbox = get_poe_bbox()
+    if not bbox:
+        return
+
+    # if is_exclusive_fullscreen():
+    #     import toasts
+    #     toasts.show_message(root, "PoE is in exclusive fullscreen — skipping snippet overlay.")
+    #     print("PoE is in exclusive fullscreen — skipping snippet overlay.")
+    #     return  # Skip overlay
+
     items = []
     # create overlay as a child window, not a new root
     overlay = tk.Toplevel(root)
@@ -868,6 +888,7 @@ def capture_snippet(root, on_done):
     canvas.bind("<ButtonRelease-1>", on_mouse_up)
 
     return items
+
 
 #####################################################
 # Captures the a snippet of the top right corner of #
