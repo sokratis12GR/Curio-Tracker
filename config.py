@@ -161,7 +161,7 @@ layout_prompt = "\n📸 Capturing layout..."
 exiting_prompt = "\n👋 Exiting."
 
 # Time Duplicate values checker:
-time_column_index = 15 # 16th column of the .csv file contains the time var
+time_column_index = 16 # 17th column of the .csv file contains the time var
 
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
 
@@ -214,5 +214,4 @@ enchant_l_val = 70 # 70
 enchant_u_hue = 130 #130
 enchant_u_sat = 90 #90
 enchant_u_val = 255 #240
-
 
