@@ -70,10 +70,10 @@ def initialize_settings():
     enable_debugging_key = get_setting('Hotkeys', 'debug_key')
     pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
     time_last_dupe_check_seconds = int(get_setting('DEFAULT', 'time_last_dupe_check_seconds', '60'))
-    info_show_keys_capture = "Press {} to capture all curios on screen no duplicates.".format(capture_key.upper())
-    info_show_keys_snippet = "Press {} to snippet a region to capture allows duplicates.".format(snippet_key.upper())
-    info_show_keys_layout = "Press {} to set current layout.".format(layout_capture_key.upper())
-    info_show_keys_exit = "Press {} to exit the script.".format(exit_key.upper())
+    info_show_keys_capture = "Press {} to capture all curios on screen no duplicates.".format(str(capture_key).upper())
+    info_show_keys_snippet = "Press {} to snippet a region to capture allows duplicates.".format(str(snippet_key).upper())
+    info_show_keys_layout = "Press {} to set current layout.".format(str(layout_capture_key).upper())
+    info_show_keys_exit = "Press {} to exit the script.".format(str(exit_key).upper())
 
 settings = DEFAULT_SETTINGS
 
@@ -214,4 +214,5 @@ enchant_l_val = 70 # 70
 enchant_u_hue = 130 #130
 enchant_u_sat = 90 #90
 enchant_u_val = 255 #240
+
 
