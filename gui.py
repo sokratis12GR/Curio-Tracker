@@ -98,6 +98,7 @@ def handle_layout_capture():
 		tracker.validateAttempt(c.layout_prompt)
 		tracker.capture_layout()
 		update_blueprint_info()
+		toasts.show_message(root, f"Blueprint Layout: {tracker.blueprint_layout}\nArea Level: {tracker.blueprint_area_level}")
 
 
 def handle_exit():
