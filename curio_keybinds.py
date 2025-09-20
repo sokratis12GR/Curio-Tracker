@@ -57,6 +57,9 @@ def normalize_key(evt_key):
     return None
 
 def parse_hotkey(hotkey_str):
+    # Ensure the input is always a string
+    hotkey_str = str(hotkey_str)
+
     parts = [p.strip().lower() for p in hotkey_str.split('+') if p.strip()]
     keys = set()
     for p in parts:
@@ -69,7 +72,7 @@ def parse_hotkey(hotkey_str):
                 keys.add(keyboard.Key.alt)
             elif p.startswith('f') and p[1:].isdigit():
                 keys.add(getattr(keyboard.Key, p))
-            elif len(p) == 1:
+            elif len(p) == 1 and p.isprintable(): 
                 keys.add(p)
             else:
                 keys.add(getattr(keyboard.Key, p))
@@ -210,4 +213,5 @@ def stop_global_listener():
         _current_keys = []
 
 # ---------------- Initialize ----------------
+
 init_from_settings()
