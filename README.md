@@ -17,12 +17,17 @@ F3 - Well every tool needs a way to exit it, so this is all it does, closes the 
 <img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/343496ad-6b80-4e1d-b11d-80cfa1b08a9a" />
 <img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/ce8faa22-eb30-4c74-8be2-b63939fcd878" />
 
+## Sorting
+<img width="1918" height="1030" alt="image" src="https://github.com/user-attachments/assets/68bb3ee9-4a90-406b-8484-fb7c7fe7dcce" />
+
 It will save the data in a `.csv` file (`saves/matches.csv`) like the following (supported by google sheets, excel and so on)
 <img width="1263" height="713" alt="image" src="https://github.com/user-attachments/assets/04e8fd60-4c86-4b40-9ddb-c4471e1fb97e" />
 
-
 Example `matches.csv` output:
 <img width="1284" height="766" alt="image" src="https://github.com/user-attachments/assets/5447ab65-7bad-47e1-a058-d5afb381f2b1" />
+
+## Light Mode
+<img width="1918" height="1029" alt="image" src="https://github.com/user-attachments/assets/a7107fe2-f117-4967-a3c0-f3bd9d2d5cfb" />
 
 # Extras
 - Real-time data correction:
@@ -40,6 +45,7 @@ In case the app crashes or has an error image, please do not hesitate to create 
 - Provide a screenshot, or a detailed explanation of the issue
 
 ***Appreciate any feedback ^^***
+
 
 
 
