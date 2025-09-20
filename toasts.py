@@ -50,6 +50,8 @@ def show(root, item, message=None, duration=5000):
     img_label = tk.Label(frame, image=tk_img, bg="black")
     img_label.image = tk_img
     img_label.pack(side="left", padx=(0, 8))
+    
+    toast.img_ref = tk_img
 
     if getattr(item, "enchants", None) and len(item.enchants) > 0:
         item_text = "\n".join([str(e) for e in item.enchants])
@@ -74,6 +76,37 @@ def show(root, item, message=None, duration=5000):
 
     toast.lift()
     root.focus_force() 
+
+    TOASTS.append(toast)
+    reposition(root)
+
+    def close_toast():
+        if toast in TOASTS:
+            TOASTS.remove(toast)
+        try:
+            toast.destroy()
+        except Exception:
+            pass
+        reposition(root)
+
+    toast.after(duration, close_toast)
+    return toast
+
+def show_message(root, message, duration=5000):
+    toast = tk.Toplevel(root)
+    toast.overrideredirect(True)
+    toast.attributes("-alpha", 0.98)
+    toast.attributes("-topmost", True)
+    toast.attributes("-toolwindow", True)
+
+    frame = tk.Frame(toast, bg="black", padx=TOAST_PADDING, pady=TOAST_PADDING)
+    frame.pack()
+
+    text_label = tk.Label(frame, text=message, bg="black", fg="white", anchor="w")
+    text_label.pack(side="left")
+
+    toast.lift()
+    root.focus_force()
 
     TOASTS.append(toast)
     reposition(root)
