@@ -28,7 +28,16 @@ images_visible = True
 IMAGE_COL_WIDTH = 200
 ROW_HEIGHT = 40
 original_image_col_width = IMAGE_COL_WIDTH
-
+TYPE_DISPLAY_MAP = {
+	"Trinket": "Trinket",
+	"Replacement": "Replacement",
+	"Replica": "Replica",
+	"Experimental": "Experimented Base Type",
+	"Weapon Enchant": "Weapon Enchantment",
+	"Armor Enchant": "Armor Enchantment",
+	"Scarab": "Scarab",
+	"Currency": "Currency"
+}
 global_item_tracker = []
 
 tracker.init_csv()
@@ -63,6 +72,7 @@ def handle_capture():
 			add_item_to_tree(item)
 
 	update_total_items_count()
+	update_visible_images()
 
 def handle_snippet():
 	def process_items(items):
@@ -81,6 +91,7 @@ def handle_snippet():
 
 	root.after(0, run_capture)
 	update_total_items_count()
+	update_visible_images()
 
 def handle_layout_capture():
 	with redirect_to_capture_console():
@@ -598,7 +609,7 @@ def update_total_items_count():
 # ---------- Load Functions ----------
 def load_all_items_threaded():
 	def worker():
-		tree.delete(*tree.get_children())  # clear all existing items
+		clear_tree()  # clear all existing items
 		all_items = tracker.load_all_parsed_items_from_csv()
 		reverse_load = sort_reverse.get("time", True)
 		if reverse_load:
@@ -627,7 +638,7 @@ def add_items_in_batches(items, batch_size=200, start_index=0):
 
 # ----- Load Latest 5 Items -----
 def load_latest_wing():
-	tree.delete(*tree.get_children())  # clear all existing items
+	clear_tree()  # clear all existing items
 	tracker.parsed_items = tracker.load_recent_parsed_items_from_csv(max_items=5)
 	if not tracker.parsed_items:
 		return
@@ -640,10 +651,11 @@ def load_latest_wing():
 
 	filter_tree_by_time()
 	update_total_items_count()
+	update_visible_images()
 
 # ----- Load Latest 1 Item -----
 def load_latest_item():
-	tree.delete(*tree.get_children())  # clear current items
+	clear_tree()  # clear current items
 	tracker.parsed_items = tracker.load_recent_parsed_items_from_csv(max_items=1)
 	if not tracker.parsed_items:
 		return
@@ -652,6 +664,7 @@ def load_latest_item():
 	add_item_to_tree(item, render_image=True)
 	filter_tree_by_time()
 	update_total_items_count()
+	update_visible_images()
 
 # ----- Clear Tree ----- 
 def clear_tree():
@@ -666,11 +679,7 @@ def clear_tree():
 def on_tree_double_click(event):
 	row_id = tree.identify_row(event.y)
 	col_id = tree.identify_column(event.x)
-
-	if not row_id or not col_id:
-		return
-
-	if col_id == "#0":
+	if not row_id or not col_id or col_id == "#0":
 		return
 
 	bbox = tree.bbox(row_id, col_id)
@@ -678,47 +687,59 @@ def on_tree_double_click(event):
 		return
 	x, y, w, h = bbox
 
-	col_idx = int(col_id.replace("#", "")) 
+	col_idx = int(col_id.replace("#", ""))
 	col_name = tree["columns"][col_idx]
 
-	if col_name != "stack_size":
+	item = csv_row_map.get(row_id)
+	if not item:
 		return
 
+	item_type = item.type
 	old_value = tree.set(row_id, col_name)
 
-	edit_entry = ttk.Entry(tree)
-	edit_entry.place(x=x, y=y, width=w, height=h)
-	edit_entry.insert(0, old_value)
-	edit_entry.focus()
+	# ---- STACK SIZE (only Currency/Scarab) ----
+	if col_name == "stack_size" and item_type in {"Currency", "Scarab"}:
+		edit_entry = ttk.Entry(tree, justify="center")
+		edit_entry.place(x=x, y=y, width=w, height=h)
+		if old_value:
+			edit_entry.insert(0, old_value)
+		edit_entry.focus()
 
-	def save_new_stack(event=None):
-		new_value = edit_entry.get().strip()
-		edit_entry.destroy()
+		def save_stack(event=None):
+			new_value = edit_entry.get().strip()
+			edit_entry.destroy()
 
-		if new_value != old_value:
-			tree.set(row_id, col_name, new_value)
-
-			# Update the actual item object
-			item = csv_row_map.get(row_id)
-			if item:
+			# Validate
+			if new_value == "":
+				stack_val = ""
+			else:
 				try:
-					item.stack_size = int(new_value)
+					stack_val = int(new_value)
+					if not (1 <= stack_val <= 40):
+						raise ValueError
 				except ValueError:
-					item.stack_size = 1
+					messagebox.showerror("Invalid Stack Size", "Enter a number between 1–40 or leave blank.")
+					return
 
-				# --- Recalculate chaos/divine values ---
+			# Update Treeview
+			tree.set(row_id, col_name, stack_val)
+
+			# Update in-memory
+			if item:
+				item.stack_size = stack_val if stack_val != "" else None
+
+				# Recalculate value display
 				chaos_float = 0
 				divine_float = 0
 				try:
-					chaos_float = float(getattr(item, "chaos_value", 0)) * item.stack_size
+					chaos_float = float(getattr(item, "chaos_value", 0)) * (item.stack_size or 1)
 				except (ValueError, TypeError):
 					pass
 				try:
-					divine_float = float(getattr(item, "divine_value", 0)) * item.stack_size
+					divine_float = float(getattr(item, "divine_value", 0)) * (item.stack_size or 1)
 				except (ValueError, TypeError):
 					pass
 
-				# Format display value
 				def format_value(f):
 					return str(int(f)) if f.is_integer() else str(round(f, 1))
 
@@ -729,20 +750,37 @@ def on_tree_double_click(event):
 				else:
 					display_value = ""
 
-				# Update Treeview columns
 				tree.set(row_id, "value", display_value)
 				tree.set(row_id, "numeric_value", chaos_float)
 
-			# Persist changes
-			update_csv_stack_size(row_id, new_value)
+			update_csv_field(row_id, "Stack Size", new_value)
 
-	edit_entry.bind("<Return>", save_new_stack)
-	edit_entry.bind("<FocusOut>", save_new_stack)
+		edit_entry.bind("<Return>", save_stack)
+		edit_entry.bind("<FocusOut>", save_stack)
+	
+	# ---- BLUEPRINT TYPE EDIT ----
+	elif col_name == "layout":
+		combo = ttk.Combobox(tree, values=layout_keywords, state="readonly")
+		combo.place(x=x, y=y, width=w, height=h)
+		combo.set(old_value or layout_keywords[0])
+		combo.focus()
 
+		def save_blueprint(event=None):
+			new_value = combo.get()
+			combo.destroy()
+
+			tree.set(row_id, col_name, new_value)
+			if item:
+				setattr(item, "blueprint_type", new_value)
+
+			update_csv_field(row_id, "Blueprint Type", new_value)
+
+		combo.bind("<<ComboboxSelected>>", save_blueprint)
+		combo.bind("<FocusOut>", save_blueprint)
 
 tree.bind("<Double-1>", on_tree_double_click)
 
-def update_csv_stack_size(row_id, new_value):
+def update_csv_field(row_id, field_name, new_value):
 	item = csv_row_map.get(row_id)
 	if not item:
 		return
@@ -767,27 +805,25 @@ def update_csv_stack_size(row_id, new_value):
 
 	try:
 		rec_idx = header.index("Record #")
-		stack_idx = header.index("Stack Size")
+		field_idx = header.index(field_name)
 	except ValueError:
-		print("[ERROR] CSV missing 'Record #' or 'Stack Size' column")
+		print(f"[ERROR] CSV missing 'Record #' or '{field_name}' column")
 		return
 
 	updated = False
 	for line in lines[1:]:
 		cols = line.split(",")
 		if rec_idx < len(cols) and cols[rec_idx].strip() == str(record_number):
-			if stack_idx >= len(cols):
-				cols += [""] * (stack_idx - len(cols) + 1)
-			cols[stack_idx] = str(new_value)
+			if field_idx >= len(cols):
+				cols += [""] * (field_idx - len(cols) + 1)
+			cols[field_idx] = str(new_value)
 			updated = True
 		updated_lines.append(",".join(cols))
 
 	if updated:
 		with open(c.csv_file_path, "w", encoding="utf-8") as f:
 			f.write("\n".join(updated_lines) + "\n")
-		print(f"[INFO] Updated stack size for Record #{record_number} → {new_value}")
-	else:
-		print(f"[WARN] Could not find CSV row for Record #{record_number}")
+		print(f"[INFO] Updated {field_name} for Record #{record_number} → {new_value}")
 
 # ---------- Sorting ----------
 sort_reverse = {"img": False, "item": False, "value": False, "type": True, "stack_size": False, "area_level": False, "layout": False, "player": False, "league": False, "time": True}
@@ -830,50 +866,50 @@ def sort_tree(column):
 
 # ---------- Filtering by Time ----------
 def filter_tree_by_time(*args):
-    selected = time_filter_var.get()
-    now = datetime.now()
+	selected = time_filter_var.get()
+	now = datetime.now()
 
-    if selected == "Custom...":
-        open_custom_hours_popup()
-        return  
+	if selected == "Custom...":
+		open_custom_hours_popup()
+		return  
 
-    for iid in all_item_iids:
-        if not tree.exists(iid):
-            continue
-        dt = item_time_map.get(iid)
-        show = False
+	for iid in all_item_iids:
+		if not tree.exists(iid):
+			continue
+		dt = item_time_map.get(iid)
+		show = False
 
-        if dt is None:
-            show = False
-        else:
-            delta = now - dt
-            if selected == "All":
-                show = True
-            elif selected == "Today":
-                show = dt.date() == now.date()
-            elif selected == "Last hour":
-                show = delta <= timedelta(hours=1)
-            elif selected == "Last 2 hours":
-                show = delta <= timedelta(hours=2)
-            elif selected == "Last 12 hours":
-                show = delta <= timedelta(hours=12)
-            elif selected == "Last 24 hours":
-                show = delta <= timedelta(days=1)
-            elif selected == "Last week":
-                show = delta <= timedelta(weeks=1)
-            elif selected == "Last 2 weeks":
-                show = delta <= timedelta(weeks=2)
-            elif selected == "Last month":
-                show = delta <= timedelta(days=30)
-            elif selected == "Last year":
-                show = delta <= timedelta(days=365)
-            elif selected == "Custom":
-                show = delta <= timedelta(hours=custom_hours_var.get())
+		if dt is None:
+			show = False
+		else:
+			delta = now - dt
+			if selected == "All":
+				show = True
+			elif selected == "Today":
+				show = dt.date() == now.date()
+			elif selected == "Last hour":
+				show = delta <= timedelta(hours=1)
+			elif selected == "Last 2 hours":
+				show = delta <= timedelta(hours=2)
+			elif selected == "Last 12 hours":
+				show = delta <= timedelta(hours=12)
+			elif selected == "Last 24 hours":
+				show = delta <= timedelta(days=1)
+			elif selected == "Last week":
+				show = delta <= timedelta(weeks=1)
+			elif selected == "Last 2 weeks":
+				show = delta <= timedelta(weeks=2)
+			elif selected == "Last month":
+				show = delta <= timedelta(days=30)
+			elif selected == "Last year":
+				show = delta <= timedelta(days=365)
+			elif selected == "Custom":
+				show = delta <= timedelta(hours=custom_hours_var.get())
 
-        if show:
-            tree.reattach(iid, "", "end")
-        else:
-            tree.detach(iid)
+		if show:
+			tree.reattach(iid, "", "end")
+		else:
+			tree.detach(iid)
 
 time_filter_var = tk.StringVar(value="All")
 time_filter_var.trace_add("write", filter_tree_by_time)
@@ -881,34 +917,34 @@ time_filter_var.trace_add("write", filter_tree_by_time)
 custom_hours_var = tk.DoubleVar(value=0.0)  # store user input for custom hours
 
 def open_custom_hours_popup():
-    popup = tk.Toplevel(root)
-    popup.title("Custom Hours Filter")
-    popup.geometry("250x100")
-    popup.resizable(False, True)
-    popup.grab_set()  # modal
-    style = ttk.Style(popup)
-    style.theme_use('clam') 
+	popup = tk.Toplevel(root)
+	popup.title("Custom Hours Filter")
+	popup.geometry("250x100")
+	popup.resizable(False, True)
+	popup.grab_set()  # modal
+	style = ttk.Style(popup)
+	style.theme_use('clam') 
 
-    ttk.Label(popup, text="Enter hours:").pack(pady=(10, 5))
+	ttk.Label(popup, text="Enter hours:").pack(pady=(10, 5))
 
-    entry_var = tk.StringVar(value=str(custom_hours_var.get()))
-    entry = ttk.Entry(popup, textvariable=entry_var, width=10)
-    entry.pack()
+	entry_var = tk.StringVar(value=str(custom_hours_var.get()))
+	entry = ttk.Entry(popup, textvariable=entry_var, width=10)
+	entry.pack()
 
-    def apply_custom():
-        try:
-            hours = float(entry_var.get())
-            custom_hours_var.set(hours)
-            time_filter_var.set("Custom")  # switch dropdown value
-        except ValueError:
-            tk.messagebox.showerror("Invalid Input", "Please enter a valid number.")
-            return
-        popup.destroy()
-        filter_tree_by_time()
+	def apply_custom():
+		try:
+			hours = float(entry_var.get())
+			custom_hours_var.set(hours)
+			time_filter_var.set("Custom")  # switch dropdown value
+		except ValueError:
+			tk.messagebox.showerror("Invalid Input", "Please enter a valid number.")
+			return
+		popup.destroy()
+		filter_tree_by_time()
 
-    ttk.Button(popup, text="Apply", command=apply_custom).pack(pady=10)
-    entry.focus()
-    entry.bind("<Return>", lambda e: apply_custom())
+	ttk.Button(popup, text="Apply", command=apply_custom).pack(pady=10)
+	entry.focus()
+	entry.bind("<Return>", lambda e: apply_custom())
 
 # Define time filter variable and dropdown
 time_options = [
@@ -955,9 +991,12 @@ def update_img_column_state(show_column: bool):
 
 	tree["displaycolumns"] = current_displayed
 
+images_visible = utils.get_setting("Columns", "img_visible", True)
+
 def toggle_images():
 	global images_visible
 	images_visible = not images_visible
+	utils.set_setting("Columns", "img_visible", images_visible)
 
 	for iid in tree.get_children():
 		orig_img = original_img_cache.get(iid)
@@ -978,7 +1017,6 @@ def toggle_column_tree(col_name, show):
 	if col_name == "img":
 		update_img_column_state(show)
 	else:
-		# Respect original order for other columns
 		current_displayed = list(tree["displaycolumns"])
 		if show and col_name not in current_displayed:
 			index = columns.index(col_name)
@@ -986,6 +1024,8 @@ def toggle_column_tree(col_name, show):
 		elif not show and col_name in current_displayed:
 			current_displayed.remove(col_name)
 		tree["displaycolumns"] = current_displayed
+
+	utils.set_setting("Columns", col_name, show)
 
 EXTRA_BUTTON_INDEX+1
 
@@ -1000,7 +1040,8 @@ col_vars = {}
 menu_indices = {}  # store menu item indices
 
 for idx, (col, label, width) in enumerate(tree_columns):
-	var = tk.BooleanVar(value=True)
+	saved_state = utils.get_setting("Columns", col, True)
+	var = tk.BooleanVar(value=saved_state)
 	col_vars[col] = var
 
 	# Use default arguments in lambda to fix late binding
@@ -1010,6 +1051,7 @@ for idx, (col, label, width) in enumerate(tree_columns):
 		command=lambda c=col, v=var: toggle_column_tree(c, v.get())
 	)
 	menu_indices[col] = idx # save the menu index
+	toggle_column_tree(col, saved_state)
 
 # Keep the existing toggle images button separate
 toggle_img_btn = ttk.Button(toggle_frame, text="Toggle Images", command=toggle_images)
@@ -1041,70 +1083,70 @@ settings_menu.add_separator()
 settings_menu.add_command(label="Exit", command=handle_exit)
 
 def show_about_popup():
-    # Fetch app version dynamically
-    try:
-        import app  # your app file containing version
-        app_version = getattr(app, "VERSION", "0.2.2.0")
-    except ImportError:
-        app_version = "0.2.2.0"
+	# Fetch app version dynamically
+	try:
+		import app  # your app file containing version
+		app_version = getattr(app, "VERSION", "0.2.2.1")
+	except ImportError:
+		app_version = "0.2.2.1"
 
-    # Use themed popup
-    popup = tk.Toplevel(root)
-    popup.title("About Curio Tracker")
-    popup.resizable(False, False)
+	# Use themed popup
+	popup = tk.Toplevel(root)
+	popup.title("About Curio Tracker")
+	popup.resizable(False, False)
 
-    # Theme colors
-    if theme_manager.is_dark_mode:
-        bg = "#36393f"
-        fg = "#dcddde"
-        accent = "#5865f2"
-    else:
-        bg = "#f4f6f8"
-        fg = "black"
-        accent = "#0078d7"
+	# Theme colors
+	if theme_manager.is_dark_mode:
+		bg = "#36393f"
+		fg = "#dcddde"
+		accent = "#5865f2"
+	else:
+		bg = "#f4f6f8"
+		fg = "black"
+		accent = "#0078d7"
 
-    popup.configure(bg=bg)
+	popup.configure(bg=bg)
 
-    # --- Layout ---
-    frm = ttk.Frame(popup, style="TFrame")
-    frm.pack(padx=20, pady=20)
+	# --- Layout ---
+	frm = ttk.Frame(popup, style="TFrame")
+	frm.pack(padx=20, pady=20)
 
-    # App logo (replace with your actual image path)
-    try:
-        from PIL import Image, ImageTk
-        logo_img = Image.open("assets/logo.png").resize((80, 80))  # adjust path/size
-        logo_photo = ImageTk.PhotoImage(logo_img)
-        lbl_logo = tk.Label(frm, image=logo_photo, bg=bg)
-        lbl_logo.image = logo_photo  # keep a reference
-        lbl_logo.pack(pady=(0, 10))
-    except Exception:
-        pass  # skip logo if PIL or image missing
+	# App logo (replace with your actual image path)
+	try:
+		from PIL import Image, ImageTk
+		logo_img = Image.open("assets/logo.png").resize((80, 80))  # adjust path/size
+		logo_photo = ImageTk.PhotoImage(logo_img)
+		lbl_logo = tk.Label(frm, image=logo_photo, bg=bg)
+		lbl_logo.image = logo_photo  # keep a reference
+		lbl_logo.pack(pady=(0, 10))
+	except Exception:
+		pass  # skip logo if PIL or image missing
 
-    # Author info
-    ttk.Label(frm, text="Curio Tracker", style="TLabel", font=("Segoe UI", 14, "bold")).pack(pady=(0,5))
-    ttk.Label(frm, text=f"Author: Sokratis Fotkatzkis", style="TLabel").pack()
-    ttk.Label(frm, text=f"Version: {app_version}", style="TLabel").pack(pady=(0,10))
+	# Author info
+	ttk.Label(frm, text="Curio Tracker", style="TLabel", font=("Segoe UI", 14, "bold")).pack(pady=(0,5))
+	ttk.Label(frm, text=f"Author: Sokratis Fotkatzkis", style="TLabel").pack()
+	ttk.Label(frm, text=f"Version: {app_version}", style="TLabel").pack(pady=(0,10))
 
-    # GitHub link
-    def open_github(e=None):
-        webbrowser.open_new("https://github.com/sokratis12GR/Curio-Tracker")
+	# GitHub link
+	def open_github(e=None):
+		webbrowser.open_new("https://github.com/sokratis12GR/Curio-Tracker")
 
-    github_text = ttk.Label(frm, text="GitHub Repository", style="TLabel", foreground=accent, cursor="hand2")
-    github_text.pack()
-    github_text.bind("<Button-1>", open_github)
+	github_text = ttk.Label(frm, text="GitHub Repository", style="TLabel", foreground=accent, cursor="hand2")
+	github_text.pack()
+	github_text.bind("<Button-1>", open_github)
 
-    # Close button
-    ttk.Button(frm, text="Close", command=popup.destroy).pack(pady=(15,0))
+	# Close button
+	ttk.Button(frm, text="Close", command=popup.destroy).pack(pady=(15,0))
 
-    # Center popup
-    popup.update_idletasks()
-    w, h = popup.winfo_width(), popup.winfo_height()
-    x = (popup.winfo_screenwidth() // 2) - (w // 2)
-    y = (popup.winfo_screenheight() // 2) - (h // 2)
-    popup.geometry(f"{w}x{h}+{x}+{y}")
-    popup.transient(root)
-    popup.grab_set()
-    root.wait_window(popup)
+	# Center popup
+	popup.update_idletasks()
+	w, h = popup.winfo_width(), popup.winfo_height()
+	x = (popup.winfo_screenwidth() // 2) - (w // 2)
+	y = (popup.winfo_screenheight() // 2) - (h // 2)
+	popup.geometry(f"{w}x{h}+{x}+{y}")
+	popup.transient(root)
+	popup.grab_set()
+	root.wait_window(popup)
 
 
 load_latest_btn = ttk.Button(left_frame, text="Load Latest Wing", command=load_latest_wing)
@@ -1116,61 +1158,61 @@ load_latest_1_btn.grid(row=EXTRA_BUTTON_INDEX, column=0, pady=5, sticky="ew")
 from tkinter import simpledialog
 
 def load_custom_number():
-    global theme_manager
-    msgbox = ThemedMessageBox(root, theme_manager)
-    messagebox.showinfo = msgbox.showinfo
-    messagebox.showwarning = msgbox.showwarning
-    messagebox.showerror = msgbox.showerror
-    messagebox.askyesno = msgbox.askyesno
+	global theme_manager
+	msgbox = ThemedMessageBox(root, theme_manager)
+	messagebox.showinfo = msgbox.showinfo
+	messagebox.showwarning = msgbox.showwarning
+	messagebox.showerror = msgbox.showerror
+	messagebox.askyesno = msgbox.askyesno
 
-    # Ask user for number of entries to load
-    try:
-        max_items = simpledialog.askinteger(
-            "Load Entries",
-            "Enter the number of entries to load:",
-            parent=root,
-            minvalue=1
-        )
-        if max_items is None:
-            return  # user cancelled
-    except Exception:
-        msgbox.showerror("Invalid Input", "Please enter a valid number.")
-        return
+	# Ask user for number of entries to load
+	try:
+		max_items = simpledialog.askinteger(
+			"Load Entries",
+			"Enter the number of entries to load:",
+			parent=root,
+			minvalue=1
+		)
+		if max_items is None:
+			return  # user cancelled
+	except Exception:
+		msgbox.showerror("Invalid Input", "Please enter a valid number.")
+		return
 
-    tree.delete(*tree.get_children())  # clear existing tree
+	tree.delete(*tree.get_children())  # clear existing tree
 
-    # Load items from CSV
-    all_items = tracker.load_all_parsed_items_from_csv()
-    if not all_items:
-        msgbox.showinfo("Load Entries", "No items available to load.")
-        return
+	# Load items from CSV
+	all_items = tracker.load_all_parsed_items_from_csv()
+	if not all_items:
+		msgbox.showinfo("Load Entries", "No items available to load.")
+		return
 
-    # Reverse items so highest record is first
-    all_items = all_items[::-1]
+	# Reverse items so highest record is first
+	all_items = all_items[::-1]
 
-    # Respect max_items
-    items_to_add = all_items[:max_items]
+	# Respect max_items
+	items_to_add = all_items[:max_items]
 
-    # Add items in batches
-    def add_batch(start_index=0, batch_size=200):
-        end_index = min(start_index + batch_size, len(items_to_add))
-        for i in range(start_index, end_index):
-            add_item_to_tree(items_to_add[i], render_image=False)
+	# Add items in batches
+	def add_batch(start_index=0, batch_size=200):
+		end_index = min(start_index + batch_size, len(items_to_add))
+		for i in range(start_index, end_index):
+			add_item_to_tree(items_to_add[i], render_image=False)
 
-        if end_index < len(items_to_add):
-            root.after(15, add_batch, end_index, batch_size)
-        else:
-            update_visible_images()
-            filter_tree_by_time()
-            update_total_items_count()
-            sort_reverse["record"] = True
-            sort_tree("record")
-            msgbox.showinfo(
-                "Load Entries",
-                f"Loaded {len(items_to_add)} entries successfully."
-            )
+		if end_index < len(items_to_add):
+			root.after(15, add_batch, end_index, batch_size)
+		else:
+			update_visible_images()
+			filter_tree_by_time()
+			update_total_items_count()
+			sort_reverse["record"] = True
+			sort_tree("record")
+			msgbox.showinfo(
+				"Load Entries",
+				f"Loaded {len(items_to_add)} entries successfully."
+			)
 
-    add_batch()
+	add_batch()
 
 EXTRA_BUTTON_INDEX += 1
 
