@@ -8,6 +8,7 @@ from settings import LOCK_FILE, OUTPUT_CURRENCY_CSV
 from statistics import median
 import ocr_utils as utils
 from ocr_utils import load_csv
+from shared_lock import is_recent_run, update_lock
 
 # === CONFIG ===
 MIN_SECONDS_BETWEEN_RUNS = 2 * 60 * 60  # 2 hours
@@ -57,24 +58,6 @@ ITEM_TYPE_MAP = {
     "Unique Map": "UniqueMap",
     "Base Types": "BaseType"
 }
-
-# === LOCK FUNCTIONS ===
-def is_recent_run():
-    if not os.path.exists(LOCK_FILE):
-        return False
-    try:
-        with open(LOCK_FILE, "r") as f:
-            ts = float(f.read().strip())
-        return (time.time() - ts) < MIN_SECONDS_BETWEEN_RUNS
-    except Exception:
-        return False
-
-def update_lock():
-    try:
-        with open(LOCK_FILE, "w") as f:
-            f.write(str(time.time()))
-    except Exception as e:
-        print(f"[WARN] Failed to update lock file: {e}")
 
 def normalize_name_for_lookup(name: str) -> str:
     if not name:
@@ -228,7 +211,7 @@ def fetch_all_items():
 
 # === WRAPPER FUNCTION TO CALL ===
 def run_fetch(force=False):
-    if not force and is_recent_run():
+    if not force and is_recent_run(OUTPUT_CURRENCY_CSV):
         print("[INFO] Last run <2 hours ago, skipping fetch.")
         return
 
@@ -242,7 +225,7 @@ def run_fetch(force=False):
     df.to_csv(OUTPUT_CURRENCY_CSV, index=False, float_format="%.2f")
     print(f"[INFO] Saved CSV: {OUTPUT_CURRENCY_CSV}")
 
-    update_lock()
+    update_lock(OUTPUT_CURRENCY_CSV)
     print(f"[INFO] Lock file updated: {LOCK_FILE}")
 
     summary = df.groupby("Category").size().to_dict()
