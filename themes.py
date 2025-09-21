@@ -12,12 +12,20 @@ class Themes:
         self.header_widgets = []  
         self.is_dark_mode = True
         self.comboboxes = [] 
+        self.sliders = []
+        self.spinboxes = []
 
     def set_header_widgets(self, header_widgets):
         self.header_widgets = header_widgets
     
     def register_combobox(self, combobox):
         self.comboboxes.append(combobox)
+    
+    def register_slider(self, slider: tk.Scale):
+        self.sliders.append(slider)
+
+    def register_spinbox(self, spinbox: tk.Spinbox):
+        self.spinboxes.append(spinbox)
 
     def style_combobox_popup(self, combobox, widget_bg, fg, accent):
         def fix_colors():
@@ -150,7 +158,13 @@ class Themes:
                        background=[("active", accent)],
                        troughcolor=[("!disabled", panel_bg)],
                        arrowcolor=[("active", "white")])
-        
+        self.style.configure(
+            "TSpinbox",
+            fieldbackground=widget_bg,
+            background=widget_bg,
+            foreground=fg,
+            arrowcolor=fg,
+        )
         # --- Headers ---
         for lbl in self.header_widgets:
             lbl.configure(background=panel_bg, foreground=fg)
@@ -183,6 +197,28 @@ class Themes:
         # --- Combobox popups ---
         for cb in self.comboboxes:
             self.style_combobox_popup(cb, widget_bg, fg, accent)
+
+        # --- Sliders ---
+        for slider in self.sliders:
+            slider.configure(
+                background=panel_bg,
+                troughcolor=widget_bg,
+                fg=fg,
+                highlightbackground=panel_bg,
+                activebackground=accent,
+                bd=0,
+                relief="flat"
+            )
+            
+        for sb in self.spinboxes:
+            sb.configure(
+                bg=widget_bg,
+                fg=fg,
+                relief="flat",
+                highlightthickness=0,
+                justify="center",
+                insertbackground=fg
+            )
         
 
 
