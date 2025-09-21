@@ -22,8 +22,9 @@ from themes import Themes, ThemedMessageBox
 import tkinter.messagebox as messagebox
 import webbrowser
 
-is_dark_mode = utils.get_setting('Application', 'is_dark_mode', True)
-are_toasts_enabled = utils.get_setting('Application', 'are_toasts_enabled', True)
+is_dark_mode = utils.get_setting('Application', 'is_dark_mode', True) # default: dark mode enabled
+are_toasts_enabled = utils.get_setting('Application', 'are_toasts_enabled', True) # default: toasts enabled
+toasts_duration_seconds = utils.get_setting('Application', "toasts_duration_seconds", 5) # default: 5 seconds toasts duration.
 images_visible = True
 IMAGE_COL_WIDTH = 200
 ROW_HEIGHT = 40
@@ -96,9 +97,8 @@ def handle_snippet():
 def handle_layout_capture():
 	with redirect_to_capture_console():
 		tracker.validateAttempt(c.layout_prompt)
-		tracker.capture_layout()
+		tracker.capture_layout(root)
 		update_blueprint_info()
-		toasts.show_message(root, f"Blueprint Layout: {tracker.blueprint_layout}\nArea Level: {tracker.blueprint_area_level}")
 
 
 def handle_exit():
@@ -297,10 +297,10 @@ VISIBLE_ROW_BUFFER = 50   # Number of rows rendered at once
 all_items_data = []       # Full list of items to display
 rendered_iids = []        # Currently rendered Treeview row IDs
 
-columns = ("item", "value", "numeric_value", "type", "stack_size", "area_level", 
+columns = ("item", "value", "numeric_value", "type", "stack_size", "tier",  "area_level", 
 		   "layout", "player", "league", "time", "record")
 tree = ttk.Treeview(tree_frame, columns=columns, show="tree headings")
-tree["displaycolumns"] = ("item", "value", "type", "stack_size", "area_level",
+tree["displaycolumns"] = ("item", "value", "type", "stack_size", "tier", "area_level",
 						  "layout", "player", "league", "time", "record")
 # Headings
 tree.heading("#0", text="Image")
@@ -316,6 +316,7 @@ tree_columns = [
 	("player", "Found by", 120),
 	("league", "League", 100),
 	("time", "Time", 150),
+	("tier", "Tier", 100),
 	("record", "Record", 100)
 ]
 
@@ -511,52 +512,14 @@ def add_item_to_tree(item, render_image=False):
 		sorted_item_keys.append((datetime.min, item_key))
 
 	chaosValue = getattr(item, "chaos_value", "")
-	divineValue = getattr(item, "divine_value", "")
-	stack_size = getattr(item, "stack_size", "")
-
 	item_type = getattr(item, "type", "N/A")
 
-	# Convert to floats safely
-	try:
-		chaos_float = float(chaosValue)
-	except (ValueError, TypeError):
-		chaos_float = 0
+	display_value = utils.calculate_estimate_value(item)
+	numeric_value = utils.convert_to_float(chaosValue)
+	
+	_, stack_size_txt = utils.get_stack_size(item)
 
-	try:
-		divine_float = float(divineValue)
-	except (ValueError, TypeError):
-		divine_float = 0
-
-	try:
-		stack_size = int(stack_size)
-	except (ValueError, TypeError):
-		stack_size = 1
-
-	# Multiply by stack size if more than 1
-	if stack_size > 1:
-		chaos_float *= stack_size
-		divine_float *= stack_size
-
-	# Helper to format numbers: drop .0 for integers
-	def format_value(f):
-		if f.is_integer():
-			return str(int(f))
-		return str(round(f, 1))  # keep 1 decimal
-
-	# Determine display value
-	if divine_float >= 0.5:
-		display_value = f"{format_value(divine_float)} Divines"
-	elif chaos_float > 0:
-		display_value = f"{format_value(chaos_float)} Chaos"
-	else:
-		display_value = ""  # show nothing if both are 0 or invalid
-
-	numeric_value = chaos_float
-	stack_size_txt = (
-			stack_size
-			if int(stack_size) > 0 and utils.is_currency_or_scarab(item_type)
-			else ""
-		)
+	item_tier = getattr(item, "tier", "")
 
 	# ---- Insert into Treeview ----
 	iid = item_key
@@ -570,6 +533,7 @@ def add_item_to_tree(item, render_image=False):
 				numeric_value,
 				item_type,
 				stack_size_txt,
+				item_tier,
 				getattr(item, "area_level", "83"),
 				getattr(item, "blueprint_type", "Prohibited Library"),
 				getattr(item, "logged_by", ""),
@@ -634,7 +598,6 @@ def add_items_in_batches(items, batch_size=200, start_index=0):
 		update_visible_images()
 		filter_tree_by_time()
 		update_total_items_count()
-		sort_reverse["record"] = True
 		sort_tree("record")
 
 # ----- Load Latest 5 Items -----
@@ -827,7 +790,7 @@ def update_csv_field(row_id, field_name, new_value):
 		print(f"[INFO] Updated {field_name} for Record #{record_number} → {new_value}")
 
 # ---------- Sorting ----------
-sort_reverse = {"img": False, "item": False, "value": False, "type": True, "stack_size": False, "area_level": False, "layout": False, "player": False, "league": False, "time": True}
+sort_reverse = {"img": False, "item": False, "value": False, "type": True, "stack_size": False, "area_level": False, "layout": False, "player": False, "league": False, "time": True, "record": True, "tier": False}
 
 def sort_tree(column):
 	children = tree.get_children()
@@ -852,6 +815,25 @@ def sort_tree(column):
 			except Exception:
 				return -1
 		items.sort(key=lambda x: parse_record(x[0]), reverse=sort_reverse[column])
+	
+	elif column == "tier":
+		def tier_key(val):
+			s = str(val).strip() if val is not None else ""
+			is_blank = 1 if s == "" else 0        
+			if is_blank:
+				numeric = 999                      
+			else:
+				try:
+					numeric = int(s)
+				except ValueError:
+					m = re.search(r"\d+", s)
+					numeric = int(m.group()) if m else 999
+
+			if sort_reverse[column]:
+				numeric = -numeric
+			return (is_blank, numeric)
+
+		items.sort(key=lambda x: tier_key(x[0]))
 
 	else:
 		items.sort(key=lambda x: x[0].lower(), reverse=sort_reverse[column])
@@ -1084,12 +1066,7 @@ settings_menu.add_separator()
 settings_menu.add_command(label="Exit", command=handle_exit)
 
 def show_about_popup():
-	# Fetch app version dynamically
-	try:
-		import app  # your app file containing version
-		app_version = getattr(app, "VERSION", "0.2.2.1")
-	except ImportError:
-		app_version = "0.2.2.1"
+	app_version = "0.2.3.0"
 
 	# Use themed popup
 	popup = tk.Toplevel(root)
@@ -1124,7 +1101,7 @@ def show_about_popup():
 		pass  # skip logo if PIL or image missing
 
 	# Author info
-	ttk.Label(frm, text="Curio Tracker", style="TLabel", font=("Segoe UI", 14, "bold")).pack(pady=(0,5))
+	ttk.Label(frm, text="Heist Curio Tracker", style="TLabel", font=("Segoe UI", 14, "bold")).pack(pady=(0,5))
 	ttk.Label(frm, text=f"Author: Sokratis Fotkatzkis", style="TLabel").pack()
 	ttk.Label(frm, text=f"Version: {app_version}", style="TLabel").pack(pady=(0,10))
 
@@ -1206,7 +1183,6 @@ def load_custom_number():
 			update_visible_images()
 			filter_tree_by_time()
 			update_total_items_count()
-			sort_reverse["record"] = True
 			sort_tree("record")
 			msgbox.showinfo(
 				"Load Entries",
@@ -1473,6 +1449,7 @@ console_toggle_btn = ttk.Button(toggle_frame, text="▼ Console", width=12, comm
 console_toggle_btn.grid(row=0, column=3, padx=5, sticky="w")
 EXTRA_BUTTON_INDEX += 1
 
+
 toasts_var = tk.BooleanVar(value=are_toasts_enabled)
 
 def toggle_toasts():
@@ -1491,6 +1468,60 @@ toasts_checkbox = ttk.Checkbutton(
 	command=toggle_toasts
 )
 toasts_checkbox.grid(row=0, column=4, padx=5, sticky="w")
+
+
+ttk.Label(toggle_frame, text="Toasts Duration:").grid(
+	row=0, column=5, sticky="w", pady=(5, 2)
+)
+
+def validate_duration(new_value):
+	if not new_value:  
+		return True
+	if new_value.isdigit():
+		value = int(new_value)
+		return 1 <= value <= 30
+	return False
+
+vcmd = (toggle_frame.register(validate_duration), '%P')
+
+
+toasts.TOASTS_DURATION = int(utils.get_setting('Application', 'toasts_duration_seconds', 5))
+if not 1 <= toasts.TOASTS_DURATION <= 30:
+	toasts.TOASTS_DURATION = 5
+
+toasts_duration_var = tk.StringVar(value=str(toasts.TOASTS_DURATION))
+toasts_duration_spinbox = ttk.Spinbox(
+	toggle_frame,
+	from_=1,
+	to=30,
+	textvariable=toasts_duration_var,
+	width=5,
+	validate='all'
+)
+toasts_duration_spinbox.grid(row=0, column=6, pady=(5, 2), sticky="w")
+
+def update_toasts_duration(*args):
+	try:
+		duration = int(toasts_duration_var.get())
+	except ValueError:
+		duration = 5  # fallback if invalid
+		toasts_duration_var.set(str(duration))
+	
+	# Clamp value between 1 and 30
+	if duration < 1:
+		duration = 1
+		toasts_duration_var.set(str(duration))
+	elif duration > 30:
+		duration = 30
+		toasts_duration_var.set(str(duration))
+	
+	toasts.TOASTS_DURATION = duration
+	utils.set_setting('Application', 'toasts_duration_seconds', toasts.TOASTS_DURATION)
+	if c.DEBUGGING:
+		print(f"[DEBUG] Toasts Duration set to: {toasts.TOASTS_DURATION}s")
+
+# Trace changes to the Spinbox
+toasts_duration_var.trace_add("write", update_toasts_duration)
 
 separator = ttk.Separator(left_frame, orient='horizontal')
 separator.grid(row=EXTRA_BUTTON_INDEX, column=0, columnspan=2, sticky="ew", pady=(10, 5))
@@ -1550,7 +1581,6 @@ curio_keybinds.init_from_settings()
 curio_keybinds.start_global_listener()
 
 # ----- Run App -----
-
 theme_manager.apply_theme(is_dark_mode=is_dark_mode)
 console_var.set(True)
 console_visible = utils.get_setting('Application', 'console_visible', True)

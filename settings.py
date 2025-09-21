@@ -11,6 +11,7 @@ def get_data_path(filename: str) -> str:
 SETTINGS_PATH = get_data_path("user_settings.ini")
 LOCK_FILE = get_data_path("last_run.lock")
 OUTPUT_CURRENCY_CSV = get_data_path("heist_item_currency_values.csv")
+OUTPUT_TIERS_CSV = get_data_path("heist_item_tiers_data.csv")
 
 settings = configparser.ConfigParser()
 if os.path.exists(SETTINGS_PATH):

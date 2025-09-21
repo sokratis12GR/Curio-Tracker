@@ -280,6 +280,65 @@ def get_top_right_layout(screen_width, screen_height):
 #        Builds the Item for the Image Rendering via CSV / OCR          #
 #                                                                       #
 #########################################################################
+def convert_to_float(val):
+    try:
+        result_float = float(val)
+    except (ValueError, TypeError):
+        result_float = 0
+    return result_float
+
+def convert_to_int(val):
+    try:
+        result_int = int(val)
+    except (ValueError, TypeError):
+        result_int = 1
+    return result_int
+
+def get_stack_size(item):
+    item_type = getattr(item, "type", "N/A")
+
+    stack_size = getattr(item, "stack_size", "")
+
+    stack_size = convert_to_int(stack_size)
+
+    stack_size_txt = (
+            stack_size
+            if stack_size > 0 and is_currency_or_scarab(item_type)
+            else ""
+    )
+    return stack_size, stack_size_txt
+
+
+def calculate_estimate_value(item) -> float:
+    chaosValue = getattr(item, "chaos_value", "")
+    divineValue = getattr(item, "divine_value", "")
+    stack_size, _ = get_stack_size(item)
+
+    chaos_float = convert_to_float(chaosValue)
+    divine_float = convert_to_float(divineValue)
+
+    # Multiply by stack size if more than 1
+    if stack_size > 1:
+        chaos_float *= stack_size
+        divine_float *= stack_size
+
+    # Helper to format numbers: drop .0 for integers
+    def format_value(f):
+        if f.is_integer():
+            return str(int(f))
+        return str(round(f, 1))  # keep 1 decimal
+
+    # Determine display value
+    if divine_float >= 0.5:
+        display_value = f"{format_value(divine_float)} Divines"
+    elif chaos_float > 0:
+        display_value = f"{format_value(chaos_float)} Chaos"
+    else:
+        display_value = ""  # show nothing if both are 0 or invalid
+    return display_value
+
+
+
 def parse_timestamp(ts_str, fallback_now=True):
     if not ts_str:
         return datetime.now() if fallback_now else None
@@ -298,8 +357,6 @@ def load_csv(file_path, row_parser=None, skip_header=True):
             results.append(row_parser(row) if row_parser else row)
     return results
 
-
-
 def build_parsed_item(
     record,
     term_title,
@@ -314,7 +371,8 @@ def build_parsed_item(
     area_level="",
     stack_size="",
     chaos_value="",
-    divine_value=""
+    divine_value="",
+    tier=""
 ):
     ts = parse_timestamp(timestamp)
 
@@ -373,6 +431,7 @@ def build_parsed_item(
         blueprint_type=blueprint_type,
         area_level=area_level,
         record_number=record,
+        tier=tier
     )
     if item_type == c.EXPERIMENTAL_TYPE:
         implicits_lines = experimental_items.get(term_title, [])

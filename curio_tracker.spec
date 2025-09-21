@@ -22,11 +22,12 @@ datas = [
     ('experimental_items.csv', '.'),
     ('config.py', '.'),
     ('curio_currency_fetch.py', '.'),
+    ('curio_tiers_fetch.py', '.'),
     ('curio_keybinds.py', '.'),
     ('ocr_utils.py', '.'),
     ('renderer.py', '.'),
     ('curio_tracker.py', '.'),
-    ('user_settings.ini', '.'),
+    ('settings.py', '.'),
     ('themes.py', '.'),
     ('toasts.py', '.'),
 ]
