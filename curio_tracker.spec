@@ -28,6 +28,7 @@ datas = [
     ('renderer.py', '.'),
     ('curio_tracker.py', '.'),
     ('settings.py', '.'),
+    ('shared_lock.py', '.'),
     ('themes.py', '.'),
     ('toasts.py', '.'),
 ]
