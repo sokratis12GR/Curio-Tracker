@@ -22,7 +22,7 @@ import config as c
 import ocr_utils as utils
 from ocr_utils import load_csv, build_parsed_item, parse_timestamp
 from collections import defaultdict
-from settings import OUTPUT_CURRENCY_CSV
+from settings import OUTPUT_CURRENCY_CSV, OUTPUT_TIERS_CSV
 import curio_currency_fetch as fetch
 
 fetch.run_fetch()
@@ -44,6 +44,7 @@ listener_ref = None
 parsed_items = []
 experimental_items = {}
 CURRENCY_DATASET = {}
+TIERS_DATASET = {}
 
 def get_resource_path(filename):
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -99,7 +100,25 @@ def load_currency_dataset(csv_file_path):
                 "divine": divine_val
             }
 
+def load_tiers_dataset(csv_file_path):
+    global TIERS_DATASET
+    TIERS_DATASET = {}
+    
+    with open(csv_file_path, newline='', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            term = utils.smart_title_case(row["name"])
+            tier = format_currency_value(row.get("tier", ""))
+
+            # store both in a dictionary per term
+            TIERS_DATASET[term] = {
+                "tier": tier,
+            }
+            if c.DEBUGGING:
+                print(f"{term}: {tier}")
+
 load_currency_dataset(OUTPUT_CURRENCY_CSV)
+load_tiers_dataset(OUTPUT_TIERS_CSV)
 term_types = load_csv_with_types(get_resource_path(c.file_name))
 all_terms = set(term_types.keys())
 seen_matches = set()
@@ -556,10 +575,10 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                     c.csv_blueprint_header, c.csv_area_level_header,
                     c.csv_trinket_header, c.csv_replacement_header,
                     c.csv_replica_header, c.csv_experimented_header,
-                    c.csv_weapon_enchant_header, c.csv_armor_enchant_trinket_header,
-                    c.csv_scarab_trinket_header, c.csv_currency_trinket_header,
-                    c.csv_stack_size_trinket_header, c.csv_variant_trinket_header,
-                    c.csv_flag_trinket_header, c.csv_time_header
+                    c.csv_weapon_enchant_header, c.csv_armor_enchant_header,
+                    c.csv_scarab_header, c.csv_currency_header,
+                    c.csv_stack_size_header, c.csv_variant_header,
+                    c.csv_flag_header, c.csv_time_header
                 ])
 
             for match in matched_terms:
@@ -573,6 +592,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                 estimated_value = CURRENCY_DATASET.get(term_title, {})
                 chaos_est = estimated_value.get("chaos")
                 divine_est = estimated_value.get("divine")
+                tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
                 if allow_dupes or not duplicate:
                     record_number = get_next_record_number()
                     mark_term_as_captured(term_title)
@@ -592,6 +612,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                             league=league_version,
                             chaos_value=chaos_est,
                             divine_value=divine_est,
+                            tier=tier
                         )
                     )
                     
@@ -698,15 +719,15 @@ def _parse_items_from_rows(rows):
             print(f"[DEBUG] Processing row {row_idx}: {row}")
 
         # Grab common metadata from CSV headers
-        record_number = row.get("Record #")
-        league = row.get("League", "")
-        logged_by = row.get("Logged By", "")
-        blueprint_type = row.get("Blueprint Type", "")
-        area_level = row.get("Area Level", "")
-        stack_size = row.get("Stack Size", "")
-        variant = row.get("Variant", "")
-        duplicate = row.get("Flag?", "FALSE").upper() == "TRUE"
-        timestamp = row.get("Time", "")
+        record_number = row.get(c.csv_record_header)
+        league = row.get(c.csv_league_header, "")
+        logged_by = row.get(c.csv_loggedby_header, "")
+        blueprint_type = row.get(c.csv_blueprint_header, "")
+        area_level = row.get(c.csv_area_level_header, "")
+        stack_size = row.get(c.csv_stack_size_header, "")
+        variant = row.get(c.csv_variant_header, "")
+        duplicate = row.get(c.csv_flag_header, "FALSE").upper() == "TRUE"
+        timestamp = row.get(c.csv_time_header, "")
 
         for col_name, inferred_type in COLUMN_TO_TYPE.items():
             value = row.get(col_name)
@@ -718,6 +739,7 @@ def _parse_items_from_rows(rows):
             estimated_value = CURRENCY_DATASET.get(term_title, {})
             chaos_est = estimated_value.get("chaos")
             divine_est = estimated_value.get("divine")
+            tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
 
             # Build parsed item directly from CSV header values
             item = build_parsed_item(
@@ -735,6 +757,7 @@ def _parse_items_from_rows(rows):
                 stack_size=stack_size,
                 chaos_value=chaos_est,
                 divine_value=divine_est,
+                tier=tier
             )
             parsed_items.append(item)
 
@@ -896,7 +919,7 @@ def capture_snippet(root, on_done):
 # checks for matches between layouts and saves the  #
 # monster level as area level                       #
 #####################################################
-def capture_layout():
+def capture_layout(root):
     global blueprint_area_level, blueprint_layout, attempt
     
     screenshot = pyautogui.screenshot()
@@ -924,9 +947,11 @@ def capture_layout():
     # Report results
     # if c.DEBUGGING:
 
+    import toasts
     if found_layout and area_level:
         blueprint_area_level = area_level
         blueprint_layout = found_layout
+        toasts.show_message(root, f"Blueprint Layout: {blueprint_layout}\nArea Level: {blueprint_area_level}")
         print("\n========== Result ==========")
         print(f"Layout: {found_layout}")
         print(f"Area Level: {area_level}")
@@ -934,6 +959,7 @@ def capture_layout():
         attempt = 1
     else:
         status = f"❌ Not found, try again. Attempt: #{attempt}"
+        toasts.show_message(root, "Couldn't capture layout, try again")
         sys.stdout.write('\r' + status + ' ' * 20)
         sys.stdout.flush()
         attempt += 1
