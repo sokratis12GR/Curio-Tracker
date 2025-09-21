@@ -23,9 +23,11 @@ import ocr_utils as utils
 from ocr_utils import load_csv, build_parsed_item, parse_timestamp
 from collections import defaultdict
 from settings import OUTPUT_CURRENCY_CSV, OUTPUT_TIERS_CSV
-import curio_currency_fetch as fetch
+import curio_currency_fetch as fetch_currency
+import curio_tiers_fetch as fetch_tiers
 
-fetch.run_fetch()
+fetch_currency.run_fetch()
+fetch_tiers.run_fetch_curios()
 utils.set_tesseract_path()
 
 csv_file_path = c.csv_file_path
