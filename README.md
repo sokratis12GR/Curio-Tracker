@@ -40,11 +40,16 @@ Example `matches.csv` output:
 
 Go to releases https://github.com/sokratis12GR/Curio-Tracker/releases, download the latest `Heist Curio Tracker.exe`
 
+# Video on how to use:
+
+https://youtu.be/BW5GyrDTVss
+
 # Troubleshooting
 In case the app crashes or has an error image, please do not hesitate to create an issue ticket at [Create Issue](https://github.com/sokratis12GR/Curio-Tracker/issues/new).
 - Provide a screenshot, or a detailed explanation of the issue
 
 ***Appreciate any feedback ^^***
+
 
 
 
