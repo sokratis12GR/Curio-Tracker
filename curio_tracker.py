@@ -6,6 +6,7 @@ import sys
 from datetime import datetime, timedelta
 import math
 import ctypes
+from typing import List, Dict
 
 import cv2
 import numpy as np
@@ -25,6 +26,7 @@ from collections import defaultdict
 from settings import OUTPUT_CURRENCY_CSV, OUTPUT_TIERS_CSV
 import curio_currency_fetch as fetch_currency
 import curio_tiers_fetch as fetch_tiers
+import toasts
 
 fetch_currency.run_fetch()
 fetch_tiers.run_fetch_curios()
@@ -275,15 +277,15 @@ def extract_currency_value(text, matched_term, term_types):
             if maximum in valid_max_values:
                 current_last = int(str(current)[-1])
                 if current_last <= maximum:
-                    return (current_last, maximum)
+                    return current_last, maximum
 
-    return (1, 20)
+    return 1, 20
 
 
 #################################################
 # Check if a term or combo term is in the text. # 
 #################################################
-def is_term_match(term, text, use_fuzzy=False):
+def is_term_match(term, text):
     def normalize_lines(text):
         return [utils.normalize_for_search(line) for line in text.splitlines()]
 
@@ -320,19 +322,6 @@ def is_term_match(term, text, use_fuzzy=False):
         for m in re.finditer(pattern, text, re.IGNORECASE):
             positions.append(m.start())
 
-        if use_fuzzy:
-            word_pattern = r"\b[\w%']+\b"
-            tokens = [(m.group(0), m.start()) for m in re.finditer(word_pattern, text)]
-            max_len_diff = 2
-            candidates = [w for w, _ in tokens if abs(len(w) - len(piece_title)) <= max_len_diff]
-            close = get_close_matches(piece_title, candidates, n=1, cutoff=0.83)
-            if close:
-                best = close[0]
-                for tok, pos in tokens:
-                    if utils.smart_title_case(tok) == utils.smart_title_case(best):
-                        if c.DEBUGGING:
-                            print(f"[Fuzzy match] Term piece: '{piece}' ≈ '{tok}'")
-                        positions.append(pos)
         return positions
 
     return bool(find_piece_positions(term))
@@ -369,15 +358,15 @@ def mark_term_as_captured(value):
 #################################################
 # Gets all matched terms from the list          # 
 #################################################
-def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
+def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
     global non_dup_count
 
     all_candidates = []
-    terms_source = term_types.keys() if use_fuzzy else all_terms
+    terms_source = all_terms
 
     for term in terms_source:
         term_title = utils.smart_title_case(term)
-        if is_term_match(term_title, text, use_fuzzy):
+        if is_term_match(term_title, text):
             duplicate = is_duplicate_recent_entry(term_title)
             all_candidates.append((term_title, duplicate))
 
@@ -469,7 +458,7 @@ def get_matched_terms(text, allow_dupes=False, use_fuzzy=False):
 
     return matched
 
-def process_text(text, allow_dupes=False, matched_terms=None):
+def process_text(text, allow_dupes=False, matched_terms=None) -> None:
     global stack_sizes, attempt
     results = []
 
@@ -522,9 +511,6 @@ def process_text(text, allow_dupes=False, matched_terms=None):
             )
         print(highlighted)
 
-    # from gui import update_images
-    # update_images()
-
     if results:
         print(c.matches_found, results)
         if non_dup_count % 5 == 0:
@@ -536,7 +522,7 @@ def process_text(text, allow_dupes=False, matched_terms=None):
         sys.stdout.flush()
         attempt += 1
 
-def write_csv_entry(text, timestamp, allow_dupes=False):
+def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
     global stack_sizes, body_armors, experimental_items, parsed_items
     write_header = not os.path.isfile(csv_file_path)
 
@@ -599,8 +585,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                     record_number = get_next_record_number()
                     mark_term_as_captured(term_title)
 
-                    item = parsed_items.append(
-                        build_parsed_item(
+                    item = build_parsed_item(
                             record=record_number,
                             term_title=term_title,
                             item_type=item_type,
@@ -616,7 +601,7 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                             divine_value=divine_est,
                             tier=tier
                         )
-                    )
+                    parsed_items.append(item)
                     
                     if c.DEBUGGING:
                         print(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
@@ -626,10 +611,10 @@ def write_csv_entry(text, timestamp, allow_dupes=False):
                     if c.DEBUGGING and c.CSV_DEBUGGING:
                         writer.writerow(format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
     except PermissionError as e:
-        import toasts
         toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
         print(f"[ERROR] PermissionError: {e}")
-        return None
+    except OSError as e:
+        print(f"[ERROR] CSV write failed: {e}")
 
 LAST_RECORD_NUMBER = 0
 
@@ -644,7 +629,10 @@ def get_next_record_number():
                     LAST_RECORD_NUMBER = 0
                 else:
                     last_row = rows[-1]
-                    LAST_RECORD_NUMBER = int(last_row[0]) if last_row[0].isdigit() else 0
+                    try:
+                        LAST_RECORD_NUMBER = int(last_row[0]) if last_row[0].isdigit() else 0
+                    except ValueError as e:
+                        LAST_RECORD_NUMBER = 0
         except FileNotFoundError:
             LAST_RECORD_NUMBER = 0
     LAST_RECORD_NUMBER += 1
@@ -806,7 +794,7 @@ def load_all_parsed_items_from_csv():
 # OCR reads the texts and checks for matches.       #
 # If a match is found, it will save it in the .csv  #
 #####################################################
-def capture_once():
+def capture_once(root):
     bbox = get_poe_bbox()
     if not bbox:
         return
@@ -815,10 +803,7 @@ def capture_once():
     full_text, filtered = ocr_from_image(screenshot_np)
 
     os.makedirs(c.saves_dir, exist_ok=True)
-    items = write_csv_entry(full_text, utils.now_timestamp(), allow_dupes=False)
-    return items
-
-
+    write_csv_entry(root, full_text, utils.now_timestamp(), allow_dupes=False)
 
 #####################################################
 # Captures the a snippet of the screen, afterwards  #
@@ -830,15 +815,7 @@ def capture_snippet(root, on_done):
     if not bbox:
         return
 
-    # if is_exclusive_fullscreen():
-    #     import toasts
-    #     toasts.show_message(root, "PoE is in exclusive fullscreen — skipping snippet overlay.")
-    #     print("PoE is in exclusive fullscreen — skipping snippet overlay.")
-    #     return  # Skip overlay
-
-    items = []
-    # create overlay as a child window, not a new root
-    overlay = tk.Toplevel(root)
+    overlay = tk.Toplevel()
     overlay.attributes("-alpha", 0.3)
     overlay.attributes("-fullscreen", True)
     overlay.attributes("-topmost", True)
@@ -862,14 +839,12 @@ def capture_snippet(root, on_done):
                                           outline='red', width=2)
 
     def on_mouse_up(event):
-        nonlocal end_x, end_y, items
+        nonlocal end_x, end_y
         end_x, end_y = event.x, event.y
-        overlay.destroy()   # only close the overlay, not the main GUI
+        overlay.destroy()  # only close overlay
 
-        # proceed with bbox / OCR logic...
         x1, y1 = min(start_x, end_x), min(start_y, end_y)
         x2, y2 = max(start_x, end_x), max(start_y, end_y)
-
         if x2 - x1 < 5 or y2 - y1 < 5:
             print(c.snippet_txt_too_small)
             return
@@ -881,38 +856,16 @@ def capture_snippet(root, on_done):
             return
 
         full_text, filtered = ocr_from_image(screenshot_np, scale=2)
-
-        h, w, _ = filtered.shape
-
-
-        if c.DEBUGGING:
-            boxes = pytesseract.image_to_boxes(filtered)
-            for b in boxes.splitlines():
-                b = b.split()
-                char, x1, y1, x2, y2 = b[0], int(b[1]), int(b[2]), int(b[3]), int(b[4])
-                
-                cv2.rectangle(filtered, (x1, h - y1), (x2, h - y2), (0, 255, 0), 1)
-                cv2.putText(filtered, char, (x1, h - y1 + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
-            cv2.imshow("Filtered Snippet", filtered)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         os.makedirs(c.saves_dir, exist_ok=True)
-        if c.DEBUGGING:
-            os.makedirs(c.logs_dir, exist_ok=True)
-            with open(f"{c.logs_dir}/ocr_snippet_{timestamp}.txt", "w", encoding="utf-8") as f:
-                f.write(full_text)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        write_csv_entry(root, full_text, timestamp, allow_dupes=True)
 
-        items = write_csv_entry(full_text, timestamp, allow_dupes=True)
-        on_done(parsed_items) 
+        if on_done:
+            on_done(parsed_items)
 
     canvas.bind("<Button-1>", on_mouse_down)
     canvas.bind("<B1-Motion>", on_mouse_drag)
     canvas.bind("<ButtonRelease-1>", on_mouse_up)
-
-    return items
 
 
 #####################################################

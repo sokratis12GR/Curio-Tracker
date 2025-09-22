@@ -1,3 +1,4 @@
+import re
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
@@ -59,16 +60,16 @@ def reapply_row_formatting():
 # ----- Listener Functions -----
 exit_event = threading.Event()
 
-
 def handle_capture():
     with redirect_to_capture_console():
         tracker.validateAttempt(c.capturing_prompt)
-        tracker.capture_once()
+        tracker.capture_once(root)
 
-    print(f"[DEBUG] Parsed items after capture: {len(tracker.parsed_items)}")
+    if c.DEBUGGING:
+        print(f"[DEBUG] Parsed items after capture: {len(tracker.parsed_items)}")
     for i, item in enumerate(tracker.parsed_items):
-        print(
-            f"[DEBUG] Item {i}: {get_item_name_str(item)}, dup={item.duplicate}, rec={getattr(item, 'record_number', None)}")
+        if c.DEBUGGING:
+            print(f"[DEBUG] Item {i}: {get_item_name_str(item)}, dup={item.duplicate}, rec={getattr(item, 'record_number', None)}")
 
     for item in tracker.parsed_items:
         if not item.duplicate:
@@ -82,24 +83,31 @@ def handle_capture():
 
 def handle_snippet():
     def process_items(items):
-        if items:
+        items = items or []
+        if not items:
+            if c.DEBUGGING:
+                print("[INFO] No items parsed during snippet capture.")
+            return
+
+        def show_items():
             tracker.validateAttempt(c.capturing_prompt)
-            print(f"[DEBUG] Snippet captured: {len(items)} items")
-            for i, item in enumerate(items):
-                print(
-                    f"[DEBUG] Item {i}: {get_item_name_str(item)}, dup={item.duplicate}, rec={getattr(item, 'record_number', None)}")
+            if c.DEBUGGING:
+                print(f"[DEBUG] Snippet captured: {len(items)} items")
+                for i, item in enumerate(items):
+                    print(f"[DEBUG] Item {i}: {get_item_name_str(item)}, dup={item.duplicate}, rec={getattr(item, 'record_number', None)}")
 
             for item in items:
                 if not item.duplicate:
                     if are_toasts_enabled:
-                        toasts.show(root, item)
+                        root.after(0, lambda i=item: toasts.show(root, i))
                     add_item_to_tree(item)
 
             update_total_items_count()
             update_visible_images()
-        else:
-            print("[INFO] No items parsed during snippet capture.")
 
+        root.after(0, show_items)
+
+    # Run snippet capture
     def run_capture():
         tracker.capture_snippet(root, on_done=process_items)
 

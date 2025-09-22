@@ -3,7 +3,7 @@ import threading
 import configparser
 from pynput import keyboard
 import traceback
-from config import DEFAULT_SETTINGS
+from config import DEFAULT_SETTINGS, DEBUGGING
 from ocr_utils import get_setting, set_setting, write_settings
 
 # ---------------- Keybinds ----------------
@@ -36,11 +36,13 @@ def update_keybind(name, combo_str):
         ini_name = f"{name}_key" if name != "debug" else "debug_key"
         set_setting('Hotkeys', ini_name, combo_str)
         write_settings()
-        print(f"[INFO] Assigned '{name}' → {combo_str}")
+        if DEBUGGING:
+            print(f"[INFO] Assigned '{name}' → {combo_str}")
         return True
     except Exception:
-        print(f"[ERROR] Failed to assign '{name}':")
-        print(traceback.format_exc())
+        if DEBUGGING:
+            print(f"[ERROR] Failed to assign '{name}':")
+            print(traceback.format_exc())
         return False
 
 def get_display_hotkey(name):
@@ -66,7 +68,8 @@ def normalize_key(evt_key):
         elif hasattr(evt_key, 'char') and evt_key.char is not None:
             return evt_key.char.lower()
     except Exception:
-        print(f"[WARN] Failed to normalize key: {evt_key}")
+        if DEBUGGING:
+            print(f"[WARN] Failed to normalize key: {evt_key}")
     return None
 
 def parse_hotkey(hotkey_str):
@@ -90,7 +93,8 @@ def parse_hotkey(hotkey_str):
             else:
                 keys.add(getattr(keyboard.Key, p))
         except Exception:
-            print(f"[WARN] Unknown key part: {p}")
+            if DEBUGGING:
+                print(f"[WARN] Unknown key part: {p}")
     return frozenset(keys)
 
 
@@ -112,16 +116,19 @@ def init_from_settings():
             combo_str = get_display_hotkey(name)
             hotkeys[name] = parse_hotkey(combo_str)
         except Exception:
-            print(f"[ERROR] Failed to load hotkey '{name}':")
-            print(traceback.format_exc())
-    print("[INFO] Keybinds loaded from settings.")
+            if DEBUGGING:
+                print(f"[ERROR] Failed to load hotkey '{name}':")
+                print(traceback.format_exc())
+    if DEBUGGING:
+        print("[INFO] Keybinds loaded from settings.")
 
 # ---------------- Recording listener ----------------
 def start_recording_popup(index, button_list, root, update_info_labels):
     global _recording_listener, _recording_index, _current_keys, _global_listener
     with _lock:
         if _recording_index is not None:
-            print("[WARN] Already recording a keybind.")
+            if DEBUGGING:
+                print("[WARN] Already recording a keybind.")
             return
         if _global_listener:
             _global_listener.stop()
@@ -138,7 +145,8 @@ def start_recording_popup(index, button_list, root, update_info_labels):
                 cancel_recording_popup(button_list)
                 return False
         except Exception:
-            print(traceback.format_exc())
+            if DEBUGGING:
+                print(traceback.format_exc())
 
     def on_release(key):
         global _recording_index, _current_keys
@@ -153,12 +161,14 @@ def start_recording_popup(index, button_list, root, update_info_labels):
             _recording_index = None
             start_global_listener()
         except Exception:
-            print(traceback.format_exc())
+            if DEBUGGING:
+                print(traceback.format_exc())
         return False
 
     _recording_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     _recording_listener.start()
-    print("[INFO] Recording keys... Press combo, then release. ESC to cancel.")
+    if DEBUGGING:
+        print("[INFO] Recording keys... Press combo, then release. ESC to cancel.")
 
 def cancel_recording_popup(button_list=None):
     global _recording_listener, _recording_index, _current_keys
@@ -171,9 +181,11 @@ def cancel_recording_popup(button_list=None):
             btn = button_list[_recording_index]
             combo = get_display_hotkey(name)
             btn.after(0, lambda b=btn, t=combo: b.config(text=t))
-        print("[INFO] Recording cancelled.")
+        if DEBUGGING:
+            print("[INFO] Recording cancelled.")
     except Exception:
-        print(traceback.format_exc())
+        if DEBUGGING:
+            print(traceback.format_exc())
     finally:
         _recording_index = None
         _current_keys = []
@@ -196,12 +208,14 @@ def start_global_listener():
                 if k and k not in _current_keys and len(_current_keys) < 3:
                     _current_keys.append(k)
             except Exception:
-                print(traceback.format_exc())
+                if DEBUGGING:
+                    print(traceback.format_exc())
 
         def on_release(key):
             try:
                 pressed = frozenset(_current_keys)
-                print(f"[DEBUG] Keys released: {[format_key(k) for k in pressed]}")
+                if DEBUGGING:
+                    print(f"[DEBUG] Keys released: {[format_key(k) for k in pressed]}")
 
                 for name, combo in hotkeys.items():
                     # Relaxed matching for cross-platform consistency
@@ -209,19 +223,23 @@ def start_global_listener():
                         handler = handlers.get(name)
                         if handler:
                             try:
-                                print(f"[INFO] Triggering handler '{name}'")
+                                if DEBUGGING:
+                                    print(f"[INFO] Triggering handler '{name}'")
                                 handler()
                             except Exception:
-                                print(f"[ERROR] handler '{name}' threw:")
-                                print(traceback.format_exc())
+                                if DEBUGGING:
+                                    print(f"[ERROR] handler '{name}' threw:")
+                                    print(traceback.format_exc())
                         break
                 _current_keys.clear()
             except Exception:
-                print(traceback.format_exc())
+                if DEBUGGING:
+                    print(traceback.format_exc())
 
         _global_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
         _global_listener.start()
-        print("[INFO] Global listener started.")
+        if DEBUGGING:
+            print("[INFO] Global listener started.")
 
 def stop_global_listener():
     global _global_listener, _current_keys
@@ -231,7 +249,8 @@ def stop_global_listener():
                 _global_listener.stop()
                 _global_listener = None
         except Exception:
-            print(traceback.format_exc())
+            if DEBUGGING:
+                print(traceback.format_exc())
         _current_keys = []
 
 # ---------------- Initialize ----------------
