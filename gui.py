@@ -1,27 +1,27 @@
+import bisect
+import contextlib
 import re
-import tkinter as tk
-from tkinter import ttk
-from PIL import Image, ImageTk
-from pynput import keyboard
+import sys
 import threading
 import time
-import configparser
-import os
-import sys
-import curio_tracker as tracker
-import config as c
-import contextlib
-from types import SimpleNamespace
-from renderer import render_item
-from datetime import datetime, timedelta
-from functools import partial
-import bisect
-import curio_keybinds
-import ocr_utils as utils
-import toasts
-from themes import Themes, ThemedMessageBox
+import tkinter as tk
 import tkinter.messagebox as messagebox
 import webbrowser
+from datetime import datetime, timedelta
+from tkinter import ttk
+
+from PIL import Image, ImageTk
+from pyautogui import ImageNotFoundException
+from pytz.exceptions import InvalidTimeError
+from selenium.common import TimeoutException
+
+import config as c
+import curio_keybinds
+import curio_tracker as tracker
+import ocr_utils as utils
+import toasts
+from renderer import render_item
+from themes import Themes, ThemedMessageBox
 
 is_dark_mode = utils.get_setting('Application', 'is_dark_mode', True)  # default: dark mode enabled
 are_toasts_enabled = utils.get_setting('Application', 'are_toasts_enabled', True)  # default: toasts enabled
@@ -60,6 +60,7 @@ def reapply_row_formatting():
 # ----- Listener Functions -----
 exit_event = threading.Event()
 
+
 def handle_capture():
     with redirect_to_capture_console():
         tracker.validateAttempt(c.capturing_prompt)
@@ -69,7 +70,8 @@ def handle_capture():
         print(f"[DEBUG] Parsed items after capture: {len(tracker.parsed_items)}")
     for i, item in enumerate(tracker.parsed_items):
         if c.DEBUGGING:
-            print(f"[DEBUG] Item {i}: {get_item_name_str(item)}, dup={item.duplicate}, rec={getattr(item, 'record_number', None)}")
+            print(
+                f"[DEBUG] Item {i}: {get_item_name_str(item)}, dup={item.duplicate}, rec={getattr(item, 'record_number', None)}")
 
     for item in tracker.parsed_items:
         if not item.duplicate:
@@ -94,7 +96,8 @@ def handle_snippet():
             if c.DEBUGGING:
                 print(f"[DEBUG] Snippet captured: {len(items)} items")
                 for i, item in enumerate(items):
-                    print(f"[DEBUG] Item {i}: {get_item_name_str(item)}, dup={item.duplicate}, rec={getattr(item, 'record_number', None)}")
+                    print(
+                        f"[DEBUG] Item {i}: {get_item_name_str(item)}, dup={item.duplicate}, rec={getattr(item, 'record_number', None)}")
 
             for item in items:
                 if not item.duplicate:
@@ -517,7 +520,7 @@ def add_item_to_tree(item, render_image=False):
             item_time_obj = datetime.strptime(
                 f"{item_time_obj} {current_year}", "%b %d %H:%M %Y"
             )
-        except Exception:
+        except InvalidTimeError:
             item_time_obj = None
     elif not isinstance(item_time_obj, datetime):
         item_time_obj = None
@@ -851,7 +854,7 @@ def sort_tree(column):
         def parse_time(val):
             try:
                 return datetime.strptime(val, "%d %b %Y - %H:%M")
-            except Exception:
+            except InvalidTimeError:
                 return datetime.min
 
         items.sort(key=lambda x: parse_time(x[0]), reverse=sort_reverse[column])
@@ -860,7 +863,7 @@ def sort_tree(column):
         def parse_record(val):
             try:
                 return int(val)
-            except Exception:
+            except ValueError:
                 return -1
 
         items.sort(key=lambda x: parse_record(x[0]), reverse=sort_reverse[column])
@@ -1150,7 +1153,6 @@ def show_about_popup():
     frm = ttk.Frame(popup, style="TFrame")
     frm.pack(padx=20, pady=20)
 
-    # App logo (replace with your actual image path)
     try:
         from PIL import Image, ImageTk
         logo_img = Image.open("assets/logo.png").resize((80, 80))  # adjust path/size
@@ -1158,7 +1160,8 @@ def show_about_popup():
         lbl_logo = tk.Label(frm, image=logo_photo, bg=bg)
         lbl_logo.image = logo_photo  # keep a reference
         lbl_logo.pack(pady=(0, 10))
-    except Exception:
+    except ImageNotFoundException as e:
+        print(e)
         pass  # skip logo if PIL or image missing
 
     # Author info

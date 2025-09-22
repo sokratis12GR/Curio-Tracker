@@ -1,7 +1,5 @@
 import os
 import sys
-import configparser
-from pynput import keyboard
 
 ######################################################################
 # LOADS THE SETTINGS VALUES SET IN USER_SETTINGS.INI                 #
@@ -48,7 +46,8 @@ time_last_dupe_check_seconds = None
 info_show_keys_capture = None
 info_show_keys_snippet = None
 info_show_keys_layout = None
-info_show_keys_exit  = None
+info_show_keys_exit = None
+
 
 def initialize_settings():
     global capture_key, exit_key, layout_capture_key, snippet_key, enable_debugging_key
@@ -71,12 +70,13 @@ def initialize_settings():
     pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
     time_last_dupe_check_seconds = int(get_setting('DEFAULT', 'time_last_dupe_check_seconds', '60'))
     info_show_keys_capture = "Press {} to capture all curios on screen no duplicates.".format(str(capture_key).upper())
-    info_show_keys_snippet = "Press {} to snippet a region to capture allows duplicates.".format(str(snippet_key).upper())
+    info_show_keys_snippet = "Press {} to snippet a region to capture allows duplicates.".format(
+        str(snippet_key).upper())
     info_show_keys_layout = "Press {} to set current layout.".format(str(layout_capture_key).upper())
     info_show_keys_exit = "Press {} to exit the script.".format(str(exit_key).upper())
 
-settings = DEFAULT_SETTINGS
 
+settings = DEFAULT_SETTINGS
 
 # Enable DEBUGGING
 DEBUGGING = False
@@ -84,7 +84,6 @@ CSV_DEBUGGING = False
 
 poe_league = "3.26"
 poe_user = "sokratis12GR"
-
 
 # Default values of blueprint layouts
 default_bp_lvl = "83"
@@ -156,13 +155,12 @@ matches_found = "\n✅ Matches found: "
 stack_size_found = " - Stack Size: {}"
 matches_not_found = "❌ No matches found."
 
-
 capturing_prompt = "\n📸 Capturing screen..."
 layout_prompt = "\n📸 Capturing layout..."
 exiting_prompt = "\n👋 Exiting."
 
 # Time Duplicate values checker:
-time_column_index = 16 # 17th column of the .csv file contains the time var
+time_column_index = 16  # 17th column of the .csv file contains the time var
 
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
 
@@ -170,7 +168,7 @@ time_column_index = 16 # 17th column of the .csv file contains the time var
 ### Lower
 replica_l_hue = 5
 replica_l_sat = 100
-replica_l_val = 80 #100
+replica_l_val = 80  # 100
 ### Upper
 replica_u_hue = 25
 replica_u_sat = 255
@@ -178,18 +176,18 @@ replica_u_val = 255
 
 ## Rare / Experimental: #D9C850
 ### Lower
-rare_l_hue = 20 # 20
-rare_l_sat = 50 # 80
-rare_l_val = 160 # 150
+rare_l_hue = 20  # 20
+rare_l_sat = 50  # 80
+rare_l_val = 160  # 150
 ### Upper
-rare_u_hue = 40 # 40
-rare_u_sat = 255 #255
-rare_u_val = 255 #255
+rare_u_hue = 40  # 40
+rare_u_sat = 255  # 255
+rare_u_val = 255  # 255
 
 ## Currency Item: #AA9E82
 ### Lower
 currency_l_hue = 15
-currency_l_sat = 0 # 20
+currency_l_sat = 0  # 20
 currency_l_val = 90
 ### Upper
 currency_u_hue = 45
@@ -208,11 +206,10 @@ scarab_u_val = 255
 
 ## Enchants (blue-gray): #5C7E9D
 ### Lower
-enchant_l_hue = 95 # 95
-enchant_l_sat = 15 # 15
-enchant_l_val = 70 # 70
+enchant_l_hue = 95  # 95
+enchant_l_sat = 15  # 15
+enchant_l_val = 70  # 70
 ### Upper
-enchant_u_hue = 130 #130
-enchant_u_sat = 90 #90
-enchant_u_val = 255 #240
-
+enchant_u_hue = 130  # 130
+enchant_u_sat = 90  # 90
+enchant_u_val = 255  # 240

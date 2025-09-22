@@ -1,13 +1,13 @@
-import requests
 import os
 import sys
-import time
-import pandas as pd
-from datetime import datetime
-from settings import LOCK_FILE, OUTPUT_CURRENCY_CSV, LEAGUE
 from statistics import median
+
+import pandas as pd
+import requests
+
 import ocr_utils as utils
 from ocr_utils import load_csv
+from settings import LOCK_FILE, OUTPUT_CURRENCY_CSV, LEAGUE
 from shared_lock import is_recent_run, update_lock
 
 # === CONFIG ===
@@ -16,9 +16,11 @@ MIN_SECONDS_BETWEEN_RUNS = 2 * 60 * 60  # 2 hours
 HEADERS = {"User-Agent": "fetch-poe-ninja-script/1.0"}
 VALID_TYPES = ["Currency", "Scarab", "Replica", "Replacement", "Experimental"]
 
+
 def get_resource_path(filename):
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, filename)
+
 
 def load_csv_with_types(file_path):
     def parser(row):
@@ -26,13 +28,15 @@ def load_csv_with_types(file_path):
             raw_term, type_name = row[0].strip(), row[1].strip()
             return utils.smart_title_case(raw_term), type_name
         return None
+
     rows = load_csv(file_path, row_parser=parser)
     return {term: type_name for term, type_name in rows if term}
+
 
 TERMS_CSV = get_resource_path("all_valid_heist_terms.csv")
 ITEMS_TYPE_MAP = load_csv_with_types(TERMS_CSV)
 
-ITEMS_TYPE_MAP["Chaos Orb"] = "Currency" 
+ITEMS_TYPE_MAP["Chaos Orb"] = "Currency"
 
 CATEGORIES_API = {
     "Currency": "currencyoverview",
@@ -58,6 +62,7 @@ ITEM_TYPE_MAP = {
     "Base Types": "BaseType"
 }
 
+
 def normalize_name_for_lookup(name: str) -> str:
     if not name:
         return name
@@ -69,6 +74,7 @@ def normalize_name_for_lookup(name: str) -> str:
     normalized = normalized.replace("Three-Step", "Three-step")
 
     return normalized
+
 
 # === FETCH FUNCTION ===
 def fetch_all_items():
@@ -149,9 +155,10 @@ def fetch_all_items():
             base_lines = category_data.get("Base Types", [])
             if lookup_name == "Astrolabe Amulet":
                 candidates = [l for l in base_lines if l.get("name") == lookup_name]
-                chaos_values = [l.get("chaosValue", 0) for l in candidates if isinstance(l.get("chaosValue"), (int, float))]
+                chaos_values = [l.get("chaosValue", 0) for l in candidates if
+                                isinstance(l.get("chaosValue"), (int, float))]
                 if chaos_values:
-                    median_value = sorted(chaos_values)[len(chaos_values)//2]
+                    median_value = sorted(chaos_values)[len(chaos_values) // 2]
                     line = next(l for l in candidates if l.get("chaosValue") == median_value)
                 else:
                     line = candidates[0] if candidates else None
@@ -159,13 +166,14 @@ def fetch_all_items():
                 def is_influenced(line):
                     variant = line.get("variant")
                     return variant not in [None, ""]
-                candidates = [l for l in base_lines if l.get("name") == lookup_name 
-                              and l.get("levelRequired") == 84 
+
+                candidates = [l for l in base_lines if l.get("name") == lookup_name
+                              and l.get("levelRequired") == 84
                               and not is_influenced(l)]
                 if not candidates:
                     for lvl in [83, 85, 86]:
-                        candidates = [l for l in base_lines if l.get("name") == lookup_name 
-                                      and l.get("levelRequired") == lvl 
+                        candidates = [l for l in base_lines if l.get("name") == lookup_name
+                                      and l.get("levelRequired") == lvl
                                       and not is_influenced(l)]
                         if candidates:
                             break
@@ -208,6 +216,7 @@ def fetch_all_items():
 
     return all_rows
 
+
 # === WRAPPER FUNCTION TO CALL ===
 def run_fetch(force=False):
     if not force and is_recent_run(OUTPUT_CURRENCY_CSV):
@@ -218,7 +227,6 @@ def run_fetch(force=False):
     if not all_rows:
         print("[WARN] No data fetched.")
         return
-
 
     df = pd.DataFrame(all_rows)
     df.to_csv(OUTPUT_CURRENCY_CSV, index=False, float_format="%.2f")

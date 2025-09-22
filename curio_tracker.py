@@ -1,32 +1,31 @@
-import tkinter as tk
 import csv
 import os
+import platform
 import re
+import subprocess
 import sys
+import time
+import tkinter as tk
+from collections import defaultdict
 from datetime import datetime, timedelta
-import math
-import ctypes
 from typing import List, Dict
 
 import cv2
 import numpy as np
 import pyautogui
-from pynput import mouse
-import pytesseract
 import pygetwindow as gw
+import pyperclip
+import pytesseract
 from PIL import ImageGrab
 from termcolor import colored
-import win32gui
-import win32con
 
 import config as c
-import ocr_utils as utils
-from ocr_utils import load_csv, build_parsed_item, parse_timestamp
-from collections import defaultdict
-from settings import OUTPUT_CURRENCY_CSV, OUTPUT_TIERS_CSV
 import curio_currency_fetch as fetch_currency
 import curio_tiers_fetch as fetch_tiers
+import ocr_utils as utils
 import toasts
+from ocr_utils import load_csv, build_parsed_item
+from settings import OUTPUT_CURRENCY_CSV, OUTPUT_TIERS_CSV
 
 fetch_currency.run_fetch()
 fetch_tiers.run_fetch_curios()
@@ -50,9 +49,11 @@ experimental_items = {}
 CURRENCY_DATASET = {}
 TIERS_DATASET = {}
 
+
 def get_resource_path(filename):
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, filename)
+
 
 def load_csv_with_types(file_path):
     def parser(row):
@@ -60,21 +61,27 @@ def load_csv_with_types(file_path):
             raw_term, type_name = row[0].strip(), row[1].strip()
             return utils.smart_title_case(raw_term), type_name
         return None
+
     rows = load_csv(file_path, row_parser=parser)
     return {term: type_name for term, type_name in rows if term}
+
 
 def load_body_armors(file_path):
     return [line.strip() for line in open(file_path, encoding="utf-8").readlines()]
 
+
 def load_experimental_csv(file_path):
     global experimental_items
+
     def parser(row):
         item_name = utils.smart_title_case(row[0].strip())
         implicits = [line.strip() for line in row[1].splitlines() if line.strip()]
         experimental_items[item_name] = implicits
         return item_name, implicits
+
     load_csv(file_path, row_parser=parser)
     return experimental_items
+
 
 def format_currency_value(value: str) -> str:
     if not value or value.strip() == "":
@@ -83,14 +90,15 @@ def format_currency_value(value: str) -> str:
         f = float(value)
     except ValueError:
         return ""
-    
+
     f_rounded = round(f, 1)
     return str(int(f_rounded)) if f_rounded.is_integer() else str(f_rounded)
+
 
 def load_currency_dataset(csv_file_path):
     global CURRENCY_DATASET
     CURRENCY_DATASET = {}
-    
+
     with open(csv_file_path, newline='', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -104,10 +112,11 @@ def load_currency_dataset(csv_file_path):
                 "divine": divine_val
             }
 
+
 def load_tiers_dataset(csv_file_path):
     global TIERS_DATASET
     TIERS_DATASET = {}
-    
+
     with open(csv_file_path, newline='', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -120,6 +129,7 @@ def load_tiers_dataset(csv_file_path):
             }
             if c.DEBUGGING:
                 print(f"{term}: {tier}")
+
 
 load_currency_dataset(OUTPUT_CURRENCY_CSV)
 load_tiers_dataset(OUTPUT_TIERS_CSV)
@@ -137,7 +147,9 @@ def build_enchant_type_lookup(term_types):
         lookup[norm].add(type_name)
     return lookup
 
+
 enchant_type_lookup = build_enchant_type_lookup(term_types)
+
 
 def get_poe_bbox():
     windows = [w for w in gw.getWindowsWithTitle(c.target_application) if w.visible]
@@ -146,6 +158,8 @@ def get_poe_bbox():
         return None
     win = windows[0]
     return (win.left, win.top, win.left + win.width, win.top + win.height)
+
+
 #############################################################################
 # Runs OCR on the given image array and returns title-cased text.           #
 #                                                                           #
@@ -187,7 +201,8 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
         cv2.destroyAllWindows()
 
     return utils.smart_title_case(text), image_np
-    
+
+
 #############################################################
 # Saves the information on the screen based on colors       #
 # which is afterwards extracted as text                     #
@@ -200,7 +215,7 @@ def filter_item_text(image_np, fullscreen=False):
         "unique": ([c.replica_l_hue, c.replica_l_sat, c.replica_l_val],
                    [c.replica_u_hue, c.replica_u_sat, c.replica_u_val]),
         "rare": ([c.rare_l_hue, c.rare_l_sat, c.rare_l_val],
-                   [c.rare_u_hue, c.rare_u_sat, c.rare_u_val]),
+                 [c.rare_u_hue, c.rare_u_sat, c.rare_u_val]),
         "currency": ([c.currency_l_hue, c.currency_l_sat, c.currency_l_val],
                      [c.currency_u_hue, c.currency_u_sat, c.currency_u_val]),
         "scarab": ([c.scarab_l_hue, c.scarab_l_sat, c.scarab_l_val],
@@ -250,7 +265,7 @@ def extract_currency_value(text, matched_term, term_types):
             'B': '8',
             'S': '5', 's': '5',
             'g': '9', 'q': '9',
-            '\\': '/', '-': '/', '|': '/',  
+            '\\': '/', '-': '/', '|': '/',
         }
         return ''.join(replace_map.get(c, c) for c in text)
 
@@ -306,7 +321,7 @@ def is_term_match(term, text):
                     for j in range(1, 3):  # allow match across next 2 lines
                         if i + j < len(norm_lines) and p2 in norm_lines[i + j]:
                             if c.DEBUGGING:
-                                print(f"[EnchantCombo] Found '{p1}' then '{p2}' on lines {i} and {i+j}")
+                                print(f"[EnchantCombo] Found '{p1}' then '{p2}' on lines {i} and {i + j}")
                             return True
             return False
 
@@ -326,7 +341,9 @@ def is_term_match(term, text):
 
     return bool(find_piece_positions(term))
 
+
 recent_terms = []
+
 
 def is_duplicate_recent_entry(value, path=csv_file_path):
     current_time = datetime.now()
@@ -352,8 +369,10 @@ def is_duplicate_recent_entry(value, path=csv_file_path):
 
     return False
 
+
 def mark_term_as_captured(value):
     recent_terms.append((value, datetime.now()))
+
 
 #################################################
 # Gets all matched terms from the list          # 
@@ -387,7 +406,7 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
 
     if c.DEBUGGING and term_title in suppress_parts and term_title not in full_enchant_terms:
         print(f"[Suppress] Skipping sub-part match: {term_title}")
-    
+
     ############################################################
     # Group candidates by term type and filter by match length #
     ############################################################
@@ -458,6 +477,7 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
 
     return matched
 
+
 def process_text(text, allow_dupes=False, matched_terms=None) -> None:
     global stack_sizes, attempt
     results = []
@@ -472,7 +492,6 @@ def process_text(text, allow_dupes=False, matched_terms=None) -> None:
         weapon_flag = match["weapon_enchant_flag"]
 
         item_type = term_types.get(utils.smart_title_case(term_title))
-
 
         # Extract stack size / currency ratio
         ratio = extract_currency_value(text, term_title, term_types)
@@ -522,6 +541,7 @@ def process_text(text, allow_dupes=False, matched_terms=None) -> None:
         sys.stdout.flush()
         attempt += 1
 
+
 def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
     global stack_sizes, body_armors, experimental_items, parsed_items
     write_header = not os.path.isfile(csv_file_path)
@@ -534,6 +554,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
         def maybe_add(fn):
             val = fn(term_title, item_type)
             return f"{prefix}{val}" if val else ""
+
         return [
             record_number,
             league_version, poe_user,
@@ -586,37 +607,40 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                     mark_term_as_captured(term_title)
 
                     item = build_parsed_item(
-                            record=record_number,
-                            term_title=term_title,
-                            item_type=item_type,
-                            duplicate=duplicate,
-                            timestamp=timestamp,
-                            experimental_items=experimental_items,
-                            stack_size=stack_size,
-                            area_level=blueprint_area_level,
-                            blueprint_type=blueprint_layout,
-                            logged_by=poe_user,
-                            league=league_version,
-                            chaos_value=chaos_est,
-                            divine_value=divine_est,
-                            tier=tier
-                        )
+                        record=record_number,
+                        term_title=term_title,
+                        item_type=item_type,
+                        duplicate=duplicate,
+                        timestamp=timestamp,
+                        experimental_items=experimental_items,
+                        stack_size=stack_size,
+                        area_level=blueprint_area_level,
+                        blueprint_type=blueprint_layout,
+                        logged_by=poe_user,
+                        league=league_version,
+                        chaos_value=chaos_est,
+                        divine_value=divine_est,
+                        tier=tier
+                    )
                     parsed_items.append(item)
-                    
+
                     if c.DEBUGGING:
                         print(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
 
                     writer.writerow(format_row(record_number, term_title, item_type, stack_size))
 
                     if c.DEBUGGING and c.CSV_DEBUGGING:
-                        writer.writerow(format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
+                        writer.writerow(
+                            format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
     except PermissionError as e:
         toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
         print(f"[ERROR] PermissionError: {e}")
     except OSError as e:
         print(f"[ERROR] CSV write failed: {e}")
 
+
 LAST_RECORD_NUMBER = 0
+
 
 def get_next_record_number():
     global LAST_RECORD_NUMBER
@@ -637,6 +661,7 @@ def get_next_record_number():
             LAST_RECORD_NUMBER = 0
     LAST_RECORD_NUMBER += 1
     return LAST_RECORD_NUMBER
+
 
 def _parse_rows_from_csv(csv_file_path):
     debug = c.DEBUGGING
@@ -663,17 +688,18 @@ def _parse_rows_from_csv(csv_file_path):
 
     return rows
 
+
 def upgrade_csv_with_record_numbers(file_path):
     if not os.path.exists(file_path):
         # CSV doesn't exist, nothing to upgrade
         print(f"[INFO] CSV file '{file_path}' not found. Skipping upgrade.")
         return
-    
+
     with open(file_path, "r", encoding="utf-8") as f:
         reader = list(csv.reader(f))
     if not reader:
         return
-    
+
     header = reader[0]
     if "Record #" not in header:
         header = ["Record #"] + header
@@ -685,9 +711,11 @@ def upgrade_csv_with_record_numbers(file_path):
             writer.writerows(upgraded_rows)
         print(f"[INFO] Upgraded CSV with Record # → {file_path}")
 
+
 def init_csv():
     # Ensure the CSV file has Record # permanently
     upgrade_csv_with_record_numbers(c.csv_file_path)
+
 
 def _parse_items_from_rows(rows):
     debug = c.DEBUGGING
@@ -758,7 +786,6 @@ def _parse_items_from_rows(rows):
     return parsed_items
 
 
-
 def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
     rows = _parse_rows_from_csv(c.csv_file_path)
     if not rows:
@@ -789,6 +816,7 @@ def load_all_parsed_items_from_csv():
     rows = _parse_rows_from_csv(c.csv_file_path)
     return _parse_items_from_rows(rows)
 
+
 #####################################################
 # Captures the entire screen, afterwards using      #
 # OCR reads the texts and checks for matches.       #
@@ -798,64 +826,37 @@ def capture_once(root):
     bbox = get_poe_bbox()
     if not bbox:
         return
-    
+
     screenshot_np = np.array(ImageGrab.grab(bbox=bbox))
     full_text, filtered = ocr_from_image(screenshot_np)
 
     os.makedirs(c.saves_dir, exist_ok=True)
     write_csv_entry(root, full_text, utils.now_timestamp(), allow_dupes=False)
 
-#####################################################
-# Captures the a snippet of the screen, afterwards  #
-# using OCR reads the texts and checks for matches. #
-# If a match is found, it will save it in the .csv  #
-#####################################################
+
 def capture_snippet(root, on_done):
-    bbox = get_poe_bbox()
-    if not bbox:
-        return
+    system = platform.system().lower()
 
-    overlay = tk.Toplevel()
-    overlay.attributes("-alpha", 0.3)
-    overlay.attributes("-fullscreen", True)
-    overlay.attributes("-topmost", True)
-    overlay.configure(background='black')
+    if system == "windows":
+        pyperclip.copy("")
 
-    start_x = start_y = end_x = end_y = 0
-    rect_id = None
+        subprocess.Popen(["explorer", "ms-screenclip:"])
+        print("[INFO] Waiting for user to complete snip...")
 
-    canvas = tk.Canvas(overlay, cursor="cross", bg='gray')
-    canvas.pack(fill=tk.BOTH, expand=True)
+        img = None
+        for _ in range(60):  # up to 30 seconds
+            time.sleep(0.5)
+            img = ImageGrab.grabclipboard()
+            if img:
+                break
 
-    def on_mouse_down(event):
-        nonlocal start_x, start_y
-        start_x, start_y = event.x, event.y
-
-    def on_mouse_drag(event):
-        nonlocal rect_id
-        if rect_id:
-            canvas.delete(rect_id)
-        rect_id = canvas.create_rectangle(start_x, start_y, event.x, event.y,
-                                          outline='red', width=2)
-
-    def on_mouse_up(event):
-        nonlocal end_x, end_y
-        end_x, end_y = event.x, event.y
-        overlay.destroy()  # only close overlay
-
-        x1, y1 = min(start_x, end_x), min(start_y, end_y)
-        x2, y2 = max(start_x, end_x), max(start_y, end_y)
-        if x2 - x1 < 5 or y2 - y1 < 5:
-            print(c.snippet_txt_too_small)
-            return
-
-        bbox = (x1, y1, x2, y2)
-        screenshot_np = np.array(ImageGrab.grab(bbox))
-        if screenshot_np is None or screenshot_np.size == 0:
+        if img is None:
             print(c.snippet_txt_failed)
             return
 
-        full_text, filtered = ocr_from_image(screenshot_np, scale=2)
+        screenshot_np = np.array(img)
+        full_text, _ = ocr_from_image(screenshot_np)
+
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         os.makedirs(c.saves_dir, exist_ok=True)
         write_csv_entry(root, full_text, timestamp, allow_dupes=True)
@@ -863,9 +864,63 @@ def capture_snippet(root, on_done):
         if on_done:
             on_done(parsed_items)
 
-    canvas.bind("<Button-1>", on_mouse_down)
-    canvas.bind("<B1-Motion>", on_mouse_drag)
-    canvas.bind("<ButtonRelease-1>", on_mouse_up)
+
+    else:
+        bbox = get_poe_bbox()
+        if not bbox:
+            return
+
+        overlay = tk.Toplevel()
+        overlay.attributes("-alpha", 0.3)
+        overlay.attributes("-fullscreen", True)
+        overlay.attributes("-topmost", True)
+        overlay.configure(background='black')
+
+        start_x = start_y = end_x = end_y = 0
+        rect_id = None
+
+        canvas = tk.Canvas(overlay, cursor="cross", bg='gray')
+        canvas.pack(fill=tk.BOTH, expand=True)
+
+        def on_mouse_down(event):
+            nonlocal start_x, start_y
+            start_x, start_y = event.x, event.y
+
+        def on_mouse_drag(event):
+            nonlocal rect_id
+            if rect_id:
+                canvas.delete(rect_id)
+            rect_id = canvas.create_rectangle(start_x, start_y, event.x, event.y,
+                                              outline='red', width=2)
+
+        def on_mouse_up(event):
+            nonlocal end_x, end_y
+            end_x, end_y = event.x, event.y
+            overlay.destroy()  # only close overlay
+
+            x1, y1 = min(start_x, end_x), min(start_y, end_y)
+            x2, y2 = max(start_x, end_x), max(start_y, end_y)
+            if x2 - x1 < 5 or y2 - y1 < 5:
+                print(c.snippet_txt_too_small)
+                return
+
+            bbox = (x1, y1, x2, y2)
+            screenshot_np = np.array(ImageGrab.grab(bbox))
+            if screenshot_np is None or screenshot_np.size == 0:
+                print(c.snippet_txt_failed)
+                return
+
+            full_text, filtered = ocr_from_image(screenshot_np, scale=2)
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            os.makedirs(c.saves_dir, exist_ok=True)
+            write_csv_entry(root, full_text, timestamp, allow_dupes=True)
+
+            if on_done:
+                on_done(filtered)
+
+        canvas.bind("<Button-1>", on_mouse_down)
+        canvas.bind("<B1-Motion>", on_mouse_drag)
+        canvas.bind("<ButtonRelease-1>", on_mouse_up)
 
 
 #####################################################
@@ -876,7 +931,7 @@ def capture_snippet(root, on_done):
 #####################################################
 def capture_layout(root):
     global blueprint_area_level, blueprint_layout, attempt
-    
+
     screenshot = pyautogui.screenshot()
     full_width, full_height = screenshot.size
 
@@ -910,7 +965,7 @@ def capture_layout(root):
         print("\n========== Result ==========")
         print(f"Layout: {found_layout}")
         print(f"Area Level: {area_level}")
-        print("="*28)
+        print("=" * 28)
         attempt = 1
     else:
         status = f"❌ Not found, try again. Attempt: #{attempt}"
@@ -924,6 +979,7 @@ def validateAttempt(print_text):
     global attempt
     if attempt == 1:
         print(print_text)
+
 
 if __name__ == "__main__":
     print("Run GUI instead: python gui.py")

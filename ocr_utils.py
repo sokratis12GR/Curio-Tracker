@@ -1,16 +1,19 @@
+import csv
+import math
 import os
 import re
-import sys
-import math
-import csv
 import shutil
-import ctypes
+import sys
 from datetime import datetime
 from difflib import get_close_matches
 from types import SimpleNamespace
+
 import pytesseract
+import win32clipboard
+from PIL import ImageGrab
+from pytz.exceptions import InvalidTimeError
+
 import config as c
-import configparser
 from settings import get_setting, set_setting, write_settings, initialize_settings
 
 ################################################################################
@@ -67,6 +70,40 @@ def set_tesseract_path():
         print("[ERROR] tessdata directory not found at:", tessdata_dir)
 
 
+def grab_new_clipboard_image(timeout=30):
+    import time
+    start = time.time()
+
+    # Get current clipboard image (or None)
+    win32clipboard.OpenClipboard()
+    try:
+        old_data = win32clipboard.GetClipboardData(win32clipboard.CF_DIB)
+    except Exception:
+        old_data = None
+    finally:
+        win32clipboard.CloseClipboard()
+
+    img = None
+    while time.time() - start < timeout:
+        time.sleep(0.2)
+        try:
+            win32clipboard.OpenClipboard()
+            try:
+                new_data = win32clipboard.GetClipboardData(win32clipboard.CF_DIB)
+            except Exception:
+                new_data = None
+            finally:
+                win32clipboard.CloseClipboard()
+        except Exception:
+            continue
+
+        if new_data != old_data:
+            img = ImageGrab.grabclipboard()
+            break
+
+    return img
+
+
 ####################################################################
 # Fixes title case issues like checking for items with apostrophes #
 ####################################################################
@@ -86,7 +123,8 @@ def smart_title_case(text):
 
     # Apply smart title casing to each word
     return re.sub(r"\b\w+'?s?\b", lambda m: fix_word(m.group(0)), text)
-    
+
+
 def normalize_for_search(s: str) -> str:
     s = s.replace("—", " ").replace("“", " ").replace("”", " ")
     s = re.sub(r"[^\w\s%';]", " ", s)  # keep %, ', ; for precise matching
@@ -108,15 +146,17 @@ def build_body_armor_regex(body_armors):
     normalized.sort(key=len, reverse=True)
     return re.compile(r"\b(" + "|".join(normalized) + r")\b", re.IGNORECASE)
 
+
 def find_first_body_armor_pos(text, body_armors):
-    norm_text = normalize_for_search(text) 
+    norm_text = normalize_for_search(text)
     body_armor_regex = build_body_armor_regex(body_armors)
     # 1. exact via regex
     if body_armor_regex:
         match = body_armor_regex.search(norm_text)
         if match:
             if c.DEBUGGING:
-                print(f"[BodyArmor] Exact match '{match.group(1)}' at {match.start()} in normalized text: {norm_text!r}")
+                print(
+                    f"[BodyArmor] Exact match '{match.group(1)}' at {match.start()} in normalized text: {norm_text!r}")
             return match.start()
 
     # 2. fuzzy fallback: try multi-word body armours first, then single-word
@@ -161,6 +201,7 @@ def find_first_body_armor_pos(text, body_armors):
                     break  # stop after first sequence for this armour
     return earliest
 
+
 def find_first_enchant_piece_pos(term_title, text):
     # take the part before ';'
     part1 = term_title.split(";", 1)[0].strip()
@@ -172,7 +213,9 @@ def find_first_enchant_piece_pos(term_title, text):
     m = re.search(pattern, norm_text, re.IGNORECASE)
     return m.start() if m else None
 
-MAX_DISTANCE = 200 # To play around and see if body armors would need more positions
+
+MAX_DISTANCE = 200  # To play around and see if body armors would need more positions
+
 
 def is_armor_enchant_by_body_armor_order(term_title, text, body_armors, enchant_type_lookup):
     base_part = term_title.split(";", 1)[0].strip()
@@ -206,7 +249,7 @@ def is_armor_enchant_by_body_armor_order(term_title, text, body_armors, enchant_
         print(f"[Fallback] '{term_title}' ambiguous and no body armor nearby, treating as Weapon Enchant")
 
     return False
-    
+
 
 def now_timestamp():
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -218,35 +261,46 @@ def now_timestamp():
 def add_if_trinket(term, type_):
     return c.trinket_data_name if type_ == c.TRINKET_TYPE else ""
 
+
 def add_if_replacement(term, type_):
     return term if type_ == c.REPLACEMENT_TYPE else ""
+
 
 def add_if_replica(term, type_):
     return term if type_ == c.REPLICA_TYPE else ""
 
+
 def add_if_experimental(term, type_):
     return term if type_ == c.EXPERIMENTAL_TYPE else ""
+
 
 def add_if_weapon_enchant(term, type_):
     return term if type_ == c.WEAPON_ENCHANT_TYPE else ""
 
+
 def add_if_armor_enchant(term, type_):
     return term if type_ == c.ARMOR_ENCHANT_TYPE else ""
+
 
 def add_if_scarab(term, type_):
     return term if type_ == c.SCARAB_TYPE else ""
 
+
 def add_if_currency(term, type_):
     return term if type_ == c.CURRENCY_TYPE else ""
+
 
 def is_currency_or_scarab(type_):
     return type_ == c.CURRENCY_TYPE or type_ == c.SCARAB_TYPE
 
+
 def is_unique(type_):
     return type_ == c.REPLACEMENT_TYPE or type_ == c.REPLICA_TYPE
 
+
 def is_rare(type_):
     return type_ == c.TRINKET_TYPE or type_ == c.EXPERIMENTAL_TYPE or type_ == c.ARMOR_ENCHANT_TYPE or type_ == c.WEAPON_ENCHANT_TYPE
+
 
 def is_enchant(type_):
     return type_ == c.ARMOR_ENCHANT_TYPE or type_ == c.WEAPON_ENCHANT_TYPE
@@ -275,6 +329,7 @@ def get_top_right_layout(screen_width, screen_height):
 
     return (left, top, right, bottom)
 
+
 #########################################################################
 #                                                                       #
 #        Builds the Item for the Image Rendering via CSV / OCR          #
@@ -287,12 +342,14 @@ def convert_to_float(val):
         result_float = 0
     return result_float
 
+
 def convert_to_int(val):
     try:
         result_int = int(val)
     except (ValueError, TypeError):
         result_int = 1
     return result_int
+
 
 def get_stack_size(item):
     item_type = getattr(item, "type", "N/A")
@@ -302,20 +359,20 @@ def get_stack_size(item):
     stack_size = convert_to_int(stack_size)
 
     stack_size_txt = (
-            stack_size
-            if stack_size > 0 and is_currency_or_scarab(item_type)
-            else ""
+        stack_size
+        if stack_size > 0 and is_currency_or_scarab(item_type)
+        else ""
     )
     return stack_size, stack_size_txt
 
 
-def calculate_estimate_value(item) -> float:
-    chaosValue = getattr(item, "chaos_value", "")
-    divineValue = getattr(item, "divine_value", "")
+def calculate_estimate_value(item):
+    chaos_value = getattr(item, "chaos_value", "")
+    divine_value = getattr(item, "divine_value", "")
     stack_size, _ = get_stack_size(item)
 
-    chaos_float = convert_to_float(chaosValue)
-    divine_float = convert_to_float(divineValue)
+    chaos_float = convert_to_float(chaos_value)
+    divine_float = convert_to_float(divine_value)
 
     # Multiply by stack size if more than 1
     if stack_size > 1:
@@ -338,14 +395,14 @@ def calculate_estimate_value(item) -> float:
     return display_value
 
 
-
 def parse_timestamp(ts_str, fallback_now=True):
     if not ts_str:
         return datetime.now() if fallback_now else None
     try:
         return datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S")
-    except Exception:
+    except InvalidTimeError:
         return datetime.now() if fallback_now else None
+
 
 def load_csv(file_path, row_parser=None, skip_header=True):
     results = []
@@ -357,22 +414,23 @@ def load_csv(file_path, row_parser=None, skip_header=True):
             results.append(row_parser(row) if row_parser else row)
     return results
 
+
 def build_parsed_item(
-    record,
-    term_title,
-    item_type,
-    duplicate,
-    timestamp,
-    experimental_items,
-    rarity=None,
-    league="",
-    logged_by="",
-    blueprint_type="",
-    area_level="",
-    stack_size="",
-    chaos_value="",
-    divine_value="",
-    tier=""
+        record,
+        term_title,
+        item_type,
+        duplicate,
+        timestamp,
+        experimental_items,
+        rarity=None,
+        league="",
+        logged_by="",
+        blueprint_type="",
+        area_level="",
+        stack_size="",
+        chaos_value="",
+        divine_value="",
+        tier=""
 ):
     ts = parse_timestamp(timestamp)
 
@@ -395,16 +453,16 @@ def build_parsed_item(
         enchants.append(term_title)
 
     rarity = (
-        rarity or
-        ("Unique" if is_unique(item_type) else
-         "rare" if is_rare(item_type) else
-         "currency" if is_currency_or_scarab(item_type) else
-         "normal")
+            rarity or
+            ("Unique" if is_unique(item_type) else
+             "rare" if is_rare(item_type) else
+             "currency" if is_currency_or_scarab(item_type) else
+             "normal")
     )
 
     stack_size_str = (
         stack_size if stack_size and str(stack_size).isdigit() and
-        int(stack_size) > 0 and is_currency_or_scarab(item_type)
+                      int(stack_size) > 0 and is_currency_or_scarab(item_type)
         else ""
     )
 

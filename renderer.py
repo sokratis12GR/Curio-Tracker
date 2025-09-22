@@ -1,8 +1,8 @@
-from PIL import Image, ImageDraw, ImageFont
-import textwrap
 import os
 import sys
-from types import SimpleNamespace
+import textwrap
+
+from PIL import Image, ImageDraw, ImageFont
 
 
 def resource_path(relative_path):
@@ -27,8 +27,8 @@ SEPARATOR_WIDTH = 221
 SEPARATOR_HEIGHT = 8
 SEPARATOR_MARGIN_TOP = 4
 SEPARATOR_MARGIN_BOTTOM = 7
-NAME_Y_OFFSET = 13    # shift item name down
-CLASS_Y_OFFSET = 10   # shift item class down
+NAME_Y_OFFSET = 13  # shift item name down
+CLASS_Y_OFFSET = 10  # shift item class down
 
 COLOR = {
     "grey": "#7f7f7f",
@@ -48,8 +48,10 @@ COLOR = {
     "affliction": "#a06dca",
 }
 
+
 def limit_text_lines(text, width_chars: int):
     return textwrap.wrap(text, width=width_chars)
+
 
 def limit_text_array(texts, width_chars=88):
     lines = []
@@ -59,6 +61,7 @@ def limit_text_array(texts, width_chars=88):
         else:
             lines.extend(textwrap.wrap(t, width=width_chars))
     return lines
+
 
 def is_base_value_increased(item, name):
     not_scaling = ["Reduced Attribute Requirements", "Block Chance", "Charges"]
@@ -71,6 +74,7 @@ def is_base_value_increased(item, name):
         to_check.extend(getattr(item, attr, []))
     name_lower = name.lower()
     return any(name_lower in stat.lower() for stat in to_check)
+
 
 def render_item(item):
     # Font loading
@@ -93,9 +97,9 @@ def render_item(item):
     # Collect all text lines to measure
     flavor_lines = item.flavorText.get("lines", []) if item.flavorText else []
     measure_texts = (
-        limit_text_array(item.affixes)
-        + item.runes + item.implicits + item.enchants
-        + flavor_lines
+            limit_text_array(item.affixes)
+            + item.runes + item.implicits + item.enchants
+            + flavor_lines
     )
 
     for line in measure_texts:
@@ -146,8 +150,6 @@ def render_item(item):
     if getattr(item, "corrupted", False):
         content_lines += 1
 
-
-
     flavor_lines = non_empty_lines(item.flavorText.get("lines", [])) if item.flavorText else []
     content_lines += len(flavor_lines)
 
@@ -157,7 +159,6 @@ def render_item(item):
         canvas_h = max(canvas_h, headerH + y_content)
     else:
         canvas_h = headerH
-
 
     # --- Create canvas ---
     img = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -191,9 +192,10 @@ def render_item(item):
 
     # Requirements
     if hasattr(item, "requirements") and item.requirements:
-        draw.text((center_x, y), "Requires: " + ", ".join(item.requirements), font=small_font, fill=COLOR["grey"], anchor="mm")
+        draw.text((center_x, y), "Requires: " + ", ".join(item.requirements), font=small_font, fill=COLOR["grey"],
+                  anchor="mm")
         y += LINE_HEIGHT
-    
+
     # Implicits
     for implicit in getattr(item, "implicits", []):
         draw.text((center_x, y), implicit, font=small_font, fill=COLOR["affix"], anchor="mm")

@@ -1,15 +1,17 @@
-import os
 import threading
-import configparser
-from pynput import keyboard
 import traceback
+
+from pynput import keyboard
+
 from config import DEFAULT_SETTINGS, DEBUGGING
 from ocr_utils import get_setting, set_setting, write_settings
+
 
 # ---------------- Keybinds ----------------
 def hotkey_default(name) -> str:
     ini_name = f"{name}_key" if name != "debug" else "debug_key"
     return get_setting('Hotkeys', ini_name, DEFAULT_SETTINGS['Hotkeys'][ini_name])
+
 
 keybinds = [
     ("Capture Screen", hotkey_default('capture'), 'capture'),
@@ -28,6 +30,7 @@ _recording_index = None
 _current_keys = []
 _lock = threading.Lock()
 
+
 # ---------------- Persistence ----------------
 def update_keybind(name, combo_str):
     try:
@@ -45,10 +48,12 @@ def update_keybind(name, combo_str):
             print(traceback.format_exc())
         return False
 
+
 def get_display_hotkey(name):
     ini_name = f"{name}_key" if name != "debug" else "debug_key"
     default = next((d for (_, d, n) in keybinds if n == name), "")
     return get_setting('Hotkeys', ini_name, default)
+
 
 # ---------------- Hotkey parsing ----------------
 def normalize_key(evt_key):
@@ -71,6 +76,7 @@ def normalize_key(evt_key):
         if DEBUGGING:
             print(f"[WARN] Failed to normalize key: {evt_key}")
     return None
+
 
 def parse_hotkey(hotkey_str):
     hotkey_str = str(hotkey_str)
@@ -102,12 +108,13 @@ def format_key(k):
     if isinstance(k, keyboard.Key):
         name = str(k).split('.')[-1].lower()
         return {
-            'alt_l':'alt','alt_r':'alt',
-            'ctrl_l':'ctrl','ctrl_r':'ctrl',
-            'shift_l':'shift','shift_r':'shift',
-            'cmd_l':'cmd','cmd_r':'cmd'
+            'alt_l': 'alt', 'alt_r': 'alt',
+            'ctrl_l': 'ctrl', 'ctrl_r': 'ctrl',
+            'shift_l': 'shift', 'shift_r': 'shift',
+            'cmd_l': 'cmd', 'cmd_r': 'cmd'
         }.get(name, name)
     return str(k).lower()
+
 
 # ---------------- Initialize runtime hotkeys ----------------
 def init_from_settings():
@@ -121,6 +128,7 @@ def init_from_settings():
                 print(traceback.format_exc())
     if DEBUGGING:
         print("[INFO] Keybinds loaded from settings.")
+
 
 # ---------------- Recording listener ----------------
 def start_recording_popup(index, button_list, root, update_info_labels):
@@ -170,6 +178,7 @@ def start_recording_popup(index, button_list, root, update_info_labels):
     if DEBUGGING:
         print("[INFO] Recording keys... Press combo, then release. ESC to cancel.")
 
+
 def cancel_recording_popup(button_list=None):
     global _recording_listener, _recording_index, _current_keys
     try:
@@ -189,6 +198,7 @@ def cancel_recording_popup(button_list=None):
     finally:
         _recording_index = None
         _current_keys = []
+
 
 # ---------------- Global listener ----------------
 def start_global_listener():
@@ -241,6 +251,7 @@ def start_global_listener():
         if DEBUGGING:
             print("[INFO] Global listener started.")
 
+
 def stop_global_listener():
     global _global_listener, _current_keys
     with _lock:
@@ -252,6 +263,7 @@ def stop_global_listener():
             if DEBUGGING:
                 print(traceback.format_exc())
         _current_keys = []
+
 
 # ---------------- Initialize ----------------
 init_from_settings()

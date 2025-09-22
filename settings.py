@@ -1,16 +1,19 @@
-import os
 import configparser
+import os
+
 from config import DEFAULT_SETTINGS
+
 
 def get_data_path(filename: str) -> str:
     appdata = os.getenv('APPDATA') or os.path.expanduser('~')
     base = os.path.join(appdata, "HeistCurioTracker")
     full_path = os.path.join(base, filename)
-    
+
     # Ensure that the directory structure exists for the file
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    
+
     return full_path
+
 
 SETTINGS_PATH = get_data_path("user_settings.ini")
 LOCK_FILE = get_data_path("fetch/last_run.lock")
@@ -34,6 +37,7 @@ def write_settings():
             settings.write(f)
     except Exception as e:
         print("[ERROR] Failed to write settings:", e)
+
 
 def set_setting(section: str, key: str, value):
     if section not in settings:
