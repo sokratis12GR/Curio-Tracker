@@ -5,13 +5,18 @@ from config import DEFAULT_SETTINGS
 def get_data_path(filename: str) -> str:
     appdata = os.getenv('APPDATA') or os.path.expanduser('~')
     base = os.path.join(appdata, "HeistCurioTracker")
-    os.makedirs(base, exist_ok=True)
-    return os.path.join(base, filename)
+    full_path = os.path.join(base, filename)
+    
+    # Ensure that the directory structure exists for the file
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    
+    return full_path
 
 SETTINGS_PATH = get_data_path("user_settings.ini")
-LOCK_FILE = get_data_path("last_run.lock")
-OUTPUT_CURRENCY_CSV = get_data_path("heist_item_currency_values.csv")
-OUTPUT_TIERS_CSV = get_data_path("heist_item_tiers_data.csv")
+LOCK_FILE = get_data_path("fetch/last_run.lock")
+OUTPUT_CURRENCY_CSV = get_data_path("fetch/heist_item_currency_values.csv")
+OUTPUT_TIERS_CSV = get_data_path("fetch/heist_item_tiers_data.csv")
+LEAGUE = "Mercenaries"
 
 settings = configparser.ConfigParser()
 if os.path.exists(SETTINGS_PATH):

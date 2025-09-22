@@ -73,7 +73,8 @@ def create_toast(root, message, image=None, duration=None):
             TOASTS.remove(toast)
         try:
             toast.destroy()
-        except Exception:
+        except Exception as e:
+            print(e)
             pass
         reposition(root)
 

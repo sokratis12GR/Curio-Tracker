@@ -7,7 +7,7 @@ from config import DEFAULT_SETTINGS
 from ocr_utils import get_setting, set_setting, write_settings
 
 # ---------------- Keybinds ----------------
-def hotkey_default(name):
+def hotkey_default(name) -> str:
     ini_name = f"{name}_key" if name != "debug" else "debug_key"
     return get_setting('Hotkeys', ini_name, DEFAULT_SETTINGS['Hotkeys'][ini_name])
 
@@ -50,16 +50,27 @@ def get_display_hotkey(name):
 
 # ---------------- Hotkey parsing ----------------
 def normalize_key(evt_key):
-    if isinstance(evt_key, keyboard.Key):
-        return evt_key
-    elif hasattr(evt_key, 'char') and evt_key.char is not None:
-        return evt_key.char.lower()
+    try:
+        if isinstance(evt_key, keyboard.Key):
+            # Map left/right variants to single key
+            if evt_key in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r, keyboard.Key.ctrl):
+                return keyboard.Key.ctrl
+            elif evt_key in (keyboard.Key.shift_l, keyboard.Key.shift_r, keyboard.Key.shift):
+                return keyboard.Key.shift
+            elif evt_key in (keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt):
+                return keyboard.Key.alt
+            elif evt_key in (keyboard.Key.cmd_l, keyboard.Key.cmd_r, keyboard.Key.cmd):
+                return keyboard.Key.cmd
+            else:
+                return evt_key
+        elif hasattr(evt_key, 'char') and evt_key.char is not None:
+            return evt_key.char.lower()
+    except Exception:
+        print(f"[WARN] Failed to normalize key: {evt_key}")
     return None
 
 def parse_hotkey(hotkey_str):
-    # Ensure the input is always a string
     hotkey_str = str(hotkey_str)
-
     parts = [p.strip().lower() for p in hotkey_str.split('+') if p.strip()]
     keys = set()
     for p in parts:
@@ -70,9 +81,11 @@ def parse_hotkey(hotkey_str):
                 keys.add(keyboard.Key.shift)
             elif p in ('alt', 'alt_l', 'alt_r'):
                 keys.add(keyboard.Key.alt)
+            elif p in ('cmd', 'cmd_l', 'cmd_r', 'win'):
+                keys.add(keyboard.Key.cmd)
             elif p.startswith('f') and p[1:].isdigit():
                 keys.add(getattr(keyboard.Key, p))
-            elif len(p) == 1 and p.isprintable(): 
+            elif len(p) == 1 and p.isprintable():
                 keys.add(p)
             else:
                 keys.add(getattr(keyboard.Key, p))
@@ -80,11 +93,16 @@ def parse_hotkey(hotkey_str):
             print(f"[WARN] Unknown key part: {p}")
     return frozenset(keys)
 
+
 def format_key(k):
     if isinstance(k, keyboard.Key):
         name = str(k).split('.')[-1].lower()
-        return {'alt_l':'alt','alt_r':'alt','ctrl_l':'ctrl','ctrl_r':'ctrl',
-                'shift_l':'shift','shift_r':'shift'}.get(name, name)
+        return {
+            'alt_l':'alt','alt_r':'alt',
+            'ctrl_l':'ctrl','ctrl_r':'ctrl',
+            'shift_l':'shift','shift_r':'shift',
+            'cmd_l':'cmd','cmd_r':'cmd'
+        }.get(name, name)
     return str(k).lower()
 
 # ---------------- Initialize runtime hotkeys ----------------
@@ -183,11 +201,15 @@ def start_global_listener():
         def on_release(key):
             try:
                 pressed = frozenset(_current_keys)
+                print(f"[DEBUG] Keys released: {[format_key(k) for k in pressed]}")
+
                 for name, combo in hotkeys.items():
-                    if combo == pressed:
+                    # Relaxed matching for cross-platform consistency
+                    if combo.issubset(pressed):
                         handler = handlers.get(name)
                         if handler:
                             try:
+                                print(f"[INFO] Triggering handler '{name}'")
                                 handler()
                             except Exception:
                                 print(f"[ERROR] handler '{name}' threw:")
@@ -213,5 +235,4 @@ def stop_global_listener():
         _current_keys = []
 
 # ---------------- Initialize ----------------
-
 init_from_settings()

@@ -4,7 +4,7 @@ import sys
 import time
 import pandas as pd
 from datetime import datetime
-from settings import LOCK_FILE, OUTPUT_CURRENCY_CSV
+from settings import LOCK_FILE, OUTPUT_CURRENCY_CSV, LEAGUE
 from statistics import median
 import ocr_utils as utils
 from ocr_utils import load_csv
@@ -14,7 +14,6 @@ from shared_lock import is_recent_run, update_lock
 MIN_SECONDS_BETWEEN_RUNS = 2 * 60 * 60  # 2 hours
 
 HEADERS = {"User-Agent": "fetch-poe-ninja-script/1.0"}
-LEAGUE = "Mercenaries"
 VALID_TYPES = ["Currency", "Scarab", "Replica", "Replacement", "Experimental"]
 
 def get_resource_path(filename):

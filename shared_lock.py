@@ -3,7 +3,7 @@ import time
 import json
 from settings import LOCK_FILE
 
-MIN_SECONDS_BETWEEN_RUNS = 2 * 60 * 60  # 2 hours
+MIN_SECONDS_BETWEEN_RUNS: int = 2 * 60 * 60  # 2 hours
 
 def is_recent_run(script_name: str) -> bool:
     if not os.path.exists(LOCK_FILE):
@@ -13,7 +13,8 @@ def is_recent_run(script_name: str) -> bool:
             data = json.load(f)
         ts = float(data.get(script_name, 0))
         return (time.time() - ts) < MIN_SECONDS_BETWEEN_RUNS
-    except Exception:
+    except Exception as e:
+        print(e)
         return False
 
 def update_lock(script_name: str):
