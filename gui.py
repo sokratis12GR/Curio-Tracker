@@ -1130,7 +1130,7 @@ settings_menu.add_command(label="Exit", command=handle_exit)
 
 
 def show_about_popup():
-    app_version = "0.2.3.0"
+    app_version = "0.2.3.1"
 
     # Use themed popup
     popup = tk.Toplevel(root)
