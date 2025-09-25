@@ -1,10 +1,10 @@
 import csv
-import datetime
 from pathlib import Path
 
-from curio_tracker import log_message
-from load_utils import load_csv, LOG_FILE
 from config import csv_file_path
+from curio_tracker import log_message
+from load_utils import load_csv
+
 
 class CSVManager:
     def __init__(self, csv_path=None):

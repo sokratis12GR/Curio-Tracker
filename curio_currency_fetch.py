@@ -1,12 +1,10 @@
-import os
-import sys
 from statistics import median
 
 import pandas as pd
 import requests
 
 from config import LEAGUE
-from load_utils import INTERNAL_ALL_TYPES_CSV, get_datasets, OUTPUT_CURRENCY_CSV, LOCK_FILE
+from load_utils import get_datasets, OUTPUT_CURRENCY_CSV, LOCK_FILE
 from shared_lock import is_recent_run, update_lock
 
 # === CONFIG ===

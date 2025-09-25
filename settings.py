@@ -1,8 +1,8 @@
 import configparser
 import os
-import sys
-from load_utils import get_data_path, get_resource_path
-from config import DEFAULT_SETTINGS, file_experimental_items, file_all_valid_heist_terms, file_body_armors
+
+from config import DEFAULT_SETTINGS
+from load_utils import get_data_path
 
 SETTINGS_PATH = get_data_path("user_settings.ini")
 

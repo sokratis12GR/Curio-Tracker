@@ -6,6 +6,7 @@ from pynput import keyboard
 from config import DEFAULT_SETTINGS, DEBUGGING
 from settings import get_setting, set_setting, write_settings
 
+
 # ---------------- Keybinds ----------------
 def hotkey_default(name) -> str:
     ini_name = f"{name}_key" if name != "debug" else "debug_key"
