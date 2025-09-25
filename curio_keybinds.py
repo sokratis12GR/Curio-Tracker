@@ -4,8 +4,7 @@ import traceback
 from pynput import keyboard
 
 from config import DEFAULT_SETTINGS, DEBUGGING
-from ocr_utils import get_setting, set_setting, write_settings
-
+from settings import get_setting, set_setting, write_settings
 
 # ---------------- Keybinds ----------------
 def hotkey_default(name) -> str:
@@ -19,6 +18,14 @@ keybinds = [
     ("Capture Snippet", hotkey_default('snippet'), 'snippet'),
     ("Exit", hotkey_default('exit'), 'exit'),
     ("Debugging", hotkey_default('debug'), 'debug'),
+]
+
+DEFAULT_KEYBINDS = [
+    ("Capture Screen", 'f2', 'capture'),
+    ("Capture Layout", 'f5', 'layout_capture'),
+    ("Capture Snippet", 'f4', 'snippet'),
+    ("Exit", 'f3', 'exit'),
+    ("Debugging", 'alt+d', 'debug'),
 ]
 
 # ---------------- Runtime storage ----------------

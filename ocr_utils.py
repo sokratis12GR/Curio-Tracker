@@ -1,4 +1,3 @@
-import csv
 import math
 import os
 import re
@@ -14,7 +13,7 @@ from PIL import ImageGrab
 from pytz.exceptions import InvalidTimeError
 
 import config as c
-from settings import get_setting, set_setting, write_settings, initialize_settings
+
 
 ################################################################################
 # Sets the Tesseract OCR location to either PATH, Bundled or User Set Location #
@@ -332,7 +331,7 @@ def get_top_right_layout(screen_width, screen_height):
 
 #########################################################################
 #                                                                       #
-#        Builds the Item for the Image Rendering via CSV / OCR          #
+#        Different bits of helpers                                      #
 #                                                                       #
 #########################################################################
 def convert_to_float(val):
@@ -395,26 +394,36 @@ def calculate_estimate_value(item):
     return display_value
 
 
-def parse_timestamp(ts_str, fallback_now=True):
-    if not ts_str:
-        return datetime.now() if fallback_now else None
+def format_currency_value(value: str) -> str:
+    if not value or value.strip() == "":
+        return ""  # no value
     try:
-        return datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S")
-    except InvalidTimeError:
-        return datetime.now() if fallback_now else None
+        f = float(value)
+    except ValueError:
+        return ""
+
+    f_rounded = round(f, 1)
+    return str(int(f_rounded)) if f_rounded.is_integer() else str(f_rounded)
 
 
-def load_csv(file_path, row_parser=None, skip_header=True):
-    results = []
-    with open(file_path, newline='', encoding='utf-8-sig') as f:
-        reader = csv.reader(f)
-        if skip_header:
-            next(reader, None)
-        for row in reader:
-            results.append(row_parser(row) if row_parser else row)
-    return results
+def parse_timestamp(ts_str):
+    if not ts_str:
+        return datetime.min  # fallback instead of None
+    ts_str = ts_str.strip()
+    for fmt in ("%Y-%m-%d_%H-%M-%S", "%Y-%m-%d %H:%M:%S"):  # support common variants
+        try:
+            return datetime.strptime(ts_str, fmt)
+        except ValueError:
+            continue
+    # last resort
+    return datetime.min
 
 
+#########################################################################
+#                                                                       #
+#        Builds the Item for the Image Rendering via CSV / OCR          #
+#                                                                       #
+#########################################################################
 def build_parsed_item(
         record,
         term_title,

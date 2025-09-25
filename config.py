@@ -82,6 +82,7 @@ settings = DEFAULT_SETTINGS
 DEBUGGING = False
 CSV_DEBUGGING = False
 
+LEAGUE = "Mercenaries"
 poe_league = "3.26"
 poe_user = "sokratis12GR"
 
@@ -93,8 +94,20 @@ layout_keywords = [
     "Bunker", "Records Office", "Mansion", "Smuggler's Den", "Underbelly",
     "Laboratory", "Prohibited Library", "Repository", "Tunnels"
 ]
+league_versions = [
+    "3.26", "3.25", "3.24", "3.23", "3.22", "3.21",
+    "3.20", "3.19", "3.18", "3.17", "3.16", "3.15",
+    "3.14", "3.13", "3.12"
+]
+time_options = [
+    "All", "Last hour", "Last 2 hours", "Last 12 hours", "Today", "Last 24 hours",
+    "Last week", "Last 2 weeks", "Last month", "Last year", "Custom..."
+]
 TOP_RIGHT_CUT_WIDTH = 170
 TOP_RIGHT_CUT_HEIGHT = 100
+
+IMAGE_COL_WIDTH = 200
+ROW_HEIGHT = 40
 
 # Type constants
 TRINKET_TYPE = "Trinket"
@@ -139,8 +152,8 @@ csv_type_header = "Type"
 csv_value_header = "Value"
 
 ### Input Value fo "Trinket/Replacement/Replica/Experimental/Weapon Enchants/Armor Enchants/Scarab/Currency"
-file_name = "all_valid_heist_terms.csv"
 trinket_data_name = "Thief's Trinket"
+file_all_valid_heist_terms = "all_valid_heist_terms.csv"
 file_body_armors = "body_armors.txt"
 file_experimental_items = "experimental_items.csv"
 target_application = "Path of Exile"

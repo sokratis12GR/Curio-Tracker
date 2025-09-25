@@ -1,11 +1,12 @@
 import pandas as pd
 import requests
 
-from settings import LOCK_FILE, OUTPUT_TIERS_CSV, LEAGUE
+from config import LEAGUE
+from load_utils import OUTPUT_TIERS_CSV, LOCK_FILE
 from shared_lock import is_recent_run, update_lock
 
 # === CONFIG ===
-MIN_SECONDS_BETWEEN_RUNS = 2 * 60 * 60  # 2 hours
+MIN_SECONDS_BETWEEN_RUNS = 12 * 60 * 60
 HEADERS = {"User-Agent": "fetch-poeladder-curios/1.0"}
 API_URL = "https://poeladder.com/api/v1/curio"
 
@@ -37,8 +38,8 @@ def fetch_curios():
 
 # === WRAPPER FUNCTION TO CALL ===
 def run_fetch_curios(force=False):
-    if not force and is_recent_run(OUTPUT_TIERS_CSV):
-        print("[INFO] Last run <2 hours ago, skipping fetch.")
+    if not force and is_recent_run(OUTPUT_TIERS_CSV, MIN_SECONDS_BETWEEN_RUNS):
+        print("[INFO] Last run <12 hours ago, skipping tiers fetch.")
         return
 
     curios = fetch_curios()

@@ -19,19 +19,32 @@ tesseract_base = os.path.abspath("tesseract")
 datas = [
     ('all_valid_heist_terms.csv', '.'),
     ('body_armors.txt', '.'),
-    ('experimental_items.csv', '.'),
-    ('config.py', '.'),
     ('curio_currency_fetch.py', '.'),
-    ('curio_tiers_fetch.py', '.'),
     ('curio_keybinds.py', '.'),
+    ('curio_tiers_fetch.py', '.'),
+    ('experimental_items.csv', '.'),
+    ('keybinds_handlers.py', '.'),
+    ('load_utils.py', '.'),
     ('ocr_utils.py', '.'),
     ('renderer.py', '.'),
-    ('curio_tracker.py', '.'),
     ('settings.py', '.'),
     ('shared_lock.py', '.'),
     ('themes.py', '.'),
     ('toasts.py', '.'),
+    ('tree_manager.py', '.'),
+    ('csv_manager.py', '.'),
+    ('tree_utils.py', '.'),
 ]
+
+# ---- Add all files from /gui ----
+gui_dir = os.path.abspath("gui")
+for root, _, files in os.walk(gui_dir):
+    for f in files:
+        if f.endswith(".py"):  # only bundle Python source files
+            src_file = os.path.join(root, f)
+            rel_path = os.path.relpath(root, gui_dir)
+            dest_dir = os.path.join("gui", rel_path)
+            datas.append((src_file, dest_dir))
 
 # ---- Add all files from /assets ----
 assets_dir = os.path.abspath("assets")
@@ -83,8 +96,8 @@ binaries += opencv_libs + pillow_libs + pyautogui_libs
 block_cipher = None
 
 a = Analysis(
-    ['gui.py'],
-    pathex=[r"D:\User\Desktop\ScreenToText\dev"],  # your source dir
+    ['main.py'],
+    pathex=[r"D:\Dev\Projects\Curio Tracker"],
     binaries=binaries,
     datas=datas,
     hiddenimports=[

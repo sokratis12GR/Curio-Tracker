@@ -24,12 +24,10 @@ import curio_currency_fetch as fetch_currency
 import curio_tiers_fetch as fetch_tiers
 import ocr_utils as utils
 import toasts
-from ocr_utils import load_csv, build_parsed_item
-from settings import OUTPUT_CURRENCY_CSV, OUTPUT_TIERS_CSV
+from load_utils import get_datasets
+from ocr_utils import build_parsed_item
 
-fetch_currency.run_fetch()
-fetch_tiers.run_fetch_curios()
-utils.set_tesseract_path()
+datasets = get_datasets(force_reload=True)
 
 csv_file_path = c.csv_file_path
 
@@ -45,99 +43,16 @@ non_dup_count = 0
 attempt = 1
 listener_ref = None
 parsed_items = []
-experimental_items = {}
-CURRENCY_DATASET = {}
-TIERS_DATASET = {}
 
-
-def get_resource_path(filename):
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_path, filename)
-
-
-def load_csv_with_types(file_path):
-    def parser(row):
-        if len(row) >= 2:
-            raw_term, type_name = row[0].strip(), row[1].strip()
-            return utils.smart_title_case(raw_term), type_name
-        return None
-
-    rows = load_csv(file_path, row_parser=parser)
-    return {term: type_name for term, type_name in rows if term}
-
-
-def load_body_armors(file_path):
-    return [line.strip() for line in open(file_path, encoding="utf-8").readlines()]
-
-
-def load_experimental_csv(file_path):
-    global experimental_items
-
-    def parser(row):
-        item_name = utils.smart_title_case(row[0].strip())
-        implicits = [line.strip() for line in row[1].splitlines() if line.strip()]
-        experimental_items[item_name] = implicits
-        return item_name, implicits
-
-    load_csv(file_path, row_parser=parser)
-    return experimental_items
-
-
-def format_currency_value(value: str) -> str:
-    if not value or value.strip() == "":
-        return ""  # no value
-    try:
-        f = float(value)
-    except ValueError:
-        return ""
-
-    f_rounded = round(f, 1)
-    return str(int(f_rounded)) if f_rounded.is_integer() else str(f_rounded)
-
-
-def load_currency_dataset(csv_file_path):
-    global CURRENCY_DATASET
-    CURRENCY_DATASET = {}
-
-    with open(csv_file_path, newline='', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            term = utils.smart_title_case(row["Name"])
-            chaos_val = format_currency_value(row.get("Chaos Value", ""))
-            divine_val = format_currency_value(row.get("Divine Value", ""))
-
-            # store both in a dictionary per term
-            CURRENCY_DATASET[term] = {
-                "chaos": chaos_val,
-                "divine": divine_val
-            }
-
-
-def load_tiers_dataset(csv_file_path):
-    global TIERS_DATASET
-    TIERS_DATASET = {}
-
-    with open(csv_file_path, newline='', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            term = utils.smart_title_case(row["name"])
-            tier = format_currency_value(row.get("tier", ""))
-
-            # store both in a dictionary per term
-            TIERS_DATASET[term] = {
-                "tier": tier,
-            }
-            if c.DEBUGGING:
-                print(f"{term}: {tier}")
-
-
-load_currency_dataset(OUTPUT_CURRENCY_CSV)
-load_tiers_dataset(OUTPUT_TIERS_CSV)
-term_types = load_csv_with_types(get_resource_path(c.file_name))
+CURRENCY_DATASET = datasets["currency"]
+# print(f"[DEBUG] Currency dataset loaded: {len(datasets.get('currency', {}))} entries")
+# for key, value in CURRENCY_DATASET.items():
+#     print(f"{key}: {value}")
+TIERS_DATASET = datasets["tiers"]
+experimental_items = datasets["experimental"]
+term_types = datasets["terms"]
 all_terms = set(term_types.keys())
-seen_matches = set()
-body_armors = load_body_armors(get_resource_path(c.file_body_armors))
-experimental_items = load_experimental_csv(get_resource_path(c.file_experimental_items))
+body_armors = datasets["body_armors"]
 
 
 def build_enchant_type_lookup(term_types):
@@ -691,7 +606,6 @@ def _parse_rows_from_csv(csv_file_path):
 
 def upgrade_csv_with_record_numbers(file_path):
     if not os.path.exists(file_path):
-        # CSV doesn't exist, nothing to upgrade
         print(f"[INFO] CSV file '{file_path}' not found. Skipping upgrade.")
         return
 
@@ -701,15 +615,48 @@ def upgrade_csv_with_record_numbers(file_path):
         return
 
     header = reader[0]
-    if "Record #" not in header:
-        header = ["Record #"] + header
+
+    # Case 1: No "Record #" column → add it
+    if c.csv_record_header not in header:
+        header = [c.csv_record_header] + header
         upgraded_rows = [header]
         for i, row in enumerate(reader[1:], start=1):
             upgraded_rows.append([str(i)] + row)
+
         with open(file_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerows(upgraded_rows)
-        print(f"[INFO] Upgraded CSV with Record # → {file_path}")
+
+        print(f"[INFO] Added 'Record #' column and generated IDs → {file_path}")
+        return
+
+    # Case 2: "Record #" exists → check for missing/empty values
+    record_index = header.index(c.csv_record_header)
+    rows = reader[1:]
+
+    needs_update = any(
+        len(row) <= record_index or row[record_index].strip() == ""
+        for row in rows
+    )
+
+    if not needs_update:
+        print(f"[INFO] '{c.csv_record_header}' column already complete. No changes made.")
+        return
+
+    # Case 3: Regenerate Record # column
+    upgraded_rows = [header]
+    for i, row in enumerate(rows, start=1):
+        row = row[:]  # copy
+        if len(row) <= record_index:
+            row.extend([""] * (record_index - len(row) + 1))
+        row[record_index] = str(i)
+        upgraded_rows.append(row)
+
+    with open(file_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerows(upgraded_rows)
+
+    print(f"[INFO] Refreshed missing '{c.csv_record_header}' values → {file_path}")
 
 
 def init_csv():
@@ -719,9 +666,8 @@ def init_csv():
 
 def _parse_items_from_rows(rows):
     debug = c.DEBUGGING
-    parsed_items = []
 
-    COLUMN_TO_TYPE = {
+    column_to_type = {
         "Trinket": c.TRINKET_TYPE,
         "Replacement": c.REPLACEMENT_TYPE,
         "Replica": c.REPLICA_TYPE,
@@ -744,20 +690,21 @@ def _parse_items_from_rows(rows):
         area_level = row.get(c.csv_area_level_header, "")
         stack_size = row.get(c.csv_stack_size_header, "")
         variant = row.get(c.csv_variant_header, "")
-        duplicate = row.get(c.csv_flag_header, "FALSE").upper() == "TRUE"
+        # duplicate = row.get(c.csv_flag_header, "FALSE").upper() == "TRUE" # Why was I even calling this????? xd
         timestamp = row.get(c.csv_time_header, "")
 
-        for col_name, inferred_type in COLUMN_TO_TYPE.items():
+        for col_name, inferred_type in column_to_type.items():
             value = row.get(col_name)
             if not value or not value.strip():
                 continue
 
-            term_title = utils.smart_title_case(value.strip())
+            term_title = utils.smart_title_case(value)
             item_type = term_types.get(term_title, inferred_type)
             estimated_value = CURRENCY_DATASET.get(term_title, {})
             chaos_est = estimated_value.get("chaos")
             divine_est = estimated_value.get("divine")
             tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
+            duplicate = False # Just predefining
 
             # Build parsed item directly from CSV header values
             item = build_parsed_item(

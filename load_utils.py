@@ -1,0 +1,131 @@
+import csv
+import os
+import sys
+
+import config as c
+from ocr_utils import smart_title_case, format_currency_value
+
+_DATASETS = None
+
+def get_data_path(filename: str) -> str:
+    appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+    base = os.path.join(appdata, c.APP_NAME)
+    full_path = os.path.join(base, filename)
+
+    # Ensure that the directory structure exists for the file
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+    return full_path
+
+
+def get_resource_path(filename):
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, filename)
+
+
+def load_csv(file_path, row_parser=None, skip_header=True, ensure_dir=False, as_dict=False):
+    results = []
+
+    if ensure_dir:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    if not os.path.exists(file_path):
+        return results
+
+    with open(file_path, newline='', encoding='utf-8-sig') as f:
+        if as_dict:
+            reader = csv.DictReader(f)
+        else:
+            reader = csv.reader(f)
+            if skip_header:
+                next(reader, None)
+
+        for row in reader:
+            if not row:
+                continue
+            parsed = row_parser(row) if row_parser else row
+            if parsed:
+                results.append(parsed)
+
+    return results
+
+
+def load_csv_with_types(file_path) -> dict:
+    def parser(row):
+        if len(row) >= 2:
+            raw_term, type_name = row[0].strip(), row[1].strip()
+            return smart_title_case(raw_term), type_name
+        return None
+
+    rows = load_csv(file_path, row_parser=parser)
+    return {term: type_name for term, type_name in rows if term}
+
+
+def load_body_armors(file_path) -> list:
+    return [line.strip() for line in open(file_path, encoding="utf-8").readlines()]
+
+
+def load_experimental_csv(file_path) -> dict:
+    def parser(row):
+        item_name = smart_title_case(row[0].strip())
+        implicits = [line.strip() for line in row[1].splitlines() if line.strip()]
+        return item_name, implicits
+
+    rows = load_csv(file_path, row_parser=parser)
+    return {item_name: implicits for item_name, implicits in rows if item_name}
+
+
+def load_currency_dataset(file_path: str) -> dict:
+    def parser(row):
+        # row is a dict because we'll use as_dict=True
+        if "Name" in row:
+            term = smart_title_case(row["Name"].strip())
+            chaos_val = format_currency_value(row.get("Chaos Value", ""))
+            divine_val = format_currency_value(row.get("Divine Value", ""))
+            return term, {"chaos": chaos_val, "divine": divine_val}
+        return None
+
+    rows = load_csv(file_path, row_parser=parser, as_dict=True)
+    # print("Loaded currency rows:", len(rows))
+    return {term: data for term, data in rows if term}
+
+
+def load_tiers_dataset(file_path: str, debugging=False) -> dict:
+    def parser(row):
+        # expecting: name, tier
+        if len(row) >= 2:
+            term = smart_title_case(row[0].strip())
+            tier = format_currency_value(row[1])
+            if debugging:
+                print(f"{term}: {tier}")
+            return term, {"tier": tier}
+        return None
+
+    rows = load_csv(file_path, row_parser=parser)
+    return {term: data for term, data in rows if term}
+
+
+SETTINGS_PATH = get_data_path("user_settings.ini")
+LOCK_FILE = get_data_path("fetch/last_run.lock")
+OUTPUT_CURRENCY_CSV = get_data_path("fetch/heist_item_currency_values.csv")
+OUTPUT_TIERS_CSV = get_data_path("fetch/heist_item_tiers_data.csv")
+INTERNAL_ALL_TYPES_CSV = get_resource_path(c.file_all_valid_heist_terms)
+INTERNAL_EXPERIMENTAL_CSV = get_resource_path(c.file_experimental_items)
+INTERNAL_BODY_ARMORS_TXT = get_resource_path(c.file_body_armors)
+
+def get_datasets(load_external=True, force_reload=False):
+    global _DATASETS
+    if _DATASETS is None or force_reload:
+        _DATASETS = {
+            "terms": load_csv_with_types(INTERNAL_ALL_TYPES_CSV),
+            "experimental": load_experimental_csv(INTERNAL_EXPERIMENTAL_CSV),
+            "body_armors": load_body_armors(INTERNAL_BODY_ARMORS_TXT),
+            "currency": [],
+            "tiers": ""
+        }
+        if load_external:
+            if os.path.exists(OUTPUT_CURRENCY_CSV):
+                _DATASETS["currency"] = load_currency_dataset(OUTPUT_CURRENCY_CSV)
+            if os.path.exists(OUTPUT_TIERS_CSV):
+                _DATASETS["tiers"] = load_tiers_dataset(OUTPUT_TIERS_CSV)
+    return _DATASETS

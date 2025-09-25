@@ -263,18 +263,3 @@ def render_item(item):
             draw.text((canvas_w // 2, y_name), line, font=name_font, fill=color_name, anchor="mm")
 
     return img
-
-# render_item(SimpleNamespace(
-#                 itemClass="",
-#                 itemRarity="rare",
-#                 itemName=SimpleNamespace(lines=["TESTING_NAME"]),
-#                 flavorText={"lines": []},
-#                 itemLevel=0,
-#                 affixes=[],
-#                 runes=[],
-#                 implicits=[],
-#                 enchants=[],
-#                 quality=0,
-#                 corrupted=False,
-#                 duplicate=False
-#             ))

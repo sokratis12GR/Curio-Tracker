@@ -2,83 +2,83 @@ import tkinter as tk
 from tkinter import ttk
 
 class Themes:
-    def __init__(self, root, style, console_output, menu, menu_indices, menu_btn=None):
+    def __init__(self, root, style, console_output=None, menu=None, menu_indices=None, menu_btn=None):
         self.root = root
         self.style = style
         self.console_output = console_output
         self.menu = menu
-        self.menu_indices = menu_indices
+        self.menu_indices = menu_indices or {}
         self.menu_btn = menu_btn
-        self.header_widgets = []  
+
         self.is_dark_mode = True
-        self.comboboxes = [] 
-        self.sliders = []
-        self.spinboxes = []
+        self.widgets = {
+            "buttons": [],
+            "comboboxes": [],
+            "sliders": [],
+            "spinboxes": [],
+            "entries": [],
+            "labels": [],
+            "headers": [],
+            "menus": [],
+            "frames": [],
+            "labelframes": []
+        }
 
     def set_header_widgets(self, header_widgets):
-        self.header_widgets = header_widgets
-    
-    def register_combobox(self, combobox):
-        self.comboboxes.append(combobox)
-    
-    def register_slider(self, slider: tk.Scale):
-        self.sliders.append(slider)
+        self.widgets["headers"].extend(header_widgets)
 
-    def register_spinbox(self, spinbox: tk.Spinbox):
-        self.spinboxes.append(spinbox)
+    def register(self, widget, widget_type=None):
+        if widget_type is None:
+            cls_name = widget.winfo_class()
+            if cls_name in ("TButton", "Button"):
+                widget_type = "buttons"
+            elif cls_name in ("TCombobox", "Combobox"):
+                widget_type = "comboboxes"
+            elif cls_name in ("Scale", "TScale"):
+                widget_type = "sliders"
+            elif cls_name in ("Spinbox", "TSpinbox"):
+                widget_type = "spinboxes"
+            elif cls_name in ("Entry", "TEntry"):
+                widget_type = "entries"
+            elif cls_name in ("TLabel", "Label"):
+                widget_type = "labels"
+            elif cls_name in ("TFrame", "Frame"):
+                widget_type = "frames"
+            elif cls_name in ("TLabelframe", "Labelframe"):
+                widget_type = "labelframes"
+            elif cls_name == "Menu":
+                widget_type = "menus"
+            else:
+                return
+        self.widgets[widget_type].append(widget)
 
     def style_combobox_popup(self, combobox, widget_bg, fg, accent):
         def fix_colors():
-            combobox.configure(background=widget_bg, foreground=fg)
             try:
                 combobox.tk.call("ttk::combobox::PopdownWindow", combobox, "f.l").configure(background=widget_bg)
             except Exception:
-                pass  # Some platforms may ignore
+                pass
+
         combobox.configure(postcommand=fix_colors)
 
     def apply_theme(self, is_dark_mode=True):
         self.is_dark_mode = is_dark_mode
 
-
-        # --- define colors ---
+        # --- Old colors ---
         if is_dark_mode:
-            app_bg = "#2f3136"
-            panel_bg = "#36393f"
-            widget_bg = "#40444b"
-            accent = "#5865f2"
-            fg = "#dcddde"
+            app_bg, panel_bg, widget_bg, accent, fg = "#2f3136", "#36393f", "#40444b", "#5865f2", "#dcddde"
         else:
-            app_bg = "#f4f6f8"
-            panel_bg = "#f4f6f8"
-            widget_bg = "white"
-            accent = "#0078d7"
-            fg = "black"
+            app_bg, panel_bg, widget_bg, accent, fg = "#f4f6f8", "#f4f6f8", "white", "#0078d7", "black"
 
-        # --- App background ---
+        # --- Root ---
         self.root.configure(bg=app_bg)
 
-        # --- Frames & Labels ---
+        # --- ttk Styles ---
         self.style.configure("TFrame", background=panel_bg)
         self.style.configure("TLabel", background=panel_bg, foreground=fg)
+        self.style.configure("TLabelframe", background=panel_bg)  # dark default
+        self.style.configure("TLabelframe.Label", background=panel_bg, foreground=fg)  # label text
         self.style.configure("Header.TLabel", background=panel_bg, foreground=fg)
-        self.style.configure("Popup.TFrame", background=panel_bg)
-        self.style.configure("Popup.TLabel", background=panel_bg, foreground=fg)
-        self.style.configure("Popup.TButton", background=widget_bg, foreground=fg)
-        self.style.map("Popup.TButton",
-                       background=[("active", accent)],
-                       foreground=[("active", "white")])
-
-        # --- Menu Button ---
-        if self.menu_btn and hasattr(self.menu_btn, "configure"):
-            self.menu_btn.configure(style="MenuButton.TMenubutton")
-        self.style.configure("MenuButton.TMenubutton",
-                             background=widget_bg,
-                             foreground=fg)
-        self.style.map("MenuButton.TMenubutton",
-                       background=[("active", accent)],
-                       foreground=[("active", "white")])
-
-        # --- Buttons, Entry, Combobox, Console ---
         self.style.configure("TButton", background=widget_bg, foreground=fg, relief="flat", padding=4)
         self.style.map("TButton", background=[("active", accent)], foreground=[("active", "white")])
         self.style.configure("TEntry", fieldbackground=widget_bg, foreground=fg, borderwidth=0, insertcolor=fg)
@@ -88,29 +88,91 @@ class Themes:
                        foreground=[("readonly", fg)],
                        selectbackground=[("readonly", accent)],
                        selectforeground=[("readonly", "white")])
+
+        # --- Buttons ---
+        for btn in self.widgets["buttons"]:
+            try:
+                btn.configure(bg=widget_bg, fg=fg, activebackground=accent)
+            except tk.TclError:
+                pass
+
+        # --- Entries ---
+        for entry in self.widgets["entries"]:
+            try:
+                entry.configure(bg=widget_bg, fg=fg, insertbackground=fg)
+            except tk.TclError:
+                pass
+
+        # --- Comboboxes ---
+        for cb in self.widgets["comboboxes"]:
+            try:
+                cb.configure(background=widget_bg, foreground=fg)
+            except tk.TclError:
+                pass
+            self.style_combobox_popup(cb, widget_bg, fg, accent)
+
+        # --- Sliders ---
+        for slider in self.widgets["sliders"]:
+            slider.configure(background=panel_bg, troughcolor=widget_bg,
+                             fg=fg, highlightbackground=panel_bg,
+                             activebackground=accent, bd=0, relief="flat")
+
+        # --- Spinboxes ---
+        for sb in self.widgets["spinboxes"]:
+            try:
+                if isinstance(sb, tk.Spinbox):
+                    sb.configure(bg=widget_bg, fg=fg, relief="flat",
+                                 highlightthickness=0, justify="center", insertbackground=fg)
+            except tk.TclError:
+                pass
+
+        # --- Headers ---
+        for lbl in self.widgets["headers"]:
+            try:
+                lbl.configure(bg=panel_bg, fg=fg)
+            except tk.TclError:
+                lbl_style = lbl.cget("style") or "Header.TLabel"
+                self.style.configure(lbl_style, background=panel_bg, foreground=fg)
+
+            if isinstance(lbl, tk.Label):
+                lbl.bind("<Enter>", lambda e, w=lbl: w.configure(bg=accent))
+                lbl.bind("<Leave>", lambda e, w=lbl: w.configure(bg=panel_bg))
+
+        # --- Frames ---
+        for frame in self.widgets["frames"]:
+            try:
+                frame.configure(bg=panel_bg)
+            except tk.TclError:
+                pass
+
+        # --- LabelFrames ---
+        for lf in self.widgets["labelframes"]:
+            try:
+                lf.configure(bg=panel_bg)
+            except tk.TclError:
+                pass
+
+        # --- Menus ---
+        for menu in self.widgets["menus"]:
+            for i in range(menu.index("end") + 1 if menu.index("end") is not None else 0):
+                menu.entryconfig(i, background=widget_bg, foreground=fg,
+                                 activebackground=accent, activeforeground="white")
+
+        # --- Menu button ---
+        if self.menu_btn and hasattr(self.menu_btn, "configure"):
+            self.menu_btn.configure(style="MenuButton.TMenubutton")
+            self.style.configure("MenuButton.TMenubutton", background=widget_bg, foreground=fg)
+            self.style.map("MenuButton.TMenubutton",
+                           background=[("active", accent)],
+                           foreground=[("active", "white")])
+
+        # --- Console Output ---
         if isinstance(self.console_output, tk.Text):
-            self.console_output.config(
-                bg=widget_bg,
-                fg=fg,
-                insertbackground=fg,
-                highlightthickness=0 if self.is_dark_mode else 1,
-                relief="flat" if self.is_dark_mode else "solid"
-            )
+            self.console_output.config(bg=widget_bg, fg=fg, insertbackground=fg,
+                                       highlightthickness=0 if self.is_dark_mode else 1,
+                                       relief="flat" if self.is_dark_mode else "solid")
 
-        # ----- LabelFrame (Info panel) -----
-        self.style.configure(
-            "Info.TLabelframe",
-            background=panel_bg,
-            borderwidth=1,
-            relief="groove"
-        )
-        self.style.configure(
-            "Info.TLabelframe.Label",
-            background=panel_bg,
-            foreground=fg
-        )
-
-        # ----- Treeview -----
+        # --- Treeview ---
         self.style.configure("Treeview",
                              background=widget_bg,
                              fieldbackground=widget_bg,
@@ -121,6 +183,7 @@ class Themes:
         self.style.map("Treeview",
                        background=[("selected", accent)],
                        foreground=[("selected", "white")])
+
         self.style.configure("Treeview.Heading",
                              background=panel_bg if is_dark_mode else "#e0e0e0",
                              foreground=fg,
@@ -129,35 +192,61 @@ class Themes:
                        background=[("active", accent), ("!active", panel_bg if is_dark_mode else "#e0e0e0")],
                        foreground=[("active", "white"), ("!active", fg)])
 
-        # --- Scrollbar ---
-        self.style.configure("Vertical.TScrollbar",
-                             gripcount=0,
-                             background=widget_bg,
-                             darkcolor=widget_bg,
-                             lightcolor=widget_bg,
-                             troughcolor=panel_bg,
-                             bordercolor=panel_bg,
-                             arrowcolor=fg,
-                             relief="flat")
+        self.style.configure(
+            "Toasts.TCheckbutton",
+            background=panel_bg,
+            foreground=fg,
+        )
+        self.style.map(
+            "Toasts.TCheckbutton",
+            background=[("active", accent)],
+            foreground=[("active", "white")],
+        )
 
-        self.style.map("Vertical.TScrollbar",
-                       background=[("active", accent)],
-                       troughcolor=[("!disabled", panel_bg)],
-                       arrowcolor=[("active", "white")])
+        # --- Scrollbars ---
+        self.style.configure(
+            "Vertical.TScrollbar",
+            gripcount=0,
+            background=widget_bg,
+            darkcolor=widget_bg,
+            lightcolor=widget_bg,
+            troughcolor=panel_bg,
+            bordercolor=panel_bg,
+            arrowcolor=fg,
+            relief="flat",
+        )
+        self.style.map(
+            "Vertical.TScrollbar",
+            background=[("active", accent)],
+            troughcolor=[("!disabled", panel_bg)],
+            arrowcolor=[("active", "white")],
+        )
+        self.style.configure(
+            "Horizontal.TScrollbar",
+            gripcount=0,
+            background=widget_bg,
+            darkcolor=widget_bg,
+            lightcolor=widget_bg,
+            troughcolor=panel_bg,
+            bordercolor=panel_bg,
+            arrowcolor=fg,
+            relief="flat",
+        )
+        self.style.map(
+            "Horizontal.TScrollbar",
+            background=[("active", accent)],
+            troughcolor=[("!disabled", panel_bg)],
+            arrowcolor=[("active", "white")],
+        )
 
-        self.style.configure("Horizontal.TScrollbar",
-                     gripcount=0,
-                     background=widget_bg,
-                     darkcolor=widget_bg,
-                     lightcolor=widget_bg,
-                     troughcolor=panel_bg,
-                     bordercolor=panel_bg,
-                     arrowcolor=fg,
-                     relief="flat")
-        self.style.map("Horizontal.TScrollbar",
-                       background=[("active", accent)],
-                       troughcolor=[("!disabled", panel_bg)],
-                       arrowcolor=[("active", "white")])
+        for cb in self.widgets["comboboxes"]:
+            try:
+                cb.configure(background=widget_bg, foreground=fg)
+            except tk.TclError:
+                pass
+            self.style_combobox_popup(cb, widget_bg, fg, accent)
+
+        # --- Spinbox ---
         self.style.configure(
             "TSpinbox",
             fieldbackground=widget_bg,
@@ -165,62 +254,59 @@ class Themes:
             foreground=fg,
             arrowcolor=fg,
         )
-        # --- Headers ---
-        for lbl in self.header_widgets:
-            lbl.configure(background=panel_bg, foreground=fg)
-            lbl.bind("<Enter>", lambda e, w=lbl: w.configure(background=accent))
-            lbl.bind("<Leave>", lambda e, w=lbl: w.configure(background=panel_bg))
 
-        # --- Checkbutton ---
         self.style.configure(
-            "TCheckbutton",
-            background=panel_bg,
+            "MenuButton.TMenubutton",
+            background=widget_bg,
             foreground=fg,
             relief="flat",
             padding=4
         )
         self.style.map(
-            "TCheckbutton",
+            "MenuButton.TMenubutton",
             background=[("active", accent)],
             foreground=[("active", "white")]
         )
 
-        # --- Menu checkbuttons ---
-        if self.menu_indices:
-            for col, index in self.menu_indices.items():
-                self.menu.entryconfig(index,
-                                      background=widget_bg,
-                                      foreground=fg,
-                                      activebackground=accent,
-                                      activeforeground="white")
+        self.style.configure(
+            "TSpinbox",
+            fieldbackground=widget_bg,
+            background=widget_bg,
+            foreground=fg,
+            arrowcolor=fg,
+        )
 
-        # --- Combobox popups ---
-        for cb in self.comboboxes:
-            self.style_combobox_popup(cb, widget_bg, fg, accent)
+        if self.menu_btn:
+            self.menu_btn.configure(style="MenuButton.TMenubutton")
 
-        # --- Sliders ---
-        for slider in self.sliders:
-            slider.configure(
-                background=panel_bg,
-                troughcolor=widget_bg,
-                fg=fg,
-                highlightbackground=panel_bg,
-                activebackground=accent,
-                bd=0,
-                relief="flat"
+        if self.menu and self.menu_indices:
+            for col, idx in self.menu_indices.items():
+                try:
+                    self.menu.entryconfig(
+                        idx,
+                        background=widget_bg,
+                        foreground=fg,
+                        activebackground=accent,
+                        activeforeground="white",
+                    )
+                except Exception:
+                    pass
+
+        if hasattr(self, 'tree_toggles') and self.tree_toggles:
+            self.tree_toggles.apply_theme(widget_bg, fg, accent)
+
+def style_combobox_popup(self, combobox, widget_bg, fg, accent):
+    def fix_colors():
+        try:
+            # configure the popdown list
+            combobox.tk.call("ttk::combobox::PopdownWindow", combobox, "f.l").configure(
+                background=widget_bg,
+                foreground=fg
             )
-            
-        for sb in self.spinboxes:
-            sb.configure(
-                bg=widget_bg,
-                fg=fg,
-                relief="flat",
-                highlightthickness=0,
-                justify="center",
-                insertbackground=fg
-            )
-        
+        except Exception:
+            pass
 
+    combobox.configure(postcommand=fix_colors)
 
 class ThemedMessageBox:
     def __init__(self, root, theme_manager):
@@ -250,6 +336,7 @@ class ThemedMessageBox:
 
         # Buttons
         result = {}
+
         def click(val):
             result['value'] = val
             popup.destroy()
@@ -282,5 +369,5 @@ class ThemedMessageBox:
         return self._show(title, message, icon="error")
 
     def askyesno(self, title, message):
-        result = self._show(title, message, buttons=("Yes","No"))
+        result = self._show(title, message, buttons=("Yes", "No"))
         return result == "Yes"

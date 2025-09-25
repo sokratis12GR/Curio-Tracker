@@ -5,9 +5,8 @@ from statistics import median
 import pandas as pd
 import requests
 
-import ocr_utils as utils
-from ocr_utils import load_csv
-from settings import LOCK_FILE, OUTPUT_CURRENCY_CSV, LEAGUE
+from config import LEAGUE
+from load_utils import INTERNAL_ALL_TYPES_CSV, get_datasets, OUTPUT_CURRENCY_CSV, LOCK_FILE
 from shared_lock import is_recent_run, update_lock
 
 # === CONFIG ===
@@ -16,25 +15,7 @@ MIN_SECONDS_BETWEEN_RUNS = 2 * 60 * 60  # 2 hours
 HEADERS = {"User-Agent": "fetch-poe-ninja-script/1.0"}
 VALID_TYPES = ["Currency", "Scarab", "Replica", "Replacement", "Experimental"]
 
-
-def get_resource_path(filename):
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_path, filename)
-
-
-def load_csv_with_types(file_path):
-    def parser(row):
-        if len(row) >= 2:
-            raw_term, type_name = row[0].strip(), row[1].strip()
-            return utils.smart_title_case(raw_term), type_name
-        return None
-
-    rows = load_csv(file_path, row_parser=parser)
-    return {term: type_name for term, type_name in rows if term}
-
-
-TERMS_CSV = get_resource_path("all_valid_heist_terms.csv")
-ITEMS_TYPE_MAP = load_csv_with_types(TERMS_CSV)
+ITEMS_TYPE_MAP = get_datasets()["terms"]
 
 ITEMS_TYPE_MAP["Chaos Orb"] = "Currency"
 
@@ -220,7 +201,7 @@ def fetch_all_items():
 # === WRAPPER FUNCTION TO CALL ===
 def run_fetch(force=False):
     if not force and is_recent_run(OUTPUT_CURRENCY_CSV):
-        print("[INFO] Last run <2 hours ago, skipping fetch.")
+        print("[INFO] Last run <2 hours ago, skipping currency values fetch.")
         return
 
     all_rows = fetch_all_items()
