@@ -231,8 +231,8 @@ def start_global_listener():
         def on_release(key):
             try:
                 pressed = frozenset(_current_keys)
-                if DEBUGGING:
-                    print(f"[DEBUG] Keys released: {[format_key(k) for k in pressed]}")
+                # if DEBUGGING:
+                #     print(f"[DEBUG] Keys released: {[format_key(k) for k in pressed]}")
 
                 for name, combo in hotkeys.items():
                     # Relaxed matching for cross-platform consistency

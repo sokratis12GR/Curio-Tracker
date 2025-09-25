@@ -10,7 +10,6 @@ exit_event = threading.Event()
 are_toasts_enabled = get_setting('Application', 'are_toasts_enabled', True)  # default: toasts enabled
 
 def handle_capture(root, tree_manager, controls):
-    tracker.validateAttempt(c.capturing_prompt)
     tracker.capture_once(root)
 
     if c.DEBUGGING:
@@ -35,7 +34,6 @@ def handle_snippet(root, tree_manager, controls):
             return
 
         def show_items():
-            tracker.validateAttempt(c.capturing_prompt)
             for item in items:
                 if not item.duplicate:
                     if are_toasts_enabled:
@@ -55,12 +53,11 @@ def handle_snippet(root, tree_manager, controls):
 
 
 def handle_layout_capture(root, tree_manager, controls):
-    tracker.validateAttempt(c.layout_prompt)
     tracker.capture_layout(root)
     root.after(0, controls.refresh_blueprint_info)
 
 def handle_exit(root, tree_manager=None, controls=None):
-    print(c.exiting_prompt)
+    tracker.log_message(c.exiting_prompt)
     exit_event.set()
     try:
         root.quit()
@@ -70,8 +67,9 @@ def handle_exit(root, tree_manager=None, controls=None):
     sys.exit(0)
 
 
-def handle_debugging_toggle(root=None, tree_manager=None, controls=None):
+def handle_debugging_toggle():
     c.DEBUGGING = not c.DEBUGGING
+    tracker.log_message(f"Debugging Mode: {"Enabled" if c.DEBUGGING else "Disabled"}")
 
 
 def register_handlers(root, tree_manager, controls):
@@ -80,5 +78,5 @@ def register_handlers(root, tree_manager, controls):
         'snippet': lambda: handle_snippet(root, tree_manager, controls),
         'layout_capture': lambda: handle_layout_capture(root, tree_manager, controls),
         'exit': lambda: handle_exit(root, tree_manager, controls),
-        'debug': lambda: handle_debugging_toggle(root, tree_manager, controls)
+        'debug': lambda: handle_debugging_toggle()
     }

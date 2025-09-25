@@ -28,7 +28,7 @@ DEFAULT_SETTINGS = {
         'exit_key': 'f3',
         'layout_capture_key': 'f5',
         'snippet_key': 'f4',
-        'debug_key': 'ctrl+alt+d'
+        'debug_key': 'alt+d'
     },
     'DEFAULT': {
         'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe',
@@ -80,6 +80,7 @@ settings = DEFAULT_SETTINGS
 
 # Enable DEBUGGING
 DEBUGGING = False
+OCR_DEBUGGING = False
 CSV_DEBUGGING = False
 
 LEAGUE = "Mercenaries"
@@ -126,6 +127,13 @@ logs_dir = "logs"
 saves_dir = "saved"
 csv_file_path = "saved/matches.csv"
 
+## File paths
+logs_file_name = "logs/tracker.log"
+settings_file_name = "user_settings.ini"
+lock_file_name = "fetch/last_run.lock"
+currency_fetch_file_name = "fetch/heist_item_currency_values.csv"
+tiers_fetch_file_name = "fetch/heist_item_tiers_data.csv"
+
 ### CSV Header Format -- Adjusted to support the format of the "PoE Curio Case Rates" Project: https://docs.google.com/spreadsheets/d/1dDDMRc3GAE4G0X-lJeLXSHaGtLLNf612nrFiOyCo0Vs/edit?gid=710775455#gid=710775455
 csv_record_header = "Record #"
 
@@ -164,13 +172,13 @@ snippet_txt_failed = "⚠️ Screenshot capture failed."
 listening_keybinds_txt = "Listening for keybinds... Press your exit key to stop."
 
 ## Matches Info
-matches_found = "\n✅ Matches found: "
+matches_found = "✅ Matches found: "
 stack_size_found = " - Stack Size: {}"
 matches_not_found = "❌ No matches found."
 
-capturing_prompt = "\n📸 Capturing screen..."
-layout_prompt = "\n📸 Capturing layout..."
-exiting_prompt = "\n👋 Exiting."
+capturing_prompt = "Capturing screen..."
+layout_prompt = "Capturing layout..."
+exiting_prompt = "👋 Exiting."
 
 # Time Duplicate values checker:
 time_column_index = 16  # 17th column of the .csv file contains the time var

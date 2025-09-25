@@ -104,11 +104,11 @@ def load_tiers_dataset(file_path: str, debugging=False) -> dict:
     rows = load_csv(file_path, row_parser=parser)
     return {term: data for term, data in rows if term}
 
-
-SETTINGS_PATH = get_data_path("user_settings.ini")
-LOCK_FILE = get_data_path("fetch/last_run.lock")
-OUTPUT_CURRENCY_CSV = get_data_path("fetch/heist_item_currency_values.csv")
-OUTPUT_TIERS_CSV = get_data_path("fetch/heist_item_tiers_data.csv")
+LOG_FILE = get_data_path(c.logs_file_name)
+SETTINGS_PATH = get_data_path(c.settings_file_name)
+LOCK_FILE = get_data_path(c.lock_file_name)
+OUTPUT_CURRENCY_CSV = get_data_path(c.currency_fetch_file_name)
+OUTPUT_TIERS_CSV = get_data_path(c.tiers_fetch_file_name)
 INTERNAL_ALL_TYPES_CSV = get_resource_path(c.file_all_valid_heist_terms)
 INTERNAL_EXPERIMENTAL_CSV = get_resource_path(c.file_experimental_items)
 INTERNAL_BODY_ARMORS_TXT = get_resource_path(c.file_body_armors)

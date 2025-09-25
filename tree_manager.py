@@ -187,10 +187,11 @@ class TreeManager:
         self._last_visible_iids.clear()
 
 
-    def delete_selected_items(self, event=None):
+    def delete_selected_items(self, item_name, event=None):
         selected = self.tree.selection()
         if not selected:
             return
+
 
         if len(selected) == 1:
             msg = "Are you sure you want to delete this record?"
@@ -202,7 +203,11 @@ class TreeManager:
             return
 
         for iid in selected:
-            self.modify_csv_record(iid, delete=True)
+            row_values = self.tree.item(iid)['values']
+
+            item_index = self.columns.index("item")
+            item_value = row_values[item_index]
+            self.modify_csv_record(iid, item_value, delete=True)
             self.tree.delete(iid)
             self.all_item_iids.discard(iid)
             self.original_img_cache.pop(iid, None)
@@ -292,6 +297,13 @@ class TreeManager:
             return
 
         item_type = getattr(item, "type", None)
+        if getattr(item, "enchants", None) and len(item.enchants) > 0:
+            item_text = "\n".join([str(e) for e in item.enchants])
+        else:
+            item_text = getattr(item, "itemName", "Unknown")
+            if hasattr(item_text, "lines"):
+                item_text = "\n".join([str(line) for line in item_text.lines])
+
         old_value = self.tree.set(row_id, col_name)
 
         # ---- STACK SIZE (only Currency/Scarab) ----
@@ -323,7 +335,7 @@ class TreeManager:
                     self.tree.set(row_id, "value", display_value)
                     self.tree.set(row_id, "numeric_value", numeric_value)
 
-                self.modify_csv_record(row_id, updates={"Stack Size": new_value})
+                self.modify_csv_record(row_id, item_text, updates={"Stack Size": new_value})
 
             edit_entry.bind("<Return>", save_stack)
             edit_entry.bind("<FocusOut>", save_stack)
@@ -343,12 +355,12 @@ class TreeManager:
                 if item:
                     setattr(item, "blueprint_type", new_value)
 
-                self.modify_csv_record(row_id, updates={"Blueprint Type": new_value})
+                self.modify_csv_record(row_id, item_text, updates={"Blueprint Type": new_value})
 
             combo.bind("<<ComboboxSelected>>", save_blueprint)
             combo.bind("<FocusOut>", save_blueprint)
 
-    def modify_csv_record(self, row_id, updates=None, delete=False):
+    def modify_csv_record(self, row_id, item_name, updates=None, delete=False):
         item = self.csv_row_map.get(row_id)
         if not item:
             return
@@ -358,7 +370,7 @@ class TreeManager:
             print("[WARN] Item has no Record #, cannot modify CSV")
             return
 
-        self.csv_manager.modify_record(record_number, updates=updates, delete=delete)
+        self.csv_manager.modify_record(record_number, item_name, updates=updates, delete=delete)
 
     # ---------- Sorting ----------
     def sort_tree(self, column):

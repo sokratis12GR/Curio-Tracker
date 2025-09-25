@@ -10,7 +10,6 @@ from types import SimpleNamespace
 import pytesseract
 import win32clipboard
 from PIL import ImageGrab
-from pytz.exceptions import InvalidTimeError
 
 import config as c
 

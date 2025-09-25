@@ -20,16 +20,13 @@ from PIL import ImageGrab
 from termcolor import colored
 
 import config as c
-import curio_currency_fetch as fetch_currency
-import curio_tiers_fetch as fetch_tiers
 import ocr_utils as utils
 import toasts
-from load_utils import get_datasets
+from config import csv_file_path
+from load_utils import get_datasets, LOG_FILE
 from ocr_utils import build_parsed_item
 
 datasets = get_datasets(force_reload=True)
-
-csv_file_path = c.csv_file_path
 
 # default values in case they only run area lvl 83 blueprints
 blueprint_area_level = c.default_bp_lvl
@@ -55,6 +52,16 @@ all_terms = set(term_types.keys())
 body_armors = datasets["body_armors"]
 
 
+def log_message(*messages, log_file: str = LOG_FILE, sep: str = " ", end: str = "\n"):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = sep.join(str(m) for m in messages)
+    log = f"[{timestamp}] {line}{end}"
+
+    print(log, end="")
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(log)
+
+
 def build_enchant_type_lookup(term_types):
     lookup = defaultdict(set)
     for raw_term, type_name in term_types.items():
@@ -69,7 +76,7 @@ enchant_type_lookup = build_enchant_type_lookup(term_types)
 def get_poe_bbox():
     windows = [w for w in gw.getWindowsWithTitle(c.target_application) if w.visible]
     if not windows:
-        print(c.not_found_target_txt)
+        log_message(c.not_found_target_txt)
         return None
     win = windows[0]
     return (win.left, win.top, win.left + win.width, win.top + win.height)
@@ -109,11 +116,12 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
 
     if c.DEBUGGING:
         print("Filtered image stats:", image_np_filtered.min(), image_np_filtered.max())
-        cv2.namedWindow("Filtered Mask", cv2.WINDOW_NORMAL)
-        cv2.imshow("Filtered Mask", image_np_filtered)
-        cv2.moveWindow("Filtered Mask", 100, 100)  # Put window at x=100, y=100 on screen
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        if c.OCR_DEBUGGING:
+            cv2.namedWindow("Filtered Mask", cv2.WINDOW_NORMAL)
+            cv2.imshow("Filtered Mask", image_np_filtered)
+            cv2.moveWindow("Filtered Mask", 100, 100)  # Put window at x=100, y=100 on screen
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
     return utils.smart_title_case(text), image_np
 
@@ -320,7 +328,7 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
             full_enchant_terms.add(term_title)
 
     if c.DEBUGGING and term_title in suppress_parts and term_title not in full_enchant_terms:
-        print(f"[Suppress] Skipping sub-part match: {term_title}")
+        log_message(f"[Suppress] Skipping sub-part match: {term_title}")
 
     ############################################################
     # Group candidates by term type and filter by match length #
@@ -393,7 +401,7 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
     return matched
 
 
-def process_text(text, allow_dupes=False, matched_terms=None) -> None:
+def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
     global stack_sizes, attempt
     results = []
 
@@ -446,14 +454,14 @@ def process_text(text, allow_dupes=False, matched_terms=None) -> None:
         print(highlighted)
 
     if results:
-        print(c.matches_found, results)
-        if non_dup_count % 5 == 0:
-            print("=" * 27)
+        log_message(c.matches_found, results)
+        # if non_dup_count % 5 == 0:
+        #     log_message("=" * 27)
         attempt = 1
     else:
         status = f"{c.matches_not_found} Attempt: #{attempt}"
-        sys.stdout.write('\r' + status + ' ' * 10)  # clear leftover chars
-        sys.stdout.flush()
+        toasts.show_message(root, status)
+        log_message(status + ' ' * 10)  # clear leftover chars
         attempt += 1
 
 
@@ -463,7 +471,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
 
     parsed_items = []
     matched_terms = get_matched_terms(text, allow_dupes)
-    process_text(text, allow_dupes, matched_terms)
+    process_text(root, text, allow_dupes, matched_terms)
 
     def format_row(record_number, term_title, item_type, stack_size, prefix=""):
         def maybe_add(fn):
@@ -540,7 +548,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                     parsed_items.append(item)
 
                     if c.DEBUGGING:
-                        print(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
+                        log_message(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
 
                     writer.writerow(format_row(record_number, term_title, item_type, stack_size))
 
@@ -549,9 +557,9 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                             format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
     except PermissionError as e:
         toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
-        print(f"[ERROR] PermissionError: {e}")
+        log_message(f"[ERROR] PermissionError: {e}")
     except OSError as e:
-        print(f"[ERROR] CSV write failed: {e}")
+        log_message(f"[ERROR] CSV write failed: {e}")
 
 
 LAST_RECORD_NUMBER = 0
@@ -586,18 +594,18 @@ def _parse_rows_from_csv(csv_file_path):
             rows = list(reader)
     except FileNotFoundError:
         if debug:
-            print(f"[DEBUG] CSV file '{csv_file_path}' not found.")
+            log_message(f"[DEBUG] CSV file '{csv_file_path}' not found.")
         return []
 
     if not rows:
         if debug:
-            print("[DEBUG] CSV file is empty.")
+            log_message("[DEBUG] CSV file is empty.")
         return []
 
     # Ensure every row has a Record #
     if "Record #" not in rows[0]:
         if debug:
-            print("[DEBUG] Adding missing 'Record #' column to rows")
+            log_message("[DEBUG] Adding missing 'Record #' column to rows")
         for i, row in enumerate(rows, start=1):
             row["Record #"] = str(i)
 
@@ -606,7 +614,7 @@ def _parse_rows_from_csv(csv_file_path):
 
 def upgrade_csv_with_record_numbers(file_path):
     if not os.path.exists(file_path):
-        print(f"[INFO] CSV file '{file_path}' not found. Skipping upgrade.")
+        log_message(f"[INFO] CSV file '{file_path}' not found. Skipping upgrade.")
         return
 
     with open(file_path, "r", encoding="utf-8") as f:
@@ -627,7 +635,7 @@ def upgrade_csv_with_record_numbers(file_path):
             writer = csv.writer(f)
             writer.writerows(upgraded_rows)
 
-        print(f"[INFO] Added 'Record #' column and generated IDs → {file_path}")
+        log_message(f"[INFO] Added 'Record #' column and generated IDs → {file_path}")
         return
 
     # Case 2: "Record #" exists → check for missing/empty values
@@ -640,7 +648,7 @@ def upgrade_csv_with_record_numbers(file_path):
     )
 
     if not needs_update:
-        print(f"[INFO] '{c.csv_record_header}' column already complete. No changes made.")
+        log_message(f"[INFO] '{c.csv_record_header}' column already complete. No changes made.")
         return
 
     # Case 3: Regenerate Record # column
@@ -656,10 +664,11 @@ def upgrade_csv_with_record_numbers(file_path):
         writer = csv.writer(f)
         writer.writerows(upgraded_rows)
 
-    print(f"[INFO] Refreshed missing '{c.csv_record_header}' values → {file_path}")
+    log_message(f"[INFO] Refreshed missing '{c.csv_record_header}' values → {file_path}")
 
 
 def init_csv():
+    log_message("Starting Heist Curio Tracker...")
     # Ensure the CSV file has Record # permanently
     upgrade_csv_with_record_numbers(c.csv_file_path)
 
@@ -704,7 +713,7 @@ def _parse_items_from_rows(rows):
             chaos_est = estimated_value.get("chaos")
             divine_est = estimated_value.get("divine")
             tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
-            duplicate = False # Just predefining
+            duplicate = False  # Just predefining
 
             # Build parsed item directly from CSV header values
             item = build_parsed_item(
@@ -728,7 +737,7 @@ def _parse_items_from_rows(rows):
 
             if debug:
                 print(f"[DEBUG] Added item: {item.itemName.lines[0]}, "
-                      f"duplicate={duplicate}, rarity={item.itemRarity}")
+                            f"duplicate={duplicate}, rarity={item.itemRarity}")
 
     return parsed_items
 
@@ -770,6 +779,7 @@ def load_all_parsed_items_from_csv():
 # If a match is found, it will save it in the .csv  #
 #####################################################
 def capture_once(root):
+    validate_attempt(c.capturing_prompt)
     bbox = get_poe_bbox()
     if not bbox:
         return
@@ -782,13 +792,14 @@ def capture_once(root):
 
 
 def capture_snippet(root, on_done):
+    validate_attempt(c.capturing_prompt)
     system = platform.system().lower()
 
     if system == "windows":
         pyperclip.copy("")
 
         subprocess.Popen(["explorer", "ms-screenclip:"])
-        print("[INFO] Waiting for user to complete snip...")
+        log_message("[INFO] Waiting for user to complete snip...")
 
         img = None
         for _ in range(60):  # up to 30 seconds
@@ -798,7 +809,7 @@ def capture_snippet(root, on_done):
                 break
 
         if img is None:
-            print(c.snippet_txt_failed)
+            log_message(c.snippet_txt_failed)
             return
 
         screenshot_np = np.array(img)
@@ -848,13 +859,13 @@ def capture_snippet(root, on_done):
             x1, y1 = min(start_x, end_x), min(start_y, end_y)
             x2, y2 = max(start_x, end_x), max(start_y, end_y)
             if x2 - x1 < 5 or y2 - y1 < 5:
-                print(c.snippet_txt_too_small)
+                log_message(c.snippet_txt_too_small)
                 return
 
             bbox = (x1, y1, x2, y2)
             screenshot_np = np.array(ImageGrab.grab(bbox))
             if screenshot_np is None or screenshot_np.size == 0:
-                print(c.snippet_txt_failed)
+                log_message(c.snippet_txt_failed)
                 return
 
             full_text, filtered = ocr_from_image(screenshot_np, scale=2)
@@ -879,6 +890,8 @@ def capture_snippet(root, on_done):
 def capture_layout(root):
     global blueprint_area_level, blueprint_layout, attempt
 
+    validate_attempt(c.layout_prompt)
+
     screenshot = pyautogui.screenshot()
     full_width, full_height = screenshot.size
 
@@ -888,7 +901,8 @@ def capture_layout(root):
     text = utils.smart_title_case(pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6'))
     if c.DEBUGGING:
         print("OCR Text:\n", text)
-        cropped.show()
+        if c.OCR_DEBUGGING:
+            cropped.show()
 
     # Search for layout keyword
     found_layout = None
@@ -908,24 +922,22 @@ def capture_layout(root):
     if found_layout and area_level:
         blueprint_area_level = area_level
         blueprint_layout = found_layout
-        toasts.show_message(root, f"Blueprint Layout: {blueprint_layout}\nArea Level: {blueprint_area_level}")
-        print("\n========== Result ==========")
-        print(f"Layout: {found_layout}")
-        print(f"Area Level: {area_level}")
-        print("=" * 28)
+        result_layout = f"Blueprint Layout: {blueprint_layout}"
+        result_area_level = f"Area Level: {blueprint_area_level}"
+        toasts.show_message(root, result_layout + "\n" + result_area_level)
+        log_message(result_layout + result_area_level)
         attempt = 1
     else:
-        status = f"❌ Not found, try again. Attempt: #{attempt}"
-        toasts.show_message(root, "Couldn't capture layout, try again")
-        sys.stdout.write('\r' + status + ' ' * 20)
-        sys.stdout.flush()
+        status = f"❌ Couldn't capture layout, try again. Attempt: #{attempt}"
+        toasts.show_message(root, status)
+        log_message(root, status)
         attempt += 1
 
 
-def validateAttempt(print_text):
+def validate_attempt(print_text):
     global attempt
     if attempt == 1:
-        print(print_text)
+        log_message(print_text)
 
 
 if __name__ == "__main__":

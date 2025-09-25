@@ -1,6 +1,9 @@
 import csv
+import datetime
 from pathlib import Path
-from load_utils import load_csv
+
+from curio_tracker import log_message
+from load_utils import load_csv, LOG_FILE
 from config import csv_file_path
 
 class CSVManager:
@@ -18,25 +21,25 @@ class CSVManager:
             writer.writeheader()
             writer.writerows(rows)
 
-    def modify_record(self, record_number, updates=None, delete=False):
+    def modify_record(self, record_number, item_name, updates=None, delete=False):
         updates = updates or {}
 
         if not self.csv_path.exists():
-            print(f"[WARN] CSV not found: {self.csv_path}")
+            log_message(f"[WARN] CSV not found: {self.csv_path}")
             return
 
         with self.csv_path.open("r", encoding="utf-8") as f:
             lines = f.read().splitlines()
 
         if not lines:
-            print(f"[WARN] CSV is empty: {self.csv_path}")
+            log_message(f"[WARN] CSV is empty: {self.csv_path}")
             return
 
         header = lines[0].split(",")
         try:
             rec_idx = header.index("Record #")
         except ValueError:
-            print("[ERROR] CSV missing 'Record #' column")
+            log_message("[ERROR] CSV missing 'Record #' column")
             return
 
         updated_lines = [lines[0]]  # keep header
@@ -55,9 +58,9 @@ class CSVManager:
                             if field_idx >= len(cols):
                                 cols += [""] * (field_idx - len(cols) + 1)
                             cols[field_idx] = str(new_value)
-                            print(f"[INFO] Record #{record_number} | {field_name} → {new_value}")
+                            log_message(f"[INFO] Record #{record_number}: '{item_name}' | {field_name} → {new_value}")
                         except ValueError:
-                            print(f"[ERROR] CSV missing column '{field_name}'")
+                            log_message(f"[ERROR] CSV missing column '{field_name}'")
                     updated = True
             updated_lines.append(",".join(cols))
 
@@ -65,7 +68,7 @@ class CSVManager:
             with self.csv_path.open("w", encoding="utf-8") as f:
                 f.write("\n".join(updated_lines) + "\n")
             action = "Deleted" if delete else "Updated"
-            print(f"[INFO] {action} Record #{record_number} in CSV")
+            log_message(f"[INFO] {action} Record #{record_number}: '{item_name}' in CSV")
         else:
             action = "delete" if delete else "update"
-            print(f"[INFO] No matching record found to {action} for Record #{record_number}")
+            log_message(f"[INFO] No matching record found to {action} for Record #{record_number}: '{item_name}'")
