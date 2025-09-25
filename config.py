@@ -82,7 +82,7 @@ settings = DEFAULT_SETTINGS
 DEBUGGING = False
 OCR_DEBUGGING = False
 CSV_DEBUGGING = False
-ENABLE_LOGGING = False
+ENABLE_LOGGING = True
 
 LEAGUE = "Mercenaries"
 poe_league = "3.26"
