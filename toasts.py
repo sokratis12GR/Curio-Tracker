@@ -1,13 +1,17 @@
 import tkinter as tk
+
 from PIL import ImageTk
-from renderer import render_item
+
 import ocr_utils as utils
+from logger import log_message
+from renderer import render_item
 
 IMAGE_COL_WIDTH = 200
 ROW_HEIGHT = 40
 TOASTS = []
 TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
 TOASTS_DURATION = 5
+
 
 def reposition(root):
     screen_w = root.winfo_screenwidth()
@@ -74,7 +78,7 @@ def create_toast(root, message, image=None, duration=None):
         try:
             toast.destroy()
         except Exception as e:
-            print(e)
+            log_message(e)
             pass
         reposition(root)
 

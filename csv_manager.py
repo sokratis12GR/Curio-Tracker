@@ -2,8 +2,8 @@ import csv
 from pathlib import Path
 
 from config import csv_file_path
-from curio_tracker import log_message
 from load_utils import load_csv
+from logger import log_message
 
 
 class CSVManager:

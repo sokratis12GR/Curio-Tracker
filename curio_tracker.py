@@ -3,7 +3,6 @@ import os
 import platform
 import re
 import subprocess
-import sys
 import time
 import tkinter as tk
 from collections import defaultdict
@@ -23,7 +22,8 @@ import config as c
 import ocr_utils as utils
 import toasts
 from config import csv_file_path, ENABLE_LOGGING
-from load_utils import get_datasets, LOG_FILE
+from load_utils import get_datasets
+from logger import log_message
 from ocr_utils import build_parsed_item
 
 datasets = get_datasets(force_reload=True)
@@ -50,16 +50,6 @@ experimental_items = datasets["experimental"]
 term_types = datasets["terms"]
 all_terms = set(term_types.keys())
 body_armors = datasets["body_armors"]
-
-
-def log_message(*messages, log_file: str = LOG_FILE, sep: str = " ", end: str = "\n"):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = sep.join(str(m) for m in messages)
-    log = f"[{timestamp}] {line}{end}"
-
-    print(log, end="")
-    with open(log_file, "a", encoding="utf-8") as f:
-        f.write(log)
 
 
 def build_enchant_type_lookup(term_types):
@@ -745,7 +735,7 @@ def _parse_items_from_rows(rows):
 
             if debug:
                 print(f"[DEBUG] Added item: {item.itemName.lines[0]}, "
-                            f"duplicate={duplicate}, rarity={item.itemRarity}")
+                      f"duplicate={duplicate}, rarity={item.itemRarity}")
 
     return parsed_items
 
@@ -932,7 +922,6 @@ def capture_layout(root):
     # Report results
     # if c.DEBUGGING:
 
-    import toasts
     if found_layout and area_level:
         blueprint_area_level = area_level
         blueprint_layout = found_layout
