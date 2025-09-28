@@ -10,6 +10,9 @@ from logger import log_message
 
 ################################################################################
 # Sets the Tesseract OCR location to either PATH, Bundled or User Set Location #
+# Note: For Bundled make sure Tesseract-OCR is available locally while in dev  #
+# inside `./tesseract/` (should contain the entire installation) so that it    #
+# is bundled correctly and the user will not need to have it installed locally #
 ################################################################################
 def set_tesseract_path():
     tesseract_bin = None
