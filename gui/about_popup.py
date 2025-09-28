@@ -1,12 +1,47 @@
+import sys
 import tkinter as tk
-from tkinter import ttk
 import webbrowser
+from tkinter import ttk
 
-import load_utils
+
+def get_dev_version():
+    try:
+        with open("version.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("StringStruct('ProductVersion'"):
+                    start = line.rfind("'")
+                    end = line.rfind("'", 0, start)
+                    if start > end:
+                        return line[end + 1 : start]
+    except FileNotFoundError:
+        return "0.0.0.0"
+    return "0.0.0.0"
+
+DEV_VERSION = get_dev_version()
+
+
+def get_version():
+    if getattr(sys, "frozen", False):
+        exe_path = sys.executable
+        try:
+            import win32api
+            info = win32api.GetFileVersionInfo(exe_path, "\\")
+
+            lang, codepage = win32api.GetFileVersionInfo(exe_path, "\\VarFileInfo\\Translation")[0]
+            str_info_path = f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductVersion"
+
+            product_version = win32api.GetFileVersionInfo(exe_path, str_info_path)
+            return product_version
+        except Exception:
+            return DEV_VERSION
+    else:
+        return DEV_VERSION
+
+VERSION = get_version()
 
 
 def show_about_popup(root, theme_manager):
-    app_version = "0.2.4.0"
     popup = tk.Toplevel(root)
     popup.title("About Curio Tracker")
     popup.resizable(False, False)
@@ -25,7 +60,7 @@ def show_about_popup(root, theme_manager):
     # Author info
     ttk.Label(frm, text="Heist Curio Tracker", font=("Segoe UI", 14, "bold")).pack(pady=(0, 5))
     ttk.Label(frm, text="Author: Sokratis Fotkatzkis").pack()
-    ttk.Label(frm, text=f"Version: {app_version}").pack(pady=(0, 10))
+    ttk.Label(frm, text=f"Version: {VERSION}").pack(pady=(0, 10))
 
     # ---- GitHub button ----
     import load_utils
