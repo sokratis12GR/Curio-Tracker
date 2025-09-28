@@ -166,16 +166,16 @@ file_all_valid_heist_terms = "all_valid_heist_terms.csv"
 file_body_armors = "body_armors.txt"
 file_experimental_items = "experimental_items.csv"
 target_application = "Path of Exile"
-not_found_target_txt = "❌ Path of Exile window not found."
-not_found_target_snippet_txt = "❌ Path of Exile window not found. Exiting snippet."
+not_found_target_txt = "Path of Exile window not found."
+not_found_target_snippet_txt = "Path of Exile window not found. Exiting snippet."
 snippet_txt_too_small = "⚠️ Selected region is too small or invalid."
 snippet_txt_failed = "⚠️ Screenshot capture failed."
 listening_keybinds_txt = "Listening for keybinds... Press your exit key to stop."
 
 ## Matches Info
-matches_found = "✅ Matches found: "
+matches_found = "Matches found: "
 stack_size_found = " - Stack Size: {}"
-matches_not_found = "❌ No matches found."
+matches_not_found = "No matches found."
 
 capturing_prompt = "Capturing screen..."
 layout_prompt = "Capturing layout..."
@@ -190,7 +190,7 @@ time_column_index = 16  # 17th column of the .csv file contains the time var
 ### Lower
 replica_l_hue = 5
 replica_l_sat = 100
-replica_l_val = 80  # 100
+replica_l_val = 80
 ### Upper
 replica_u_hue = 25
 replica_u_sat = 255
@@ -198,18 +198,18 @@ replica_u_val = 255
 
 ## Rare / Experimental: #D9C850
 ### Lower
-rare_l_hue = 20  # 20
-rare_l_sat = 50  # 80
-rare_l_val = 160  # 150
+rare_l_hue = 20
+rare_l_sat = 50
+rare_l_val = 160
 ### Upper
-rare_u_hue = 40  # 40
-rare_u_sat = 255  # 255
-rare_u_val = 255  # 255
+rare_u_hue = 40
+rare_u_sat = 255
+rare_u_val = 255
 
 ## Currency Item: #AA9E82
 ### Lower
 currency_l_hue = 15
-currency_l_sat = 0  # 20
+currency_l_sat = 0
 currency_l_val = 90
 ### Upper
 currency_u_hue = 45
@@ -228,10 +228,10 @@ scarab_u_val = 255
 
 ## Enchants (blue-gray): #5C7E9D
 ### Lower
-enchant_l_hue = 95  # 95
-enchant_l_sat = 15  # 15
-enchant_l_val = 70  # 70
+enchant_l_hue = 95
+enchant_l_sat = 15
+enchant_l_val = 70
 ### Upper
-enchant_u_hue = 130  # 130
-enchant_u_sat = 90  # 90
-enchant_u_val = 255  # 240
+enchant_u_hue = 130
+enchant_u_sat = 90
+enchant_u_val = 255

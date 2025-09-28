@@ -3,6 +3,7 @@ import requests
 
 from config import LEAGUE
 from load_utils import OUTPUT_TIERS_CSV, LOCK_FILE
+from logger import log_message
 from shared_lock import is_recent_run, update_lock
 
 # === CONFIG ===
@@ -39,12 +40,12 @@ def fetch_curios():
 # === WRAPPER FUNCTION TO CALL ===
 def run_fetch_curios(force=False):
     if not force and is_recent_run(OUTPUT_TIERS_CSV, MIN_SECONDS_BETWEEN_RUNS):
-        print("[INFO] Last run <12 hours ago, skipping tiers fetch.")
+        log_message("[INFO] Last run <12 hours ago, skipping tiers fetch.")
         return
 
     curios = fetch_curios()
     if not curios:
-        print("[WARN] No curios fetched.")
+        log_message("[WARN] No curios fetched.")
         return
 
     for entry in curios:
@@ -54,9 +55,9 @@ def run_fetch_curios(force=False):
 
     df = pd.DataFrame(curios)
     df.to_csv(OUTPUT_TIERS_CSV, index=False)
-    print(f"[INFO] Saved curios CSV: {OUTPUT_TIERS_CSV} with {len(df)} rows")
+    log_message(f"[INFO] Saved curios CSV: {OUTPUT_TIERS_CSV} with {len(df)} rows")
 
     update_lock(OUTPUT_TIERS_CSV)
-    print(f"[INFO] Lock file updated: {LOCK_FILE}")
+    log_message(f"[INFO] Lock file updated: {LOCK_FILE}")
 
 # run_fetch_curios(True)

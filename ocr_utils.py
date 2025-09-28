@@ -1,71 +1,13 @@
 import math
-import os
 import re
-import shutil
-import sys
 from datetime import datetime
 from difflib import get_close_matches
 from types import SimpleNamespace
 
-import pytesseract
 import win32clipboard
 from PIL import ImageGrab
 
 import config as c
-
-
-################################################################################
-# Sets the Tesseract OCR location to either PATH, Bundled or User Set Location #
-################################################################################
-def set_tesseract_path():
-    tesseract_bin = None
-
-    # 1. Attempt to find from PATH
-    path_from_system = shutil.which("tesseract")
-    if path_from_system and os.path.isfile(path_from_system):
-        tesseract_bin = path_from_system
-
-    # 2. If not in PATH, attempt PyInstaller bundled executable
-    if not tesseract_bin and hasattr(sys, "_MEIPASS"):
-        bundled_path = os.path.join(sys._MEIPASS, "tesseract", "tesseract.exe")
-        if os.path.isfile(bundled_path):
-            tesseract_bin = bundled_path
-
-    # 3. Local dev fallback
-    if not tesseract_bin:
-        dev_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "tesseract",
-            "tesseract.exe"
-        )
-        if os.path.isfile(dev_path):
-            tesseract_bin = dev_path
-
-    # 4. Last fallback: hardcoded/config path
-    if not tesseract_bin or not os.path.isfile(tesseract_bin):
-        tesseract_bin = os.path.normpath(c.pytesseract_path)
-
-    # --- Apply and verify ---
-    pytesseract.pytesseract.tesseract_cmd = tesseract_bin
-    if c.DEBUGGING:
-        print("[DEBUG] Tesseract binary set to:", tesseract_bin)
-
-    tesseract_dir = os.path.dirname(tesseract_bin)
-    tessdata_dir = os.path.join(tesseract_dir, "tessdata")
-
-    if os.path.isdir(tessdata_dir):
-        os.environ["TESSDATA_PREFIX"] = tessdata_dir
-        if c.DEBUGGING:
-            print("[DEBUG] TESSDATA_PREFIX set to:", tessdata_dir)
-        eng_path = os.path.join(tessdata_dir, "eng.traineddata")
-        if os.path.isfile(eng_path):
-            if c.DEBUGGING:
-                print("[DEBUG] eng.traineddata found:", eng_path)
-        else:
-            if c.DEBUGGING:
-                print("[ERROR] eng.traineddata NOT found in tessdata!")
-    else:
-        print("[ERROR] tessdata directory not found at:", tessdata_dir)
 
 
 def grab_new_clipboard_image(timeout=30):

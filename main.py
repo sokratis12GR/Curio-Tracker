@@ -12,6 +12,7 @@ from gui.toggles import TreeToggles, ToastsToggles
 from gui.treeview import setup_tree
 from keybinds_handlers import register_handlers
 from load_utils import get_resource_path
+from set_tesseract_path import set_tesseract_path
 from settings import get_setting, set_setting
 from themes import Themes
 from tree_manager import TreeManager
@@ -24,7 +25,7 @@ import config as c
 def main():
     fetch_currency.run_fetch()
     fetch_tiers.run_fetch_curios()
-    utils.set_tesseract_path()
+    set_tesseract_path()
     tracker.init_csv()
     c.initialize_settings()
 

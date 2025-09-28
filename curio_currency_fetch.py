@@ -5,6 +5,7 @@ import requests
 
 from config import LEAGUE
 from load_utils import get_datasets, OUTPUT_CURRENCY_CSV, LOCK_FILE
+from logger import log_message
 from shared_lock import is_recent_run, update_lock
 
 # === CONFIG ===
@@ -199,24 +200,24 @@ def fetch_all_items():
 # === WRAPPER FUNCTION TO CALL ===
 def run_fetch(force=False):
     if not force and is_recent_run(OUTPUT_CURRENCY_CSV):
-        print("[INFO] Last run <2 hours ago, skipping currency values fetch.")
+        log_message("[INFO] Last run <2 hours ago, skipping currency values fetch.")
         return
 
     all_rows = fetch_all_items()
     if not all_rows:
-        print("[WARN] No data fetched.")
+        log_message("[WARN] No data fetched.")
         return
 
     df = pd.DataFrame(all_rows)
     df.to_csv(OUTPUT_CURRENCY_CSV, index=False, float_format="%.2f")
-    print(f"[INFO] Saved CSV: {OUTPUT_CURRENCY_CSV}")
+    log_message(f"[INFO] Saved CSV: {OUTPUT_CURRENCY_CSV}")
 
     update_lock(OUTPUT_CURRENCY_CSV)
-    print(f"[INFO] Lock file updated: {LOCK_FILE}")
+    log_message(f"[INFO] Lock file updated: {LOCK_FILE}")
 
     summary = df.groupby("Category").size().to_dict()
-    print("[INFO] Fetched items summary per category:")
+    log_message("[INFO] Fetched items summary per category:")
     for cat, count in summary.items():
-        print(f"  {cat}: {count} items")
+        log_message(f"  {cat}: {count} items")
 
 # run_fetch(True)

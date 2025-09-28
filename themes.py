@@ -308,25 +308,22 @@ def style_combobox_popup(self, combobox, widget_bg, fg, accent):
 
     combobox.configure(postcommand=fix_colors)
 
+
 class ThemedMessageBox:
     def __init__(self, root, theme_manager):
         self.root = root
         self.theme_manager = theme_manager
 
-    def _show(self, title, message, icon=None, buttons=("OK",)):
+    def _show(self, title, message, icon=None, buttons=("OK",), **kwargs):
         popup = tk.Toplevel(self.root)
         popup.title(title)
         popup.resizable(False, False)
 
         # Use theme colors
         if self.theme_manager.is_dark_mode:
-            bg = "#36393f"
-            fg = "#dcddde"
-            accent = "#5865f2"
+            bg, fg, accent = "#36393f", "#dcddde", "#5865f2"
         else:
-            bg = "#f4f6f8"
-            fg = "black"
-            accent = "#0078d7"
+            bg, fg, accent = "#f4f6f8", "black", "#0078d7"
 
         popup.configure(bg=bg)
 
@@ -359,15 +356,16 @@ class ThemedMessageBox:
 
         return result.get('value', None)
 
-    def showinfo(self, title, message):
-        return self._show(title, message, icon="info")
+    # Public wrappers that accept **kwargs
+    def showinfo(self, title, message, **kwargs):
+        return self._show(title, message, icon="info", **kwargs)
 
-    def showwarning(self, title, message):
-        return self._show(title, message, icon="warning")
+    def showwarning(self, title, message, **kwargs):
+        return self._show(title, message, icon="warning", **kwargs)
 
-    def showerror(self, title, message):
-        return self._show(title, message, icon="error")
+    def showerror(self, title, message, **kwargs):
+        return self._show(title, message, icon="error", **kwargs)
 
-    def askyesno(self, title, message):
-        result = self._show(title, message, buttons=("Yes", "No"))
+    def askyesno(self, title, message, **kwargs):
+        result = self._show(title, message, buttons=("Yes", "No"), **kwargs)
         return result == "Yes"

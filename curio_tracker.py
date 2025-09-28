@@ -21,7 +21,7 @@ from termcolor import colored
 import config as c
 import ocr_utils as utils
 import toasts
-from config import csv_file_path, ENABLE_LOGGING
+from config import csv_file_path
 from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
@@ -42,9 +42,6 @@ listener_ref = None
 parsed_items = []
 
 CURRENCY_DATASET = datasets["currency"]
-# print(f"[DEBUG] Currency dataset loaded: {len(datasets.get('currency', {}))} entries")
-# for key, value in CURRENCY_DATASET.items():
-#     print(f"{key}: {value}")
 TIERS_DATASET = datasets["tiers"]
 experimental_items = datasets["experimental"]
 term_types = datasets["terms"]
@@ -66,11 +63,10 @@ enchant_type_lookup = build_enchant_type_lookup(term_types)
 def get_poe_bbox():
     windows = [w for w in gw.getWindowsWithTitle(c.target_application) if w.visible]
     if not windows:
-        if ENABLE_LOGGING:
-            log_message(c.not_found_target_txt)
+        log_message(c.not_found_target_txt)
         return None
     win = windows[0]
-    return (win.left, win.top, win.left + win.width, win.top + win.height)
+    return win.left, win.top, win.left + win.width, win.top + win.height
 
 
 #############################################################################
@@ -158,7 +154,7 @@ def filter_item_text(image_np, fullscreen=False):
 
 
 ####################################################################
-# Checks for a match of x/y and if currency applies the stack size # 
+# Checks for a match of x/y and if currency applies the stack size #
 ####################################################################
 def extract_currency_value(text, matched_term, term_types):
     if term_types.get(matched_term) not in {c.CURRENCY_TYPE, c.SCARAB_TYPE}:
@@ -212,7 +208,7 @@ def extract_currency_value(text, matched_term, term_types):
 
 
 #################################################
-# Check if a term or combo term is in the text. # 
+# Check if a term or combo term is in the text. #
 #################################################
 def is_term_match(term, text):
     def normalize_lines(text):
@@ -262,21 +258,23 @@ recent_terms = []
 def is_duplicate_recent_entry(value, path=csv_file_path):
     current_time = datetime.now()
 
+    # Check in-memory recent terms first
     for term, ts in recent_terms:
         if term == value and (current_time - ts).total_seconds() < c.time_last_dupe_check_seconds:
             return True
 
     # Check CSV for older duplicates
     if os.path.exists(path):
-        with open(path, newline='') as f:
-            reader = csv.reader(f)
+        with open(path, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
             for row in reader:
-                if len(row) <= c.time_column_index:
+                ts_str = row.get(c.csv_time_header)
+                if not ts_str:
                     continue
                 try:
-                    entry_time = datetime.strptime(row[c.time_column_index], "%Y-%m-%d_%H-%M-%S")
+                    entry_time = datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S")
                     if (current_time - entry_time).total_seconds() < c.time_last_dupe_check_seconds:
-                        if value in row:
+                        if value in row.values():  # Check if value exists anywhere in the row
                             return True
                 except ValueError:
                     continue
@@ -289,7 +287,7 @@ def mark_term_as_captured(value):
 
 
 #################################################
-# Gets all matched terms from the list          # 
+# Gets all matched terms from the list          #
 #################################################
 def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
     global non_dup_count
@@ -312,13 +310,13 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
     suppress_parts = set()
     full_enchant_terms = set()
     for term_title, _ in all_candidates:
-        if ";" in term_title and ((term_types.get(term_title) in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE))):
+        if ";" in term_title and (term_types.get(term_title) in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE)):
             part1, part2 = [utils.smart_title_case(p.strip()) for p in term_title.split(";", 1)]
             suppress_parts.add(part1)
             suppress_parts.add(part2)
             full_enchant_terms.add(term_title)
 
-    if ENABLE_LOGGING and term_title in suppress_parts and term_title not in full_enchant_terms:
+    if term_title in suppress_parts and term_title not in full_enchant_terms:
         log_message(f"[Suppress] Skipping sub-part match: {term_title}")
 
     ############################################################
@@ -445,14 +443,12 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
         print(highlighted)
 
     if results:
-        if ENABLE_LOGGING:
-            log_message(c.matches_found, results)
+        log_message(c.matches_found, results)
         attempt = 1
     else:
         status = f"{c.matches_not_found} Attempt: #{attempt}"
         toasts.show_message(root, status)
-        if ENABLE_LOGGING:
-            log_message(status)  # clear leftover chars
+        log_message(status)  # clear leftover chars
         attempt += 1
 
 
@@ -538,8 +534,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                     )
                     parsed_items.append(item)
 
-                    if ENABLE_LOGGING:
-                        log_message(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
+                    log_message(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
 
                     writer.writerow(format_row(record_number, term_title, item_type, stack_size))
 
@@ -548,11 +543,9 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                             format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
     except PermissionError as e:
         toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
-        if ENABLE_LOGGING:
-            log_message(f"[ERROR] PermissionError: {e}")
+        log_message(f"[ERROR] PermissionError: {e}")
     except OSError as e:
-        if ENABLE_LOGGING:
-            log_message(f"[ERROR] CSV write failed: {e}")
+        log_message(f"[ERROR] CSV write failed: {e}")
 
 
 LAST_RECORD_NUMBER = 0
@@ -580,25 +573,21 @@ def get_next_record_number():
 
 
 def _parse_rows_from_csv(csv_file_path):
-    debug = c.DEBUGGING or ENABLE_LOGGING
     try:
         with open(csv_file_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
     except FileNotFoundError:
-        if debug:
-            log_message(f"[DEBUG] CSV file '{csv_file_path}' not found.")
+        log_message(f"[DEBUG] CSV file '{csv_file_path}' not found.")
         return []
 
     if not rows:
-        if debug:
-            log_message("[DEBUG] CSV file is empty.")
+        log_message("[DEBUG] CSV file is empty.")
         return []
 
     # Ensure every row has a Record #
     if "Record #" not in rows[0]:
-        if debug:
-            log_message("[DEBUG] Adding missing 'Record #' column to rows")
+        log_message("[DEBUG] Adding missing 'Record #' column to rows")
         for i, row in enumerate(rows, start=1):
             row["Record #"] = str(i)
 
@@ -607,8 +596,7 @@ def _parse_rows_from_csv(csv_file_path):
 
 def upgrade_csv_with_record_numbers(file_path):
     if not os.path.exists(file_path):
-        if ENABLE_LOGGING:
-            log_message(f"[INFO] CSV file '{file_path}' not found. Skipping upgrade.")
+        log_message(f"[INFO] CSV file '{file_path}' not found. Skipping upgrade.")
         return
 
     with open(file_path, "r", encoding="utf-8") as f:
@@ -629,8 +617,7 @@ def upgrade_csv_with_record_numbers(file_path):
             writer = csv.writer(f)
             writer.writerows(upgraded_rows)
 
-        if ENABLE_LOGGING:
-            log_message(f"[INFO] Added 'Record #' column and generated IDs → {file_path}")
+        log_message(f"[INFO] Added 'Record #' column and generated IDs → {file_path}")
         return
 
     # Case 2: "Record #" exists → check for missing/empty values
@@ -643,8 +630,7 @@ def upgrade_csv_with_record_numbers(file_path):
     )
 
     if not needs_update:
-        if ENABLE_LOGGING:
-            log_message(f"[INFO] '{c.csv_record_header}' column already complete. No changes made.")
+        log_message(f"[INFO] '{c.csv_record_header}' column already complete. No changes made.")
         return
 
     # Case 3: Regenerate Record # column
@@ -660,19 +646,18 @@ def upgrade_csv_with_record_numbers(file_path):
         writer = csv.writer(f)
         writer.writerows(upgraded_rows)
 
-    if ENABLE_LOGGING:
-        log_message(f"[INFO] Refreshed missing '{c.csv_record_header}' values → {file_path}")
+    log_message(f"[INFO] Refreshed missing '{c.csv_record_header}' values → {file_path}")
 
 
 def init_csv():
-    if ENABLE_LOGGING:
-        log_message("Starting Heist Curio Tracker...")
+    log_message("Starting Heist Curio Tracker...")
     # Ensure the CSV file has Record # permanently
     upgrade_csv_with_record_numbers(c.csv_file_path)
 
 
 def _parse_items_from_rows(rows):
     debug = c.DEBUGGING
+    parsed_items = []
 
     column_to_type = {
         "Trinket": c.TRINKET_TYPE,
@@ -759,8 +744,12 @@ def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
         return _parse_items_from_rows(last_rows)
 
     newest_ts = max(t for t in timestamps if t is not None)
-    recent_rows = [row for row, ts in zip(last_rows, timestamps)
-                   if ts and (newest_ts - ts) <= timedelta(seconds=within_seconds)]
+    recent_rows = [
+        row for row, ts in zip(last_rows, timestamps)
+        if ts and (newest_ts - ts) <= timedelta(seconds=within_seconds)
+    ]
+
+    recent_rows = recent_rows[-max_items:]
 
     return _parse_items_from_rows(recent_rows)
 
@@ -777,8 +766,7 @@ def load_all_parsed_items_from_csv():
 # If a match is found, it will save it in the .csv  #
 #####################################################
 def capture_once(root):
-    if ENABLE_LOGGING:
-        validate_attempt(c.capturing_prompt)
+    validate_attempt(c.capturing_prompt)
     bbox = get_poe_bbox()
     if not bbox:
         return
@@ -799,8 +787,7 @@ def capture_snippet(root, on_done):
 
         subprocess.Popen(["explorer", "ms-screenclip:"])
 
-        if ENABLE_LOGGING:
-            log_message("[INFO] Waiting for user to complete snip...")
+        log_message("[INFO] Waiting for user to complete snip...")
 
         img = None
         for _ in range(60):  # up to 30 seconds
@@ -810,8 +797,7 @@ def capture_snippet(root, on_done):
                 break
 
         if img is None:
-            if ENABLE_LOGGING:
-                log_message(c.snippet_txt_failed)
+            log_message(c.snippet_txt_failed)
             return
 
         screenshot_np = np.array(img)
@@ -861,15 +847,13 @@ def capture_snippet(root, on_done):
             x1, y1 = min(start_x, end_x), min(start_y, end_y)
             x2, y2 = max(start_x, end_x), max(start_y, end_y)
             if x2 - x1 < 5 or y2 - y1 < 5:
-                if ENABLE_LOGGING:
-                    log_message(c.snippet_txt_too_small)
+                log_message(c.snippet_txt_too_small)
                 return
 
             bbox = (x1, y1, x2, y2)
             screenshot_np = np.array(ImageGrab.grab(bbox))
             if screenshot_np is None or screenshot_np.size == 0:
-                if ENABLE_LOGGING:
-                    log_message(c.snippet_txt_failed)
+                log_message(c.snippet_txt_failed)
                 return
 
             full_text, filtered = ocr_from_image(screenshot_np, scale=2)
@@ -920,22 +904,18 @@ def capture_layout(root):
     area_level = match.group(1) if match else c.default_bp_lvl
 
     # Report results
-    # if c.DEBUGGING:
-
     if found_layout and area_level:
         blueprint_area_level = area_level
         blueprint_layout = found_layout
         result_layout = f"Blueprint Layout: {blueprint_layout}"
         result_area_level = f"Area Level: {blueprint_area_level}"
         toasts.show_message(root, result_layout + "\n" + result_area_level)
-        if ENABLE_LOGGING:
-            log_message(result_layout + result_area_level)
+        log_message(result_layout + " | " + result_area_level)
         attempt = 1
     else:
-        status = f"❌ Couldn't capture layout, try again. Attempt: #{attempt}"
+        status = f"Couldn't capture layout, try again. Attempt: #{attempt}"
         toasts.show_message(root, status)
-        if ENABLE_LOGGING:
-            log_message(root, status)
+        log_message(status)
         attempt += 1
 
 

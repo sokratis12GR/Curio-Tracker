@@ -1,4 +1,3 @@
-import bisect
 import threading
 import tkinter as tk
 from datetime import datetime, timedelta
@@ -8,7 +7,7 @@ from PIL import Image, ImageTk
 from pytz import InvalidTimeError
 
 import ocr_utils as utils
-from config import IMAGE_COL_WIDTH, ROW_HEIGHT, layout_keywords, csv_file_path
+from config import IMAGE_COL_WIDTH, ROW_HEIGHT, layout_keywords
 from csv_manager import CSVManager
 from gui.custom_hours_popup import CustomHoursPopup
 from gui.treeview import tree_columns
@@ -110,23 +109,6 @@ class TreeManager:
         self.item_time_map[item_key] = item_time_obj
         display_time = item_time_obj.strftime("%d %b %Y - %H:%M") if item_time_obj else "Unknown"
 
-        # # ---- Sorting ----
-        # entry = (item_time_obj, item_key)
-        #
-        # if item_time_obj is not None:
-        #     # Get only known times for bisect
-        #     known_times = [t for t, _ in self.sorted_item_keys if t is not None]
-        #     if self.sort_reverse.get("time"):
-        #         rev_known = list(reversed(known_times))
-        #         index = len(known_times) - bisect.bisect_left(rev_known, item_time_obj)
-        #     else:
-        #         index = bisect.bisect_left(known_times, item_time_obj)
-        #     self.sorted_item_keys.insert(index, entry)
-        # else:
-        #     # Unknown timestamp → append at end of sorted keys
-        #     index = len(self.sorted_item_keys)
-        #     self.sorted_item_keys.append(entry)
-
         chaos_value = getattr(item, "chaos_value", "")
         item_type = getattr(item, "type", "N/A")
 
@@ -170,7 +152,8 @@ class TreeManager:
         self.global_item_tracker.append({
             "iid": iid,
             "csv_index": len(self.global_item_tracker),
-            "name": item_name_str
+            "name": item_name_str,
+            "item_obj": item
         })
 
         if render_image:
@@ -185,13 +168,12 @@ class TreeManager:
         self.sorted_item_keys.clear()
         self.item_time_map.clear()
         self._last_visible_iids.clear()
-
+        self.global_item_tracker.clear()
 
     def delete_selected_items(self, item_name, event=None):
         selected = self.tree.selection()
         if not selected:
             return
-
 
         if len(selected) == 1:
             msg = "Are you sure you want to delete this record?"
@@ -245,13 +227,13 @@ class TreeManager:
             if reverse_load:
                 all_items = list(reversed(all_items))
 
-            self.tree.after(0, self._add_items_in_batches, all_items, 200, 0, False, post_callback)
+            self.tree.after(50, self._add_items_in_batches, all_items, 200, 0, False, post_callback)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def load_latest_items(self, tracker):
         self.clear_tree()
-        parsed = tracker.load_recent_parsed_items_from_csv(max_items=5)
+        parsed = tracker.load_recent_parsed_items_from_csv()
         print(f"[DEBUG] Loaded {len(parsed)} items")  # <--- check this
         if not parsed:
             return

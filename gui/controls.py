@@ -263,8 +263,7 @@ class LeftFrameControls:
             tree_manager=self.tree_manager,
             tracker=self.tracker,
             theme_manager=self.theme_manager
-        )
-        custom_loader.run()
+        ).run()
         self.update_total_items_count()
 
     def load_all_data_wrapper(self):
@@ -277,8 +276,10 @@ class LeftFrameControls:
         return self.tree_manager.all_item_iids
 
     def update_total_items_count(self):
-        count = len(self.tree_manager.all_item_iids)
-        self.widgets['total_items_label'].config(text=f"Total: {count}")
+        label = self.widgets.get('total_items_label')
+        if label and label.winfo_exists():
+            count = len(self.tree_manager.all_item_iids)
+            label.config(text=f"Total: {count}")
 
     def get_current_row(self):
         return self.row_index
