@@ -31,6 +31,7 @@ datas = [
     ('shared_lock.py', '.'),
     ('themes.py', '.'),
     ('toasts.py', '.'),
+    ('logger.py', '.'),
     ('tree_manager.py', '.'),
     ('csv_manager.py', '.'),
     ('tree_utils.py', '.'),
