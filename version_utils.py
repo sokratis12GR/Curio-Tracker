@@ -17,23 +17,22 @@ def get_dev_version() -> str:
     return "0.0.0.0"
 
 
-def get_version() -> str:
+def get_version():
     dev_version = get_dev_version()
-
     if getattr(sys, "frozen", False):
-        # Running as frozen exe
         exe_path = sys.executable
         try:
             import win32api
             info = win32api.GetFileVersionInfo(exe_path, "\\")
-            lang, codepage = info['VarFileInfo']['Translation'][0]
+
+            lang, codepage = win32api.GetFileVersionInfo(exe_path, "\\VarFileInfo\\Translation")[0]
             str_info_path = f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductVersion"
+
             product_version = win32api.GetFileVersionInfo(exe_path, str_info_path)
             return product_version
         except Exception:
             return dev_version
     else:
-        # Running as script
         return dev_version
 
 
