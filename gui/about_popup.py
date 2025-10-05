@@ -2,44 +2,7 @@ import sys
 import tkinter as tk
 import webbrowser
 from tkinter import ttk
-
-
-def get_dev_version():
-    try:
-        with open("version.txt", "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("StringStruct('ProductVersion'"):
-                    start = line.rfind("'")
-                    end = line.rfind("'", 0, start)
-                    if start > end:
-                        return line[end + 1 : start]
-    except FileNotFoundError:
-        return "0.0.0.0"
-    return "0.0.0.0"
-
-DEV_VERSION = get_dev_version()
-
-
-def get_version():
-    if getattr(sys, "frozen", False):
-        exe_path = sys.executable
-        try:
-            import win32api
-            info = win32api.GetFileVersionInfo(exe_path, "\\")
-
-            lang, codepage = win32api.GetFileVersionInfo(exe_path, "\\VarFileInfo\\Translation")[0]
-            str_info_path = f"\\StringFileInfo\\{lang:04X}{codepage:04X}\\ProductVersion"
-
-            product_version = win32api.GetFileVersionInfo(exe_path, str_info_path)
-            return product_version
-        except Exception:
-            return DEV_VERSION
-    else:
-        return DEV_VERSION
-
-VERSION = get_version()
-
+from version_utils import VERSION
 
 def show_about_popup(root, theme_manager):
     popup = tk.Toplevel(root)
