@@ -35,6 +35,8 @@ datas = [
     ('tree_manager.py', '.'),
     ('csv_manager.py', '.'),
     ('tree_utils.py', '.'),
+    ('version_utils.py', '.'),
+    ('update_checker.py', '.'),
 ]
 
 # ---- Add all files from /gui ----

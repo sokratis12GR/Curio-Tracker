@@ -1,6 +1,7 @@
 import tkinter as tk
 
 from gui import about_popup, keybinds_popup  # your popup modules
+from update_checker import check_for_updates
 
 
 def create_settings_menu(root, theme_manager, toggle_theme_callback, update_info_callback):
@@ -21,7 +22,11 @@ def create_settings_menu(root, theme_manager, toggle_theme_callback, update_info
         command=lambda: about_popup.show_about_popup(root, theme_manager)
     )
     settings_menu.add_separator()
+    settings_menu.add_command(
+        label="Check for Updates",
+        command=lambda: check_for_updates(root, theme_manager)
+    )
+    settings_menu.add_separator()
     settings_menu.add_command(label="Exit", command=root.destroy)
 
     return menu_bar
-
