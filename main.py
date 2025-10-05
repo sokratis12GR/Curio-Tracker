@@ -1,9 +1,11 @@
 import tkinter as tk
 from tkinter import ttk
 
+import curio_currency_fetch as fetch_currency
 import curio_keybinds
+import curio_tiers_fetch as fetch_tiers
 import curio_tracker as tracker
-from config import ROW_HEIGHT
+from config import ROW_HEIGHT, DEBUGGING, initialize_settings
 from gui.controls import LeftFrameControls
 from gui.info_frame import InfoPanel
 from gui.layout import create_layout
@@ -16,18 +18,14 @@ from set_tesseract_path import set_tesseract_path
 from settings import get_setting, set_setting
 from themes import Themes
 from tree_manager import TreeManager
-import curio_currency_fetch as fetch_currency
-import curio_tiers_fetch as fetch_tiers
-import ocr_utils as utils
 
-import config as c
 
 def main():
     fetch_currency.run_fetch()
     fetch_tiers.run_fetch_curios()
     set_tesseract_path()
     tracker.init_csv()
-    c.initialize_settings()
+    initialize_settings()
 
     root = tk.Tk()
     root.title("Heist Curio Tracker")
@@ -117,6 +115,17 @@ def main():
 
     curio_keybinds.init_from_settings()
     curio_keybinds.start_global_listener()
+
+    try:
+        import inputs
+        if inputs.devices.gamepads:
+            curio_keybinds.start_controller_thread()
+        else:
+            if DEBUGGING:
+                print("[INFO] No controller detected. Skipping controller thread.")
+    except Exception as e:
+        if DEBUGGING:
+            print(f"[WARN] Could not initialize controller thread: {e}")
 
     theme_manager.apply_theme(is_dark_mode=is_dark_mode)
 

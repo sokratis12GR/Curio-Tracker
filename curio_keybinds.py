@@ -1,10 +1,26 @@
 import threading
+import time
 import traceback
 
+import inputs
 from pynput import keyboard
 
 from config import DEFAULT_SETTINGS, DEBUGGING
 from settings import get_setting, set_setting, write_settings
+
+# ---------------- Controller map ----------------
+CONTROLLER_MAP = {
+    "BTN_SOUTH": "pad_a",
+    "BTN_EAST": "pad_b",
+    "BTN_NORTH": "pad_y",
+    "BTN_WEST": "pad_x",
+    "BTN_TL": "pad_lb",
+    "BTN_TR": "pad_rb",
+    "BTN_SELECT": "pad_back",
+    "BTN_START": "pad_start",
+    "BTN_THUMBL": "pad_ls",
+    "BTN_THUMBR": "pad_rs",
+}
 
 
 # ---------------- Keybinds ----------------
@@ -67,7 +83,6 @@ def get_display_hotkey(name):
 def normalize_key(evt_key):
     try:
         if isinstance(evt_key, keyboard.Key):
-            # Map left/right variants to single key
             if evt_key in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r, keyboard.Key.ctrl):
                 return keyboard.Key.ctrl
             elif evt_key in (keyboard.Key.shift_l, keyboard.Key.shift_r, keyboard.Key.shift):
@@ -84,6 +99,10 @@ def normalize_key(evt_key):
         if DEBUGGING:
             print(f"[WARN] Failed to normalize key: {evt_key}")
     return None
+
+
+def normalize_button(event_code):
+    return CONTROLLER_MAP.get(event_code)
 
 
 def parse_hotkey(hotkey_str):
@@ -103,6 +122,8 @@ def parse_hotkey(hotkey_str):
             elif p.startswith('f') and p[1:].isdigit():
                 keys.add(getattr(keyboard.Key, p))
             elif len(p) == 1 and p.isprintable():
+                keys.add(p)
+            elif p in CONTROLLER_MAP.values():
                 keys.add(p)
             else:
                 keys.add(getattr(keyboard.Key, p))
@@ -138,6 +159,46 @@ def init_from_settings():
         print("[INFO] Keybinds loaded from settings.")
 
 
+# ---------------- Controller listener ----------------
+def controller_listener():
+    if DEBUGGING:
+        print("[INFO] Controller listener started.")
+
+    gamepads = inputs.devices.gamepads
+    if not gamepads:
+        if DEBUGGING:
+            print("[WARN] No controller detected.")
+        return
+
+    gamepad = gamepads[0]
+
+    while True:
+        try:
+            events = gamepad.read()
+            for event in events:
+                if event.ev_type == "Key" and event.state == 1:
+                    btn = normalize_button(event.code)
+                    if not btn:
+                        continue
+                    pressed = frozenset([btn])
+                    for name, combo in hotkeys.items():
+                        if combo.issubset(pressed):
+                            handler = handlers.get(name)
+                            if handler:
+                                if DEBUGGING:
+                                    print(f"[INFO] Triggering handler '{name}' from controller")
+                                handler()
+                            break
+        except inputs.UnpluggedError:
+            if DEBUGGING:
+                print("[WARN] Controller unplugged.")
+            return
+        except Exception:
+            if DEBUGGING:
+                print(traceback.format_exc())
+        time.sleep(0.01)
+
+
 # ---------------- Recording listener ----------------
 def start_recording_popup(index, button_list, root, update_info_labels):
     global _recording_listener, _recording_index, _current_keys, _global_listener
@@ -152,6 +213,22 @@ def start_recording_popup(index, button_list, root, update_info_labels):
         _recording_index = index
         _current_keys = []
 
+    def finish_recording():
+        global _recording_index, _current_keys
+        if _recording_index is None:
+            return  # already finished/cancelled
+
+        if len(_current_keys) >= 1:
+            combo_str = '+'.join(format_key(k) for k in _current_keys)
+            btn = button_list[_recording_index]
+            btn.after(0, lambda b=btn, t=combo_str: b.config(text=t))
+            update_keybind(keybinds[_recording_index][2], combo_str)
+            update_info_labels()
+
+        _current_keys.clear()
+        _recording_index = None
+        start_global_listener()
+
     def on_press(key):
         try:
             k = normalize_key(key)
@@ -165,26 +242,44 @@ def start_recording_popup(index, button_list, root, update_info_labels):
                 print(traceback.format_exc())
 
     def on_release(key):
-        global _recording_index, _current_keys
-        try:
-            if len(_current_keys) >= 1:
-                combo_str = '+'.join(format_key(k) for k in _current_keys)
-                btn = button_list[_recording_index]
-                btn.after(0, lambda b=btn, t=combo_str: b.config(text=t))
-                update_keybind(keybinds[_recording_index][2], combo_str)
-                update_info_labels()
-            _current_keys.clear()
-            _recording_index = None
-            start_global_listener()
-        except Exception:
-            if DEBUGGING:
-                print(traceback.format_exc())
+        finish_recording()
         return False
 
     _recording_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     _recording_listener.start()
+
+    def controller_record_loop():
+        global _recording_index, _current_keys
+        if DEBUGGING:
+            print("[INFO] Recording controller input...")
+        if not inputs.devices.gamepads:
+            if DEBUGGING:
+                print("[WARN] No controller detected.")
+            return
+        gamepad = inputs.devices.gamepads[0]
+
+        while _recording_index is not None:
+            try:
+                for event in gamepad.read():
+                    if event.ev_type == "Key" and event.state == 1:
+                        btn = normalize_button(event.code)
+                        if btn:
+                            _current_keys.append(btn)
+                            finish_recording()
+                            return
+            except inputs.UnpluggedError:
+                if DEBUGGING:
+                    print("[WARN] Controller unplugged.")
+                return
+            except Exception:
+                if DEBUGGING:
+                    print(traceback.format_exc())
+            time.sleep(0.01)
+
+    threading.Thread(target=controller_record_loop, daemon=True).start()
+
     if DEBUGGING:
-        print("[INFO] Recording keys... Press combo, then release. ESC to cancel.")
+        print("[INFO] Recording keys or controller buttons... ESC to cancel.")
 
 
 def cancel_recording_popup(button_list=None):
@@ -232,17 +327,13 @@ def start_global_listener():
         def on_release(key):
             try:
                 pressed = frozenset(_current_keys)
-                # if DEBUGGING:
-                #     print(f"[DEBUG] Keys released: {[format_key(k) for k in pressed]}")
-
                 for name, combo in hotkeys.items():
-                    # Relaxed matching for cross-platform consistency
                     if combo.issubset(pressed):
                         handler = handlers.get(name)
                         if handler:
                             try:
                                 if DEBUGGING:
-                                    print(f"[INFO] Triggering handler '{name}'")
+                                    print(f"[INFO] Triggering handler '{name}' from keyboard")
                                 handler()
                             except Exception:
                                 if DEBUGGING:
@@ -257,7 +348,7 @@ def start_global_listener():
         _global_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
         _global_listener.start()
         if DEBUGGING:
-            print("[INFO] Global listener started.")
+            print("[INFO] Global keyboard listener started.")
 
 
 def stop_global_listener():
@@ -275,3 +366,8 @@ def stop_global_listener():
 
 # ---------------- Initialize ----------------
 init_from_settings()
+
+def start_controller_thread():
+    t = threading.Thread(target=controller_listener, daemon=True)
+    t.start()
+    return t
