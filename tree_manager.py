@@ -66,7 +66,7 @@ class TreeManager:
         self.col_vars = {}  # track visibility of each column
         self.toggle_img_btn = None
 
-    def add_item_to_tree(self, item, render_image=False):
+    def add_item_to_tree(self, item, render_image=False, insert_at_top=True):
 
         item_name_str = get_item_name_str(item)
         record_number = getattr(item, "record_number", None)
@@ -88,12 +88,7 @@ class TreeManager:
             self.original_img_cache[item_key] = img.copy()
 
         # ---- Item text ----
-        if getattr(item, "enchants", None) and len(item.enchants) > 0:
-            item_text = "\n".join([str(e) for e in item.enchants])
-        else:
-            item_text = getattr(item, "itemName", "Unknown")
-            if hasattr(item_text, "lines"):
-                item_text = "\n".join([str(line) for line in item_text.lines])
+        item_text = utils.parse_item_name(item)
 
         # ---- Parse timestamp ----
         item_time_obj = getattr(item, "time", None)
@@ -145,7 +140,11 @@ class TreeManager:
         values = tuple(values_map.get(col, "") for col in self.columns)
 
         # Insert into Treeview
-        self.tree.insert("", 0, iid=iid, image="", values=values)
+        if insert_at_top:
+            self.tree.insert("", 0, iid=iid, image="", values=values)
+        else:
+            self.tree.insert("", "end", iid=iid, image="", values=values)
+
         self.all_item_iids.add(iid)
 
         # ---- Track globally ----
@@ -199,9 +198,10 @@ class TreeManager:
 
     def _add_items_in_batches(self, items, batch_size=200, start_index=0, render_images=False, post_callback=None):
         end_index = min(start_index + batch_size, len(items))
+        batch = items[start_index:end_index]
 
-        for i in range(start_index, end_index):
-            self.add_item_to_tree(items[i], render_image=render_images)
+        for item in batch:
+            self.add_item_to_tree(item, render_image=render_images, insert_at_top=False)
 
         if end_index < len(items):
             self.tree.after(
@@ -216,18 +216,25 @@ class TreeManager:
         else:
             self.update_visible_images()
             self.filter_tree_by_time()
-            self.sort_tree("record")
             if post_callback:
                 post_callback()
 
     def load_all_items_threaded(self, tracker, post_callback=None):
+        self.clear_tree()
+
         def worker():
             all_items = tracker.load_all_parsed_items_from_csv()
-            reverse_load = self.sort_reverse.get("time", True)
-            if reverse_load:
-                all_items = list(reversed(all_items))
+            all_items.sort(key=lambda item: getattr(item, "time", datetime.min), reverse=True)
 
-            self.tree.after(50, self._add_items_in_batches, all_items, 200, 0, False, post_callback)
+            self.tree.after(
+                50,
+                self._add_items_in_batches,
+                all_items,
+                200,
+                0,
+                False,
+                post_callback
+            )
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -415,16 +422,19 @@ class TreeManager:
         selected_time = self.time_filter_var.get()
         now = datetime.now()
 
+        # Collect iids that should be visible
+        visible_iids = []
+
         for iid in self.all_item_iids:
             if not self.tree.exists(iid) or self.tree.parent(iid) != "":
                 continue
 
-            # --- Search match ---
+            # Search match
             values = self.tree.item(iid, "values")
             text = " ".join(str(v).lower() for v in values)
             matches_search = search_query in text if search_query else True
 
-            # --- Time match ---
+            # Time match
             dt = self.item_time_map.get(iid)
             matches_time = False
             if dt is None:
@@ -456,10 +466,20 @@ class TreeManager:
                         self.open_custom_hours_popup()
                     return
 
-            # --- Reattach / detach ---
             if matches_search and matches_time:
-                self.tree.reattach(iid, "", "end")
-            else:
+                visible_iids.append((dt or datetime.min, iid))
+
+        # Sort visible rows by timestamp descending
+        visible_iids.sort(key=lambda x: x[0], reverse=True)
+
+        # Reattach in correct order
+        for _, iid in visible_iids:
+            self.tree.reattach(iid, "", "end")
+
+        # Detach invisible rows
+        invisible_iids = set(self.all_item_iids) - {iid for _, iid in visible_iids}
+        for iid in invisible_iids:
+            if self.tree.exists(iid):
                 self.tree.detach(iid)
 
     def open_custom_hours_popup(self):

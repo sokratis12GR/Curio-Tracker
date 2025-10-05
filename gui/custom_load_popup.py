@@ -57,7 +57,6 @@ class CustomLoader:
             self.tree_manager.update_visible_images()
             self.tree_manager.filter_tree_by_time()
             self.controls.update_total_items_count()
-            self.tree_manager.sort_tree("record")
             self.msgbox.showinfo(
                 "Load Entries",
                 f"Loaded {len(items)} entries successfully."
