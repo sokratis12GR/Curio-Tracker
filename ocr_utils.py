@@ -360,6 +360,15 @@ def parse_timestamp(ts_str):
     return datetime.min
 
 
+def parse_item_name(item) -> str:
+    if getattr(item, "enchants", None) and len(item.enchants) > 0:
+        item_text = "\n".join([str(e) for e in item.enchants])
+    else:
+        item_text = getattr(item, "itemName", "Unknown")
+        if hasattr(item_text, "lines"):
+            item_text = "\n".join([str(line) for line in item_text.lines])
+    return item_text
+
 #########################################################################
 #                                                                       #
 #        Builds the Item for the Image Rendering via CSV / OCR          #
