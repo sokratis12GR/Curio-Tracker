@@ -37,8 +37,8 @@ class LeftFrameControls:
         self._add_separator()
         self._setup_buttons()
         self._add_separator()
-        self._setup_player_info()
-        self._setup_league()
+        # self._setup_player_info()
+        # self._setup_league()
         self._setup_blueprint_type()
         self._setup_area_level()
         self._add_separator()
@@ -122,47 +122,47 @@ class LeftFrameControls:
         separator.grid(row=self.row_index, column=0, columnspan=2, sticky="ew", pady=(10, 10))
         self.row_index += 1
 
-    # --- Player Info
-    def _setup_player_info(self):
-        lbl = ttk.Label(self.parent, text="PoE Player:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
-        self.theme_manager.register(lbl)
-        self.header_widgets.append(lbl)
-
-        entry = ttk.Entry(self.parent, textvariable=self.vars['poe_player'], width=20)
-        entry.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-        self.theme_manager.register(entry)
-        self.vars['poe_player'].trace_add("write", self.update_tracker_poe_player)
-        self.widgets['poe_player_entry'] = entry
-        self.row_index += 1
-
-    def update_tracker_poe_player(self, *args):
-        if self.updating_from_tracker:
-            return
-        value = self.vars['poe_player'].get()
-        self.tracker.poe_user = value
-        set_setting("User", "poe_user", value)
-
-    # --- League
-    def _setup_league(self):
-        lbl = ttk.Label(self.parent, text="League:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
-        self.theme_manager.register(lbl)
-        self.header_widgets.append(lbl)
-
-        cb = ttk.Combobox(self.parent, textvariable=self.vars['league'], values=league_versions, width=20)
-        cb.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-        self.theme_manager.register(cb)
-        self.vars['league'].trace_add("write", self.update_tracker_league)
-        self.widgets['league_cb'] = cb
-        self.row_index += 1
-
-    def update_tracker_league(self, *args):
-        if self.updating_from_tracker:
-            return
-        value = self.vars['league'].get()
-        self.tracker.league_version = value
-        set_setting("User", "poe_league", value)
+    # # --- Player Info
+    # def _setup_player_info(self):
+    #     lbl = ttk.Label(self.parent, text="PoE Player:")
+    #     lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
+    #     self.theme_manager.register(lbl)
+    #     self.header_widgets.append(lbl)
+    #
+    #     entry = ttk.Entry(self.parent, textvariable=self.vars['poe_player'], width=20)
+    #     entry.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
+    #     self.theme_manager.register(entry)
+    #     self.vars['poe_player'].trace_add("write", self.update_tracker_poe_player)
+    #     self.widgets['poe_player_entry'] = entry
+    #     self.row_index += 1
+    #
+    # def update_tracker_poe_player(self, *args):
+    #     if self.updating_from_tracker:
+    #         return
+    #     value = self.vars['poe_player'].get()
+    #     self.tracker.poe_user = value
+    #     set_setting("User", "poe_user", value)
+    #
+    # # --- League
+    # def _setup_league(self):
+    #     lbl = ttk.Label(self.parent, text="League Version:")
+    #     lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
+    #     self.theme_manager.register(lbl)
+    #     self.header_widgets.append(lbl)
+    #
+    #     cb = ttk.Combobox(self.parent, textvariable=self.vars['league'], values=league_versions, width=20)
+    #     cb.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
+    #     self.theme_manager.register(cb)
+    #     self.vars['league'].trace_add("write", self.update_tracker_league)
+    #     self.widgets['league_cb'] = cb
+    #     self.row_index += 1
+    #
+    # def update_tracker_league(self, *args):
+    #     if self.updating_from_tracker:
+    #         return
+    #     value = self.vars['league'].get()
+    #     self.tracker.league_version = value
+    #     set_setting("User", "poe_league", value)
 
     # --- Blueprint Type
     def _setup_blueprint_type(self):
@@ -225,18 +225,19 @@ class LeftFrameControls:
         self.widgets['search_entry'] = search_entry
         self.row_index += 1
 
-        # Counter below search bar
-        self.vars['search_count'] = tk.StringVar(value="Found: 0")
-        search_count_label = ttk.Label(self.parent, textvariable=self.vars['search_count'])
-        search_count_label.grid(row=self.row_index, column=0, columnspan=2, sticky="w", pady=(0, 5))
-        self.theme_manager.register(search_count_label)
-        self.widgets['search_count_label'] = search_count_label
-        self.row_index += 1
 
         total_items_label = ttk.Label(self.parent, text="Total: 0")
         total_items_label.grid(row=self.row_index, column=0, columnspan=2, sticky="w", pady=(0, 5))
         self.theme_manager.register(total_items_label)
         self.widgets['total_items_label'] = total_items_label
+
+        # Counter below search bar
+        self.vars['search_count'] = tk.StringVar(value="Found: 0")
+        search_count_label = ttk.Label(self.parent, textvariable=self.vars['search_count'])
+        search_count_label.grid(row=self.row_index, column=1, columnspan=2, sticky="w", pady=(0, 5))
+        self.theme_manager.register(search_count_label)
+        self.widgets['search_count_label'] = search_count_label
+
         self.row_index += 1
 
     def search_items(self, *args):

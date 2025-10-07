@@ -5,13 +5,14 @@ from PIL import ImageTk
 import ocr_utils as utils
 from logger import log_message
 from renderer import render_item
+from settings import get_setting, set_setting
 
 IMAGE_COL_WIDTH = 200
 ROW_HEIGHT = 40
 TOASTS = []
 TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
-TOASTS_DURATION = 5
-
+TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
+ARE_TOASTS_ENABLED = get_setting('Application', 'are_toasts_enabled', True)
 
 def reposition(root):
     screen_w = root.winfo_screenwidth()
@@ -43,6 +44,8 @@ def get_toast_duration_ms():
 
 
 def create_toast(root, message, image=None, duration=None):
+    if not ARE_TOASTS_ENABLED:
+        return None
     duration = duration or get_toast_duration_ms()
 
     toast = tk.Toplevel(root)
@@ -87,6 +90,9 @@ def create_toast(root, message, image=None, duration=None):
 
 
 def show(root, item, message=None, duration=None):
+    if not ARE_TOASTS_ENABLED:
+        return None
+
     if message is None:
         # Build default message from item
         if getattr(item, "enchants", None) and len(item.enchants) > 0:
@@ -114,3 +120,16 @@ def show(root, item, message=None, duration=None):
 
 def show_message(root, message, duration=None):
     return create_toast(root, message, duration=duration)
+
+def toggle_toasts(enabled: bool):
+    global ARE_TOASTS_ENABLED
+    ARE_TOASTS_ENABLED = enabled
+    set_setting('Application', 'are_toasts_enabled', enabled)
+    log_message(f"Toasts enabled: {enabled}")
+
+
+def set_toast_duration(seconds: int):
+    global TOASTS_DURATION
+    TOASTS_DURATION = seconds
+    set_setting('Application', 'toasts_duration_seconds', seconds)
+    log_message(f"Toast duration set to: {seconds}s")

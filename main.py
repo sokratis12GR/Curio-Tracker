@@ -5,12 +5,12 @@ import curio_currency_fetch as fetch_currency
 import curio_keybinds
 import curio_tiers_fetch as fetch_tiers
 import curio_tracker as tracker
-from config import ROW_HEIGHT, DEBUGGING, initialize_settings
+from config import ROW_HEIGHT, DEBUGGING, initialize_settings, LEAGUE
 from gui.controls import LeftFrameControls
 from gui.info_frame import InfoPanel
 from gui.layout import create_layout
 from gui.menus import create_settings_menu
-from gui.toggles import TreeToggles, ToastsToggles
+from gui.toggles import TreeToggles
 from gui.treeview import setup_tree
 from keybinds_handlers import register_handlers
 from load_utils import get_resource_path
@@ -37,6 +37,7 @@ def main():
     root.resizable(True, True)
 
     is_dark_mode = get_setting('Application', 'is_dark_mode', True)  # default: dark mode enabled
+    data_league = get_setting('Application', 'data_league', LEAGUE)  # default: {LEAGUE}
 
     style = ttk.Style(root)
     try:
@@ -55,8 +56,6 @@ def main():
     # GUI layout
     layout = create_layout(root)
 
-    # Capture console setup
-    # console_output = setup_console(layout['console_frame']) - Disabled for now, feels unnecessary.
     tree = setup_tree(layout['tree_frame'])
     left_frame = layout['left_frame']
     right_frame = layout['right_frame']
@@ -69,15 +68,15 @@ def main():
     tree_toggles.frame.grid(row=0, column=0, sticky="w", padx=5)
     theme_manager.tree_toggles = tree_toggles
 
-    toasts_toggles = ToastsToggles(toggle_frame)
-    toasts_toggles.frame.grid(row=0, column=1, sticky="w", padx=5)
-    theme_manager.register(toasts_toggles.toasts_checkbox, "buttons")
-    theme_manager.register(toasts_toggles.toasts_duration_spinbox, "spinboxes")
+    def reload_tree_for_league(new_league):
+        tracker.on_league_change(new_league)
+        tree_manager.update_visible_images()
 
     tracker.poe_user = get_setting("User", "poe_user", tracker.poe_user)
     tracker.league_version = get_setting("User", "poe_league", tracker.league_version)
     tracker.blueprint_layout = get_setting("Blueprint", "layout", tracker.blueprint_layout)
     tracker.blueprint_area_level = get_setting("Blueprint", "area_level", tracker.blueprint_area_level)
+    tracker.on_league_change(data_league)
 
     def toggle_theme():
         nonlocal is_dark_mode
@@ -101,13 +100,14 @@ def main():
     for lbl in info_panel.labels.values():
         theme_manager.register(lbl, "labels")
 
-    menu_bar = create_settings_menu(root, theme_manager, toggle_theme, info_panel)
 
     menu_bar = create_settings_menu(
         root,
         theme_manager,
+        tracker,
         toggle_theme_callback=toggle_theme,
-        update_info_callback=info_panel.update_labels
+        update_info_callback=info_panel.update_labels,
+        reload_tree_for_league=reload_tree_for_league
     )
 
     handlers = register_handlers(root, tree_manager, controls=left_controls)

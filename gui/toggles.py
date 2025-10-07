@@ -4,6 +4,7 @@ from tkinter import ttk
 from PIL import ImageTk
 
 import toasts
+from logger import log_message
 from settings import get_setting, set_setting  # replace with your actual settings module
 import config as c
 
@@ -116,75 +117,106 @@ class TreeToggles:
             except tk.TclError:
                 pass
 
-class ToastsToggles:
-    def __init__(self, parent_frame):
-        self.frame = ttk.Frame(parent_frame)
-        self.frame.grid(row=0, column=0, sticky="w", pady=(5, 0))
-
-        # Toasts enabled checkbox
-        self.toasts_var = tk.BooleanVar(value=get_setting('Application', 'are_toasts_enabled', True))
-        self.toasts_checkbox = ttk.Checkbutton(
-            self.frame,
-            text="Enable Toasts",
-            variable=self.toasts_var,
-            command=self.toggle_toasts
-        )
-        self.toasts_checkbox.grid(row=0, column=0, padx=5, sticky="w")
-        self.toasts_checkbox.configure(style="Toasts.TCheckbutton")
-
-        # Toasts duration label
-        ttk.Label(self.frame, text="Toasts Duration:").grid(
-            row=0, column=1, sticky="w", padx=(10, 2)
-        )
-
-        # Toasts duration spinbox
-        self.toasts_duration_var = tk.StringVar(
-            value=str(get_setting('Application', 'toasts_duration_seconds', 5))
-        )
-
-        self.toasts_duration_spinbox = ttk.Spinbox(
-            self.frame,
-            from_=1,
-            to=30,
-            textvariable=self.toasts_duration_var,
-            width=5,
-            validate='all',
-            validatecommand=(self.frame.register(self.validate_duration), '%P')
-        )
-        self.toasts_duration_spinbox.grid(row=0, column=2, sticky="w")
-
-        # Trace changes
-        self.toasts_duration_var.trace_add("write", self.update_toasts_duration)
-
-        # Initialize toasts duration
-        duration = int(self.toasts_duration_var.get())
-        toasts.TOASTS_DURATION = max(1, min(duration, 30))
-
-    def toggle_toasts(self):
-        enabled = self.toasts_var.get()
-        set_setting('Application', 'are_toasts_enabled', enabled)
-        if c.DEBUGGING:
-            print(f"[DEBUG] Toasts enabled: {enabled}")
-
-    def validate_duration(self, new_value):
-        if not new_value:
-            return True
-        if new_value.isdigit():
-            value = int(new_value)
-            return 1 <= value <= 30
-        return False
-
-    def update_toasts_duration(self, *args):
-        try:
-            duration = int(self.toasts_duration_var.get())
-        except ValueError:
-            duration = 5
-            self.toasts_duration_var.set(str(duration))
-
-        duration = max(1, min(duration, 30))
-        self.toasts_duration_var.set(str(duration))
-        toasts.TOASTS_DURATION = duration
-        set_setting('Application', 'toasts_duration_seconds', duration)
-
-        if c.DEBUGGING:
-            print(f"[DEBUG] Toasts Duration set to: {duration}s")
+# class ToastsToggles:
+#     def __init__(self, parent_frame):
+#         self.frame = ttk.Frame(parent_frame)
+#         self.frame.grid(row=0, column=0, sticky="w", pady=(5, 0))
+#
+#         # Toasts enabled checkbox
+#         self.toasts_var = tk.BooleanVar(value=get_setting('Application', 'are_toasts_enabled', True))
+#         self.toasts_checkbox = ttk.Checkbutton(
+#             self.frame,
+#             text="Enable Toasts",
+#             variable=self.toasts_var,
+#             command=self.toggle_toasts
+#         )
+#         self.toasts_checkbox.grid(row=0, column=0, padx=5, sticky="w")
+#         self.toasts_checkbox.configure(style="Toasts.TCheckbutton")
+#
+#         # Toasts duration label
+#         ttk.Label(self.frame, text="Toasts Duration:").grid(
+#             row=0, column=1, sticky="w", padx=(10, 2)
+#         )
+#
+#         # Toasts duration spinbox
+#         self.toasts_duration_var = tk.StringVar(
+#             value=str(get_setting('Application', 'toasts_duration_seconds', 5))
+#         )
+#
+#         self.toasts_duration_spinbox = ttk.Spinbox(
+#             self.frame,
+#             from_=1,
+#             to=30,
+#             textvariable=self.toasts_duration_var,
+#             width=5,
+#             validate='all',
+#             validatecommand=(self.frame.register(self.validate_duration), '%P')
+#         )
+#         self.toasts_duration_spinbox.grid(row=0, column=2, sticky="w")
+#
+#         # Trace changes
+#         self.toasts_duration_var.trace_add("write", self.update_toasts_duration)
+#
+#         # Initialize toasts duration
+#         duration = int(self.toasts_duration_var.get())
+#         toasts.TOASTS_DURATION = max(1, min(duration, 30))
+#
+#     def toggle_toasts(self):
+#         enabled = self.toasts_var.get()
+#         set_setting('Application', 'are_toasts_enabled', enabled)
+#         if c.DEBUGGING:
+#             print(f"[DEBUG] Toasts enabled: {enabled}")
+#
+#     def validate_duration(self, new_value):
+#         if not new_value:
+#             return True
+#         if new_value.isdigit():
+#             value = int(new_value)
+#             return 1 <= value <= 30
+#         return False
+#
+#     def update_toasts_duration(self, *args):
+#         try:
+#             duration = int(self.toasts_duration_var.get())
+#         except ValueError:
+#             duration = 5
+#             self.toasts_duration_var.set(str(duration))
+#
+#         duration = max(1, min(duration, 30))
+#         self.toasts_duration_var.set(str(duration))
+#         toasts.TOASTS_DURATION = duration
+#         set_setting('Application', 'toasts_duration_seconds', duration)
+#
+#         if c.DEBUGGING:
+#             print(f"[DEBUG] Toasts Duration set to: {duration}s")
+#
+# class LeagueSelector:
+#     def __init__(self, parent_frame, on_league_change_callback=None):
+#         self.frame = ttk.Frame(parent_frame)
+#         self.frame.grid(row=0, column=1, sticky="e", padx=10, pady=(5, 0))
+#
+#         self.league_options = c.LEAGUES_TO_FETCH
+#         current_league = get_setting("Application", "data_league", c.LEAGUE)
+#         if current_league not in self.league_options:
+#             current_league = c.LEAGUE
+#
+#         ttk.Label(self.frame, text="League:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+#
+#         self.league_var = tk.StringVar(value=current_league)
+#         self.league_dropdown = ttk.Combobox(
+#             self.frame,
+#             textvariable=self.league_var,
+#             values=self.league_options,
+#             state="readonly",
+#             width=20
+#         )
+#         self.league_dropdown.grid(row=0, column=1, sticky="w")
+#
+#         self.callback = on_league_change_callback
+#         self.league_dropdown.bind("<<ComboboxSelected>>", self._on_change)
+#
+#     def _on_change(self, event=None):
+#         new_league = self.league_var.get()
+#         set_setting("Application", "data_league", new_league)
+#         if self.callback:
+#             self.callback(new_league)
