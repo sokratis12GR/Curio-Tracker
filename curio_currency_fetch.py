@@ -3,7 +3,7 @@ from statistics import median
 import pandas as pd
 import requests
 
-from config import LEAGUE
+from config import LEAGUES_TO_FETCH
 from load_utils import get_datasets, OUTPUT_CURRENCY_CSV, LOCK_FILE
 from logger import log_message
 from shared_lock import is_recent_run, update_lock
@@ -57,13 +57,13 @@ def normalize_name_for_lookup(name: str) -> str:
 
 
 # === FETCH FUNCTION ===
-def fetch_all_items():
+def fetch_all_items(league: str):
     all_rows = []
 
     category_data = {}
     for cat_name, api_endpoint in CATEGORIES_API.items():
-        print(f"Fetching {cat_name}...")
-        params = {"league": LEAGUE}
+        print(f"Fetching {cat_name} for {league}...")
+        params = {"league": league}
         if api_endpoint == "currencyoverview":
             params["type"] = "Currency"
         else:
@@ -191,7 +191,8 @@ def fetch_all_items():
             "Name": csv_name,
             "Chaos Value": chaos_value,
             "Exalted Value": exalted_value,
-            "Divine Value": divine_value
+            "Divine Value": divine_value,
+            "League": league
         })
 
     return all_rows
@@ -203,21 +204,31 @@ def run_fetch(force=False):
         log_message("[INFO] Last run <2 hours ago, skipping currency values fetch.")
         return
 
-    all_rows = fetch_all_items()
+    all_rows = []
+
+    for league in LEAGUES_TO_FETCH:
+        rows = fetch_all_items(league)
+        if rows:
+            all_rows.extend(rows)
+            log_message(f"[INFO] Fetched {len(rows)} rows for {league}.")
+        else:
+            log_message(f"[WARN] No data fetched for {league}.")
+
     if not all_rows:
-        log_message("[WARN] No data fetched.")
+        log_message("[WARN] No data fetched for any league.")
         return
 
     df = pd.DataFrame(all_rows)
+
     df.to_csv(OUTPUT_CURRENCY_CSV, index=False, float_format="%.2f")
-    log_message(f"[INFO] Saved CSV: {OUTPUT_CURRENCY_CSV}")
+    log_message(f"[INFO] Saved combined CSV: {OUTPUT_CURRENCY_CSV}")
 
     update_lock(OUTPUT_CURRENCY_CSV)
     log_message(f"[INFO] Lock file updated: {LOCK_FILE}")
 
-    summary = df.groupby("Category").size().to_dict()
-    log_message("[INFO] Fetched items summary per category:")
-    for cat, count in summary.items():
-        log_message(f"  {cat}: {count} items")
+    summary = df.groupby(["League", "Category"]).size().to_dict()
+    log_message("[INFO] Fetched items summary per league/category:")
+    for (league, cat), count in summary.items():
+        log_message(f"  {league} - {cat}: {count} items")
 
 # run_fetch(True)

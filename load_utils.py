@@ -76,23 +76,24 @@ def load_experimental_csv(file_path) -> dict:
 
 
 def load_currency_dataset(file_path: str) -> dict:
-    def parser(row):
-        # row is a dict because we'll use as_dict=True
-        if "Name" in row:
-            term = smart_title_case(row["Name"].strip())
-            chaos_val = format_currency_value(row.get("Chaos Value", ""))
-            divine_val = format_currency_value(row.get("Divine Value", ""))
-            return term, {"chaos": chaos_val, "divine": divine_val}
-        return None
+    rows = load_csv(file_path, row_parser=lambda row: (
+        smart_title_case(row["Name"].strip()),
+        format_currency_value(row.get("Chaos Value", "")),
+        format_currency_value(row.get("Divine Value", "")),
+        row.get("League")
+    ) if "Name" in row else None, as_dict=True)
 
-    rows = load_csv(file_path, row_parser=parser, as_dict=True)
-    # print("Loaded currency rows:", len(rows))
-    return {term: data for term, data in rows if term}
-
+    dataset = {}
+    for term, chaos, divine, league in rows:
+        if not league:
+            continue
+        if league not in dataset:
+            dataset[league] = {}
+        dataset[league][term] = {"chaos": chaos, "divine": divine}
+    return dataset
 
 def load_tiers_dataset(file_path: str, debugging=False) -> dict:
     def parser(row):
-        # expecting: name, tier
         if len(row) >= 2:
             term = smart_title_case(row[0].strip())
             tier = format_currency_value(row[1])
@@ -103,6 +104,7 @@ def load_tiers_dataset(file_path: str, debugging=False) -> dict:
 
     rows = load_csv(file_path, row_parser=parser)
     return {term: data for term, data in rows if term}
+
 
 LOG_FILE = get_data_path(c.logs_file_name)
 SETTINGS_PATH = get_data_path(c.settings_file_name)
@@ -129,3 +131,4 @@ def get_datasets(load_external=True, force_reload=False):
             if os.path.exists(OUTPUT_TIERS_CSV):
                 _DATASETS["tiers"] = load_tiers_dataset(OUTPUT_TIERS_CSV)
     return _DATASETS
+

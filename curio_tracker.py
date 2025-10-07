@@ -1,4 +1,5 @@
 import csv
+import json
 import os
 import platform
 import re
@@ -21,7 +22,7 @@ from termcolor import colored
 import config as c
 import ocr_utils as utils
 import toasts
-from config import csv_file_path
+from config import csv_file_path, LEAGUE
 from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
@@ -41,7 +42,27 @@ attempt = 1
 listener_ref = None
 parsed_items = []
 
-CURRENCY_DATASET = datasets["currency"]
+full_currency = datasets.get("currency") or {}
+
+def on_league_change(new_league: str):
+    global CURRENCY_DATASET
+    CURRENCY_DATASET = full_currency.get(new_league, {})
+    if c.DEBUGGING:
+        log_currency_dataset(CURRENCY_DATASET)
+
+def log_currency_dataset(dataset):
+    if not dataset:
+        log_message("[DEBUG] CURRENCY_DATASET is empty or None!")
+        return
+
+    log_message(f"[DEBUG] CURRENCY_DATASET contains {len(dataset)} entries:")
+    for term, values in dataset.items():
+        # Convert values to JSON string for readable logging
+        values_str = json.dumps(values, ensure_ascii=False)
+        log_message(f"  - {term}: {values_str}")
+
+CURRENCY_DATASET = {}
+
 TIERS_DATASET = datasets["tiers"]
 experimental_items = datasets["experimental"]
 term_types = datasets["terms"]
@@ -695,6 +716,7 @@ def _parse_items_from_rows(rows):
             estimated_value = CURRENCY_DATASET.get(term_title, {})
             chaos_est = estimated_value.get("chaos")
             divine_est = estimated_value.get("divine")
+
             tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
             duplicate = False  # Just predefining
 
