@@ -5,7 +5,7 @@ from gui.settings_popup import show_settings_popup
 from update_checker import check_for_updates
 
 
-def create_settings_menu(root, theme_manager, tracker, toggle_theme_callback, update_info_callback, reload_tree_for_league=None):
+def create_settings_menu(root, theme_manager, tracker, toggle_theme_callback, update_info_callback):
     menu_bar = tk.Menu(root)
     root.config(menu=menu_bar)
 
@@ -17,7 +17,6 @@ def create_settings_menu(root, theme_manager, tracker, toggle_theme_callback, up
         command=lambda: keybinds_popup.show_keybind_popup(root, update_labels_callback=update_info_callback)
     )
 
-
     settings_menu.add_command(label="Toggle Theme (Light/Dark)", command=toggle_theme_callback)
     settings_menu.add_command(
         label="About",
@@ -26,7 +25,7 @@ def create_settings_menu(root, theme_manager, tracker, toggle_theme_callback, up
     settings_menu.add_separator()
     settings_menu.add_command(
         label="Settings",
-        command=lambda: show_settings_popup(root, tracker=tracker, on_league_change_callback=reload_tree_for_league)
+        command=lambda: show_settings_popup(root, tracker)
     )
     settings_menu.add_separator()
     settings_menu.add_command(

@@ -9,11 +9,12 @@ from settings import get_setting, set_setting
 class SettingsPopup:
     def __init__(self, parent, tracker, on_league_change_callback=None):
         self.parent = parent
+        self.tracker = tracker
         self.on_league_change_callback = on_league_change_callback
 
         self.popup = tk.Toplevel(parent)
         self.popup.title("Application Settings")
-        self.popup.geometry("300x400")
+        self.popup.geometry("280x400")
         self.popup.resizable(False, False)
         self.popup.grab_set()  # make modal
 
@@ -48,11 +49,11 @@ class SettingsPopup:
         # --- League Selection for User ---
         next_row()
         ttk.Label(frame, text="League:").grid(row=row, column=0, sticky="w", pady=(5, 5))
-        self.user_league_var = tk.StringVar(value=get_setting("User", "poe_league", c.LEAGUE))
+        self.user_league_var = tk.StringVar(value=get_setting("User", "poe_league", c.poe_league))
         self.user_league_cb = ttk.Combobox(
             frame,
             textvariable=self.user_league_var,
-            values=c.LEAGUES_TO_FETCH,
+            values=c.league_versions,
             state="readonly",
             width=20
         )
@@ -189,12 +190,15 @@ class SettingsPopup:
         if c.DEBUGGING:
             print(f"[DEBUG] Toasts Duration set to: {duration}s")
 
-    def _on_league_change(self, event=None):
+    def _on_league_change(self, event):
         new_league = self.league_var.get()
         set_setting("Application", "data_league", new_league)
-        if self.on_league_change_callback:
-            self.on_league_change_callback(new_league)
+        if hasattr(self, "tracker"):
+            self.reload_tree_for_league(new_league)
+
+    def reload_tree_for_league(self, new_league):
+        self.tracker.on_league_change(new_league)
 
 
-def show_settings_popup(parent, tracker, on_league_change_callback=None):
-    SettingsPopup(parent, tracker, on_league_change_callback)
+def show_settings_popup(parent, tracker):
+    SettingsPopup(parent, tracker)

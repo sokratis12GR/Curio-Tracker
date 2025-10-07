@@ -68,10 +68,6 @@ def main():
     tree_toggles.frame.grid(row=0, column=0, sticky="w", padx=5)
     theme_manager.tree_toggles = tree_toggles
 
-    def reload_tree_for_league(new_league):
-        tracker.on_league_change(new_league)
-        tree_manager.update_visible_images()
-
     tracker.poe_user = get_setting("User", "poe_user", tracker.poe_user)
     tracker.league_version = get_setting("User", "poe_league", tracker.league_version)
     tracker.blueprint_layout = get_setting("Blueprint", "layout", tracker.blueprint_layout)
@@ -100,14 +96,12 @@ def main():
     for lbl in info_panel.labels.values():
         theme_manager.register(lbl, "labels")
 
-
     menu_bar = create_settings_menu(
         root,
         theme_manager,
         tracker,
         toggle_theme_callback=toggle_theme,
         update_info_callback=info_panel.update_labels,
-        reload_tree_for_league=reload_tree_for_league
     )
 
     handlers = register_handlers(root, tree_manager, controls=left_controls)
