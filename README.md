@@ -63,6 +63,9 @@ at [Create Issue](https://github.com/sokratis12GR/Curio-Tracker/issues/new).
 - Provide a screenshot, or a detailed explanation of the issue
 - In case of something not occuring please provide a the log file located inside `%appdata%/HeistCurioTracker/logs/tracker.log`
 
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/sokratis12gr/curio-tracker/total)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/sokratis12gr/curio-tracker)
+
 ***Appreciate any feedback ^^***
 
 
