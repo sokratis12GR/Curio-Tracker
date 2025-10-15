@@ -1,44 +1,45 @@
 import threading
-import tkinter as tk
 from datetime import datetime, timedelta
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 
-from PIL import Image, ImageTk
+from customtkinter import *
 from pytz import InvalidTimeError
 
 import ocr_utils as utils
-from config import IMAGE_COL_WIDTH, ROW_HEIGHT, layout_keywords
+from config import ROW_HEIGHT, layout_keywords, TREE_COLUMNS
 from csv_manager import CSVManager
 from gui.custom_hours_popup import CustomHoursPopup
-from gui.treeview import tree_columns
-from renderer import render_item
-from tree_utils import get_item_name_str, generate_item_id, pad_image
+from gui.item_overview_frame import ItemOverviewFrame
+from tree_utils import get_item_name_str, generate_item_id
+
+
+def _get_row_tag(index):
+    return "odd" if index % 2 == 0 else "even"
 
 
 class TreeManager:
-    def __init__(self, tree, is_dark_mode):
+    def __init__(self, tree, mode):
+        self.overview_frame = None
         self.tree = tree
         self.csv_manager = CSVManager()
-        self.tree_columns = tree_columns
-        self.columns = [col["id"] for col in tree_columns]
+        self.tree_columns = TREE_COLUMNS
+        self.columns = [col["id"] for col in TREE_COLUMNS]
         self.display_columns = [
             col["id"]
-            for col in tree_columns
+            for col in TREE_COLUMNS
             if col.get("visible", True) and col["id"] != "numeric_value"
         ]
         self.tree["displaycolumns"] = tuple(self.display_columns)
-        self.image_col_width = IMAGE_COL_WIDTH
         self.row_height = ROW_HEIGHT
-        self.is_dark_mode = is_dark_mode
-        # Image caches
-        self.original_img_cache = {}
-        self.image_cache = {}
+        self.current_mode = mode
         self._custom_popup_open = False
-        self.time_filter_var = tk.StringVar(value="All")
-        self.custom_hours_var = tk.DoubleVar(value=1)
+        self.time_filter_var = StringVar(value="All")
+        self.custom_hours_var = DoubleVar(value=1)
         self.time_filter_var.trace_add("write", self.filter_tree_by_time)
-        self.search_var = tk.StringVar(value="")
+        self.search_var = StringVar(value="")
         self.search_var.trace_add("write", lambda *args: self.apply_filters())
+
+        self.should_cancel_process = False
 
         # Data trackers
         self.global_item_tracker = []
@@ -47,26 +48,31 @@ class TreeManager:
         self.all_item_iids = set()
         self.csv_row_map = {}
         self._last_visible_iids = set()
-        self.sort_reverse = {col["id"]: col.get("sort_reverse", False) for col in tree_columns}
-        self.images_visible = True
+        self.sort_reverse = {col["id"]: col.get("sort_reverse", False) for col in TREE_COLUMNS}
 
         # Row tags
-        self.tree.tag_configure("odd", background="#2f3136", foreground="#dcddde")
-        self.tree.tag_configure("even", background="#36393f", foreground="#dcddde")
-        self.tree.tag_configure("light_odd", background="#f4f6f8", foreground="black")
-        self.tree.tag_configure("light_even", background="#e8eaed", foreground="black")
+        if self.current_mode == "POE":
+            self.tree.tag_configure("poe_odd", background="#2a1a12", foreground="#e6dcc0")
+            self.tree.tag_configure("poe_even", background="#3a2618", foreground="#e6dcc0")
+        elif self.current_mode == "DARK":
+            self.tree.tag_configure("odd", background="#2f3136", foreground="#dcddde")
+            self.tree.tag_configure("even", background="#36393f", foreground="#dcddde")
+        elif self.current_mode == "LIGHT":
+            self.tree.tag_configure("light_odd", background="#f4f6f8", foreground="black")
+            self.tree.tag_configure("light_even", background="#e8eaed", foreground="black")
 
+        self.checkbox_states = {}
         # Bind events
-        self.tree.bind("<Configure>", lambda e: self.update_visible_images())
-        self.tree.bind("<Motion>", lambda e: self.update_visible_images())
+        self.tree.bind("<Configure>", lambda e: self.reapply_row_formatting())
+        self.tree.bind("<Motion>", lambda e: self.reapply_row_formatting())
+        self.tree.bind("<Button-1>", self.on_tree_click)
         self.tree.bind("<Double-1>", self.on_tree_double_click)
         self.tree.bind("<Delete>", self.delete_selected_items)
 
         self.toggle_frame = None
-        self.col_vars = {}  # track visibility of each column
-        self.toggle_img_btn = None
+        self.col_vars = {}
 
-    def add_item_to_tree(self, item, render_image=False, insert_at_top=True):
+    def add_item_to_tree(self, item, insert_at_top=True):
 
         item_name_str = get_item_name_str(item)
         record_number = getattr(item, "record_number", None)
@@ -78,14 +84,6 @@ class TreeManager:
         # Avoid duplicate insert for same record
         if record_number and self.tree.exists(f"rec_{record_number}"):
             return
-
-        # ---- Render image ----
-        if item_key not in self.original_img_cache:
-            img = render_item(item)
-            img = img.resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT), Image.LANCZOS)
-            img = pad_image(img, left_pad=-20, top_pad=0,
-                            target_width=IMAGE_COL_WIDTH, target_height=ROW_HEIGHT)
-            self.original_img_cache[item_key] = img.copy()
 
         # ---- Item text ----
         item_text = utils.parse_item_name(item)
@@ -117,6 +115,8 @@ class TreeManager:
         blueprint_type = getattr(item, "blueprint_type", "Prohibited Library")
         logged_by = getattr(item, "logged_by", "")
         league = getattr(item, "league", "3.26")
+        owned = getattr(item, "owned", "")
+        picked = getattr(item, "picked", "")
 
         # ---- Insert into Treeview ----
         iid = item_key
@@ -134,7 +134,12 @@ class TreeManager:
             "league": league,
             "time": display_time,
             "record": record_number,
+            "owned": owned,
+            "picked": picked,
         }
+
+        self.checkbox_states[(iid, "owned")] = owned
+        self.checkbox_states[(iid, "picked")] = picked
 
         # Build values tuple in order of self.columns
         values = tuple(values_map.get(col, "") for col in self.columns)
@@ -155,15 +160,12 @@ class TreeManager:
             "item_obj": item
         })
 
-        if render_image:
-            self.update_visible_images()
+        self.reapply_row_formatting()
 
     def clear_tree(self):
         self.tree.delete(*self.tree.get_children())
         self.all_item_iids.clear()
         self.csv_row_map.clear()
-        self.original_img_cache.clear()
-        self.image_cache.clear()
         self.sorted_item_keys.clear()
         self.item_time_map.clear()
         self._last_visible_iids.clear()
@@ -191,36 +193,34 @@ class TreeManager:
             self.modify_csv_record(iid, item_value, delete=True)
             self.tree.delete(iid)
             self.all_item_iids.discard(iid)
-            self.original_img_cache.pop(iid, None)
-            self.image_cache.pop(iid, None)
             self.item_time_map.pop(iid, None)
             self.csv_row_map.pop(iid, None)
 
-    def _add_items_in_batches(self, items, batch_size=200, start_index=0, render_images=False, post_callback=None):
+    def _add_items_in_batches(self, items, batch_size=200, start_index=0, post_callback=None):
         end_index = min(start_index + batch_size, len(items))
         batch = items[start_index:end_index]
 
         for item in batch:
-            self.add_item_to_tree(item, render_image=render_images, insert_at_top=False)
+            self.add_item_to_tree(item, insert_at_top=False)
 
-        if end_index < len(items):
+        if end_index < len(items) and not self.should_cancel_process:
             self.tree.after(
                 15,
                 self._add_items_in_batches,
                 items,
                 batch_size,
                 end_index,
-                render_images,
                 post_callback
             )
         else:
-            self.update_visible_images()
+            self.reapply_row_formatting()
             self.filter_tree_by_time()
             if post_callback:
                 post_callback()
 
     def load_all_items_threaded(self, tracker, post_callback=None):
         self.clear_tree()
+        self.should_cancel_process = False
 
         def worker():
             all_items = tracker.load_all_parsed_items_from_csv()
@@ -232,7 +232,6 @@ class TreeManager:
                 all_items,
                 200,
                 0,
-                False,
                 post_callback
             )
 
@@ -240,41 +239,79 @@ class TreeManager:
 
     def load_latest_items(self, tracker):
         self.clear_tree()
+        self.should_cancel_process = True
         parsed = tracker.load_recent_parsed_items_from_csv()
         print(f"[DEBUG] Loaded {len(parsed)} items")  # <--- check this
         if not parsed:
             return
 
         for item in parsed:
-            self.add_item_to_tree(item, render_image=True)
+            self.add_item_to_tree(item)
 
         self.filter_tree_by_time()
-        self.update_visible_images()
+        self.reapply_row_formatting()
 
     def load_latest_item(self, tracker):
         self.clear_tree()
+        self.should_cancel_process = True
         parsed = tracker.load_recent_parsed_items_from_csv(max_items=1)
         if not parsed:
             return
 
         item = parsed[0]
-        self.add_item_to_tree(item, render_image=True)
+        self.add_item_to_tree(item)
 
         self.filter_tree_by_time()
-        self.update_visible_images()
+        self.reapply_row_formatting()
 
-    def on_tree_double_click(self, event):
+    def on_tree_click(self, event):
+        region = self.tree.identify("region", event.x, event.y)
+        if region != "cell":
+            return
+
         row_id = self.tree.identify_row(event.y)
         col_id = self.tree.identify_column(event.x)
         if not row_id or not col_id or col_id == "#0":
             return
 
-        # Get column index in displayed columns
-        col_idx = int(col_id.replace("#", "")) - 1  # #1 is first displayed column
         displayed_columns = self.tree["displaycolumns"]
-        if col_idx >= len(displayed_columns):
+        col_index = int(col_id.replace("#", "")) - 1
+        if col_index >= len(displayed_columns):
             return
-        col_name = displayed_columns[col_idx]
+
+        col_name = displayed_columns[col_index]
+        if col_name not in ("owned", "picked"):
+            return
+
+        # --- Toggle value ---
+        current_state = self.checkbox_states.get((row_id, col_name), False)
+        new_state = not current_state
+        self.checkbox_states[(row_id, col_name)] = new_state
+
+        # Update the tree display
+        self.tree.set(row_id, col_name, "✓" if new_state else "")
+
+        # Update item object
+        item = self.csv_row_map.get(row_id)
+        if item:
+            setattr(item, col_name, new_state)
+            self.modify_csv_record(row_id, getattr(item, "itemName", ""), updates={col_name.capitalize(): new_state})
+
+    def on_tree_double_click(self, event):
+        # Identify row and column
+        row_id = self.tree.identify_row(event.y)
+        col_id = self.tree.identify_column(event.x)
+        if not row_id or not col_id or col_id == "#0":
+            return
+
+        col_idx_displayed = int(col_id.replace("#", "")) - 1
+        displayed_columns = self.tree["displaycolumns"]
+        if col_idx_displayed >= len(displayed_columns):
+            return
+
+        # Map to actual column name
+        col_name = displayed_columns[col_idx_displayed]
+        print(f"row_id: {row_id}, col_id: {col_id}, col_name: {col_name}")
 
         bbox = self.tree.bbox(row_id, col_name)
         if not bbox:
@@ -297,8 +334,8 @@ class TreeManager:
 
         # ---- STACK SIZE (only Currency/Scarab) ----
         if col_name == "stack_size" and item_type in {"Currency", "Scarab"}:
-            edit_entry = ttk.Entry(self.tree, justify="center")
-            edit_entry.place(x=x, y=y, width=w, height=h)
+            edit_entry = CTkEntry(self.tree, justify="center", width=w, height=h)
+            edit_entry.place(x=x, y=y)
             if old_value:
                 edit_entry.insert(0, old_value)
             edit_entry.focus()
@@ -331,8 +368,8 @@ class TreeManager:
 
         # ---- BLUEPRINT TYPE EDIT ----
         elif col_name == "layout":
-            combo = ttk.Combobox(self.tree, values=layout_keywords, state="readonly")
-            combo.place(x=x, y=y, width=w, height=h)
+            combo = CTkComboBox(self.tree, values=layout_keywords, state="readonly", width=w, height=h)
+            combo.place(x=x, y=y)
             combo.set(old_value or layout_keywords[0])
             combo.focus()
 
@@ -361,6 +398,22 @@ class TreeManager:
 
         self.csv_manager.modify_record(record_number, item_name, updates=updates, delete=delete)
 
+    def bind_overview(self, overview_frame: ItemOverviewFrame):
+        self.overview_frame = overview_frame
+        self.tree.bind("<<TreeviewSelect>>", self.on_tree_selection)
+
+    def on_tree_selection(self, event):
+        selected = self.tree.selection()
+        if not selected:
+            if hasattr(self, "overview_frame"):
+                self.overview_frame.update_item(None)
+            return
+
+        iid = selected[0]
+        item = self.csv_row_map.get(iid)
+        if hasattr(self, "overview_frame"):
+            self.overview_frame.update_item(item)
+
     # ---------- Sorting ----------
     def sort_tree(self, column):
         children = self.tree.get_children()
@@ -384,7 +437,7 @@ class TreeManager:
                     return int(val)
                 except (ValueError, TypeError):
                     return float('inf') if not reverse else float('-inf')
-            elif column == "tier":
+            elif column == "tier" or column == "stack_size":
                 import re
                 s = str(val).strip() if val else ""
                 if s == "":
@@ -405,9 +458,7 @@ class TreeManager:
         # Reinsert in sorted order
         for index, iid in enumerate(sorted_iids):
             self.tree.move(iid, "", index)
-            tag = "odd" if index % 2 == 0 else "even"
-            if not self.is_dark_mode:
-                tag = "light_odd" if index % 2 == 0 else "light_even"
+            tag = _get_row_tag(index)
             self.tree.item(iid, tags=(tag,))
 
         # Toggle sort direction for next click
@@ -495,7 +546,6 @@ class TreeManager:
 
         CustomHoursPopup(
             parent=self.tree.winfo_toplevel(),
-            is_dark_mode=self.is_dark_mode,
             initial_hours=self.custom_hours_var.get(),
             callback=on_apply
         )
@@ -504,41 +554,9 @@ class TreeManager:
         self._custom_popup_open = False
         popup.destroy()
 
-    # -------------------
-    # Image Virtualization
-    # -------------------
-    def update_visible_images(self):
-        first_frac, last_frac = self.tree.yview()
-        children = self.tree.get_children()
-        total = len(children)
-        if total == 0:
-            return
-
-        first_idx = int(first_frac * total)
-        last_idx = int(last_frac * total) + 1
-        current_visible = set(children[first_idx:last_idx])
-
-        # Remove images no longer visible
-        for iid in self._last_visible_iids - current_visible:
-            if self.tree.exists(iid):
-                self.tree.item(iid, image="")
-                self.image_cache.pop(iid, None)
-
-        # Add images for newly visible rows
-        for iid in current_visible - self._last_visible_iids:
-            if iid in self.original_img_cache:
-                self.image_cache[iid] = ImageTk.PhotoImage(self.original_img_cache[iid])
-                self.tree.item(iid, image=self.image_cache[iid])
-
-        self._last_visible_iids = current_visible
-        self.reapply_row_formatting()
-
     def reapply_row_formatting(self):
         for index, iid in enumerate(self.tree.get_children()):
-            if self.is_dark_mode:
-                tag = "odd" if index % 2 == 0 else "even"
-            else:
-                tag = "light_odd" if index % 2 == 0 else "light_even"
+            tag = _get_row_tag(index)
             self.tree.item(iid, tags=(tag,))
 
     def filter_tree_by_time(self, *args):

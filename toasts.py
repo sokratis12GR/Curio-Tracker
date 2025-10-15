@@ -14,6 +14,7 @@ TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
 TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
 ARE_TOASTS_ENABLED = get_setting('Application', 'are_toasts_enabled', True)
 
+
 def reposition(root):
     screen_w = root.winfo_screenwidth()
     x_right = screen_w - TOAST_MARGIN
@@ -43,7 +44,7 @@ def get_toast_duration_ms():
     return TOASTS_DURATION * 1000
 
 
-def create_toast(root, message, image=None, duration=None):
+def create_toast(root, message, image=None, duration=None, is_missing=False):
     if not ARE_TOASTS_ENABLED:
         return None
     duration = duration or get_toast_duration_ms()
@@ -54,7 +55,18 @@ def create_toast(root, message, image=None, duration=None):
     toast.attributes("-topmost", True)
     toast.attributes("-toolwindow", True)
 
-    frame = tk.Frame(toast, bg="black", padx=TOAST_PADDING, pady=TOAST_PADDING)
+    # Add green border if item is owned
+    border_color = "green" if is_missing else "black"
+    border_thickness = 3 if is_missing else 0
+
+    frame = tk.Frame(
+        toast,
+        bg="black",
+        padx=TOAST_PADDING,
+        pady=TOAST_PADDING,
+        highlightbackground=border_color,
+        highlightthickness=border_thickness
+    )
     frame.pack()
 
     # Add image if provided
@@ -89,37 +101,38 @@ def create_toast(root, message, image=None, duration=None):
     return toast
 
 
+
 def show(root, item, message=None, duration=None):
-    if not ARE_TOASTS_ENABLED:
-        return None
+
+    owned = getattr(item, "owned", False)
+    type = getattr(item, "type", "")
+    is_missing = False
+    if not owned and utils.is_unique(type):
+        is_missing = True
 
     if message is None:
-        # Build default message from item
-        if getattr(item, "enchants", None) and len(item.enchants) > 0:
-            item_text = "\n".join(str(e) for e in item.enchants)
-        else:
-            item_text = getattr(item, "itemName", "New Item")
-            if hasattr(item_text, "lines"):
-                item_text = "\n".join(str(line) for line in item_text.lines)
-
+        item_text = utils.parse_item_name(item)
         _, stack_size_txt = utils.get_stack_size(item)
         display_value = utils.calculate_estimate_value(item)
         tier = getattr(item, "tier", "")
 
+        added_owned_txt = "Missing\n" if is_missing else ""
         added_stack_size_txt = f" | Stack Size: {stack_size_txt}" if stack_size_txt else ""
         added_tier_txt = f" | Tier: {tier}" if tier else ""
         added_estimated_value_txt = f"\n Estimated Value: {display_value}" if display_value else ""
 
-        message = item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt
+        message = added_owned_txt + item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt
 
     img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
     tk_img = ImageTk.PhotoImage(img)
 
-    return create_toast(root, message, image=tk_img, duration=duration)
+    return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing)
+
 
 
 def show_message(root, message, duration=None):
     return create_toast(root, message, duration=duration)
+
 
 def toggle_toasts(enabled: bool):
     global ARE_TOASTS_ENABLED

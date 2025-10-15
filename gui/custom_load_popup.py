@@ -1,16 +1,18 @@
-import tkinter as tk
-from tkinter import simpledialog, messagebox
-from themes import ThemedMessageBox
+from customtkinter import CTkInputDialog
+
+from gui.ctksimplebox import CTkMessageBox
+from tree_manager import TreeManager
+
 
 class CustomLoader:
-    def __init__(self, root, controls, tree_manager, tracker, theme_manager):
+    def __init__(self, root, controls, tree_manager: TreeManager, tracker):
         self.root = root
         self.controls = controls
         self.tree_manager = tree_manager
         self.tracker = tracker
-        self.msgbox = ThemedMessageBox(root, theme_manager)
 
-        # Monkey-patch messagebox with themed ones
+        import tkinter.messagebox as messagebox
+        self.msgbox = CTkMessageBox(root)
         messagebox.showinfo = self.msgbox.showinfo
         messagebox.showwarning = self.msgbox.showwarning
         messagebox.showerror = self.msgbox.showerror
@@ -18,14 +20,18 @@ class CustomLoader:
 
     def run(self):
         try:
-            max_items = simpledialog.askinteger(
-                "Load Entries",
-                "Enter the number of entries to load:",
-                parent=self.root,
-                minvalue=1
-            )
-            if not max_items:
+            max_items = CTkInputDialog(
+                text="Enter the number of entries to load:",
+                title="Load Entries"
+
+            ).get_input()
+
+            if max_items is None:
                 return  # user cancelled
+
+            max_items = int(max_items)
+            if max_items < 1:
+                raise ValueError
         except Exception:
             self.msgbox.showerror("Invalid Input", "Please enter a valid number.")
             return
@@ -49,12 +55,12 @@ class CustomLoader:
     def _add_batch(self, items, start_index=0, batch_size=200):
         end_index = min(start_index + batch_size, len(items))
         for i in range(start_index, end_index):
-            self.tree_manager.add_item_to_tree(items[i], render_image=False)
+            self.tree_manager.add_item_to_tree(items[i])
 
         if end_index < len(items):
             self.root.after(15, self._add_batch, items, end_index, batch_size)
         else:
-            self.tree_manager.update_visible_images()
+            self.tree_manager.reapply_row_formatting()
             self.tree_manager.filter_tree_by_time()
             self.controls.update_total_items_count()
             self.msgbox.showinfo(

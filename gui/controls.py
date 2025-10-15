@@ -1,16 +1,16 @@
 # controls.py
-import tkinter as tk
-from tkinter import ttk
+
+from customtkinter import *
 
 from config import league_versions, layout_keywords, time_options
 from gui.custom_load_popup import CustomLoader
+from gui.info_frame import InfoPanelPopup
 from settings import set_setting
 
 
 class LeftFrameControls:
-    def __init__(self, parent, theme_manager, tracker, tree_manager, tree):
+    def __init__(self, parent, tracker, tree_manager, tree):
         self.parent = parent
-        self.theme_manager = theme_manager
         self.tracker = tracker
         self.tree_manager = tree_manager
         self.tree = tree
@@ -20,12 +20,12 @@ class LeftFrameControls:
 
         # --- StringVars
         self.vars = {
-            "poe_player": tk.StringVar(value=getattr(tracker, "poe_user", "")),
-            "league": tk.StringVar(value=getattr(tracker, "league_version", league_versions[0])),
-            "blueprint_type": tk.StringVar(value=tracker.blueprint_layout),
-            "area_level": tk.StringVar(value=str(tracker.blueprint_area_level)),
-            "search": tk.StringVar(value=""),
-            "search_count": tk.StringVar(value="Found: 0")
+            "poe_player": StringVar(value=getattr(tracker, "poe_user", "")),
+            "league": StringVar(value=getattr(tracker, "league_version", league_versions[0])),
+            "blueprint_type": StringVar(value=tracker.blueprint_layout),
+            "area_level": StringVar(value=str(tracker.blueprint_area_level)),
+            "search": StringVar(value=""),
+            "search_count": StringVar(value="Found: 0")
         }
 
         self.vcmd = (self.parent.register(self.validate_area_level), "%P")
@@ -37,46 +37,31 @@ class LeftFrameControls:
         self._add_separator()
         self._setup_buttons()
         self._add_separator()
-        # self._setup_player_info()
-        # self._setup_league()
         self._setup_blueprint_type()
         self._setup_area_level()
         self._add_separator()
         self._setup_search_and_info()
         self._add_separator()
-
-        # --- Automatic theme registration ---
-        self._register_widgets_for_theme()
+        self._setup_info()
 
     # --- Validation ---
     def validate_area_level(self, value):
         return value == "" or value.isdigit()
 
-    # --- Automatic registration method ---
-    def _register_widgets_for_theme(self):
-        for w in self.widgets.values():
-            self.theme_manager.register(w)
-        # Register header labels
-        for lbl in self.header_widgets:
-            self.theme_manager.register(lbl, "headers")
-
     # --- Time Filter
     def _setup_time_filter(self):
-        lbl = ttk.Label(self.parent, text="Time Filter:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
+        lbl = CTkLabel(self.parent, text="Time Filter:")
+        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2), padx=5)
         self.header_widgets.append(lbl)
-        self.theme_manager.register(lbl)
 
-        time_filter_dropdown = ttk.Combobox(
-            self.parent,
-            textvariable=self.tree_manager.time_filter_var,
+        time_filter_dropdown = CTkComboBox(
+            master=self.parent,
+            variable=self.tree_manager.time_filter_var,
             values=time_options,
-            width=20,
-            state="readonly",
-            style="TCombobox"
+            width=150,
+            corner_radius=6,
         )
         time_filter_dropdown.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-        self.theme_manager.register(time_filter_dropdown)
 
         self.row_index += 1
         self.tree_manager.time_filter_var.trace_add("write", lambda *args: self.tree_manager.filter_tree_by_time())
@@ -100,7 +85,7 @@ class LeftFrameControls:
         rows_used = 0
 
         for i, (text, cmd) in enumerate(btns):
-            btn = ttk.Button(self.parent, text=text, command=cmd)
+            btn = CTkButton(self.parent, text=text, command=cmd)
 
             if i < 4:
                 row = self.row_index + (i // 2)
@@ -112,85 +97,44 @@ class LeftFrameControls:
                 btn.grid(row=row, column=0, columnspan=2, pady=5, sticky="ew")
                 rows_used += 1
 
-            self.theme_manager.register(btn)
             self.widgets[text] = btn
 
         self.row_index += rows_used
 
     def _add_separator(self):
-        separator = ttk.Separator(self.parent, orient="horizontal")
+        separator = CTkFrame(self.parent, height=2, fg_color="#a0a0a0")  # Thin line
         separator.grid(row=self.row_index, column=0, columnspan=2, sticky="ew", pady=(10, 10))
         self.row_index += 1
 
-    # # --- Player Info
-    # def _setup_player_info(self):
-    #     lbl = ttk.Label(self.parent, text="PoE Player:")
-    #     lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
-    #     self.theme_manager.register(lbl)
-    #     self.header_widgets.append(lbl)
-    #
-    #     entry = ttk.Entry(self.parent, textvariable=self.vars['poe_player'], width=20)
-    #     entry.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-    #     self.theme_manager.register(entry)
-    #     self.vars['poe_player'].trace_add("write", self.update_tracker_poe_player)
-    #     self.widgets['poe_player_entry'] = entry
-    #     self.row_index += 1
-    #
-    # def update_tracker_poe_player(self, *args):
-    #     if self.updating_from_tracker:
-    #         return
-    #     value = self.vars['poe_player'].get()
-    #     self.tracker.poe_user = value
-    #     set_setting("User", "poe_user", value)
-    #
-    # # --- League
-    # def _setup_league(self):
-    #     lbl = ttk.Label(self.parent, text="League Version:")
-    #     lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
-    #     self.theme_manager.register(lbl)
-    #     self.header_widgets.append(lbl)
-    #
-    #     cb = ttk.Combobox(self.parent, textvariable=self.vars['league'], values=league_versions, width=20)
-    #     cb.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-    #     self.theme_manager.register(cb)
-    #     self.vars['league'].trace_add("write", self.update_tracker_league)
-    #     self.widgets['league_cb'] = cb
-    #     self.row_index += 1
-    #
-    # def update_tracker_league(self, *args):
-    #     if self.updating_from_tracker:
-    #         return
-    #     value = self.vars['league'].get()
-    #     self.tracker.league_version = value
-    #     set_setting("User", "poe_league", value)
-
     # --- Blueprint Type
     def _setup_blueprint_type(self):
-        lbl = ttk.Label(self.parent, text="Blueprint Type:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
-        self.theme_manager.register(lbl)
+        lbl = CTkLabel(self.parent, text="Blueprint Type:")
+        lbl.grid(row=self.row_index, column=0, sticky="w", padx=5, pady=(5, 2))
         self.header_widgets.append(lbl)
 
-        cb = ttk.Combobox(self.parent, textvariable=self.vars['blueprint_type'], values=layout_keywords, width=20)
+        cb = CTkComboBox(self.parent, variable=self.vars['blueprint_type'], values=layout_keywords, width=150)
         cb.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-        self.theme_manager.register(cb)
         self.vars['blueprint_type'].trace_add("write", self.update_tracker_blueprint)
         self.widgets['blueprint_cb'] = cb
         self.row_index += 1
 
     # --- Area Level
     def _setup_area_level(self):
-        lbl = ttk.Label(self.parent, text="Area Level:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
-        self.theme_manager.register(lbl)
+        lbl = CTkLabel(self.parent, text="Area Level:")
+        lbl.grid(row=self.row_index, column=0, sticky="w", padx=5, pady=(5, 2))
         self.header_widgets.append(lbl)
 
-        entry = ttk.Entry(self.parent, textvariable=self.vars['area_level'], width=20, validate="key",
-                          validatecommand=self.vcmd)
-        entry.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-        self.theme_manager.register(entry)
+        allowed_ilvl = [str(i) for i in range(48, 84)]
+        allowed_ilvl.reverse()
+        area_level_dropdown = CTkComboBox(
+            master=self.parent,
+            variable=self.vars['area_level'],
+            values=allowed_ilvl,
+            width=150
+        )
+        area_level_dropdown.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
         self.vars['area_level'].trace_add("write", self.update_tracker_blueprint)
-        self.widgets['area_level_entry'] = entry
+        self.widgets['area_level_entry'] = area_level_dropdown
         self.row_index += 1
 
     def update_tracker_blueprint(self, *args):
@@ -213,31 +157,37 @@ class LeftFrameControls:
 
     # --- Search & Info
     def _setup_search_and_info(self):
-        lbl = ttk.Label(self.parent, text="Search:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2))
-        self.theme_manager.register(lbl)
+        lbl = CTkLabel(self.parent, text="Search:")
+        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2), padx=5)
         self.header_widgets.append(lbl)
 
-        search_entry = ttk.Entry(self.parent, textvariable=self.vars['search'])
+        search_entry = CTkEntry(self.parent, textvariable=self.vars['search'], width=150)
         search_entry.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-        self.theme_manager.register(search_entry)
         self.vars['search'].trace_add("write", self.search_items)
         self.widgets['search_entry'] = search_entry
         self.row_index += 1
 
-
-        total_items_label = ttk.Label(self.parent, text="Total: 0")
-        total_items_label.grid(row=self.row_index, column=0, columnspan=2, sticky="w", pady=(0, 5))
-        self.theme_manager.register(total_items_label)
+        total_items_label = CTkLabel(self.parent, text="Total: 0")
+        total_items_label.grid(row=self.row_index, column=0, columnspan=2, sticky="w", padx=5, pady=(0, 5))
         self.widgets['total_items_label'] = total_items_label
 
         # Counter below search bar
-        self.vars['search_count'] = tk.StringVar(value="Found: 0")
-        search_count_label = ttk.Label(self.parent, textvariable=self.vars['search_count'])
+        self.vars['search_count'] = StringVar(value="Found: 0")
+        search_count_label = CTkLabel(self.parent, textvariable=self.vars['search_count'])
         search_count_label.grid(row=self.row_index, column=1, columnspan=2, sticky="w", pady=(0, 5))
-        self.theme_manager.register(search_count_label)
         self.widgets['search_count_label'] = search_count_label
 
+        self.row_index += 1
+
+    def _open_info(self):
+        popup = InfoPanelPopup(self.parent, title="Curio Hotkey Info")
+        popup.show()
+
+    # --- Search & Info
+    def _setup_info(self):
+        how_to_use_btn = CTkButton(self.parent, text="Info (Usage)", command=self._open_info)
+        how_to_use_btn.grid(row=self.row_index, column=0, columnspan=4, sticky="w", padx=5)
+        self.widgets['how_to_use_btn'] = how_to_use_btn
         self.row_index += 1
 
     def search_items(self, *args):
@@ -263,7 +213,6 @@ class LeftFrameControls:
             controls=self,
             tree_manager=self.tree_manager,
             tracker=self.tracker,
-            theme_manager=self.theme_manager
         ).run()
         self.update_total_items_count()
 
@@ -280,7 +229,7 @@ class LeftFrameControls:
         label = self.widgets.get('total_items_label')
         if label and label.winfo_exists():
             count = len(self.tree_manager.all_item_iids)
-            label.config(text=f"Total: {count}")
+            label.configure(text=f"Total: {count}")
 
     def get_current_row(self):
         return self.row_index

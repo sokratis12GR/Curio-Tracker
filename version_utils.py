@@ -2,6 +2,7 @@ import sys
 
 DEV_VERSION_FILE = "version.txt"
 
+
 def get_dev_version() -> str:
     try:
         with open(DEV_VERSION_FILE, "r", encoding="utf-8") as f:
@@ -11,7 +12,7 @@ def get_dev_version() -> str:
                     start = line.rfind("'")
                     end = line.rfind("'", 0, start)
                     if start > end:
-                        return line[end + 1 : start]
+                        return line[end + 1: start]
     except FileNotFoundError:
         return "0.0.0.0"
     return "0.0.0.0"

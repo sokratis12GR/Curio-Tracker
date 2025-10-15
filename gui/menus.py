@@ -1,38 +1,55 @@
-import tkinter as tk
+import customtkinter as ctk
 
-from gui import about_popup, keybinds_popup  # your popup modules
+from gui import keybinds_popup
+from gui.about_popup import CustomAboutPopup
 from gui.settings_popup import show_settings_popup
 from update_checker import check_for_updates
 
 
-def create_settings_menu(root, theme_manager, tracker, toggle_theme_callback, update_info_callback):
-    menu_bar = tk.Menu(root)
-    root.config(menu=menu_bar)
+def create_settings_menu(root, tracker, theme_manager, tree_manager, update_info_callback):
+    menu_frame = ctk.CTkFrame(root, corner_radius=0)
 
-    settings_menu = tk.Menu(menu_bar, tearoff=0)
-    menu_bar.add_cascade(label="File", menu=settings_menu)
+    try:
+        uses_grid = len(root.grid_slaves()) > 0
+    except Exception:
+        uses_grid = False
 
-    settings_menu.add_command(
-        label="Keybinds",
-        command=lambda: keybinds_popup.show_keybind_popup(root, update_labels_callback=update_info_callback)
+    if uses_grid:
+        menu_frame.grid(row=0, column=0, columnspan=3, sticky="ew", padx=5)
+    else:
+        menu_frame.pack(fill="x")
+
+    def handle_selection(choice):
+        if choice == "Keybinds":
+            keybinds_popup.show_keybind_popup(root, update_labels_callback=update_info_callback)
+        elif choice == "About":
+            CustomAboutPopup(root)
+        elif choice == "Settings":
+            show_settings_popup(root, tracker, theme_manager, tree_manager)
+        elif choice == "Check for Updates":
+            check_for_updates(root, theme_manager)
+        elif choice == "Exit":
+            root.destroy()
+
+        menu_dropdown.set("File")
+
+    file_menu_items = [
+        "Keybinds",
+        "About",
+        "Settings",
+        "Check for Updates",
+        "Exit"
+    ]
+
+    menu_dropdown = ctk.CTkOptionMenu(
+        master=menu_frame,
+        values=file_menu_items,
+        command=handle_selection,
+        width=50,
+        anchor="w",
     )
 
-    settings_menu.add_command(label="Toggle Theme (Light/Dark)", command=toggle_theme_callback)
-    settings_menu.add_command(
-        label="About",
-        command=lambda: about_popup.show_about_popup(root, theme_manager)
-    )
-    settings_menu.add_separator()
-    settings_menu.add_command(
-        label="Settings",
-        command=lambda: show_settings_popup(root, tracker)
-    )
-    settings_menu.add_separator()
-    settings_menu.add_command(
-        label="Check for Updates",
-        command=lambda: check_for_updates(root, theme_manager)
-    )
-    settings_menu.add_separator()
-    settings_menu.add_command(label="Exit", command=root.destroy)
+    menu_dropdown.set("File")
+    menu_dropdown.pack(side="left")
 
-    return menu_bar
+    return menu_frame

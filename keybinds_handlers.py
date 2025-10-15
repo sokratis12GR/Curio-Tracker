@@ -1,5 +1,6 @@
 import sys
 import threading
+from tkinter import TclError
 
 import config as c
 import curio_tracker as tracker
@@ -59,16 +60,31 @@ def handle_layout_capture(root, tree_manager, controls):
     root.after(0, controls.refresh_blueprint_info)
 
 
-def handle_exit(root, tree_manager=None, controls=None):
-    if c.ENABLE_LOGGING:
-        tracker.log_message(c.exiting_prompt)
+def handle_exit(root):
+    tracker.log_message(c.exiting_prompt)
+
     exit_event.set()
+
     try:
-        root.quit()
-        root.destroy()
-    except Exception:
+        def safe_quit_destroy(*args):
+            try:
+                root.quit()
+                root.destroy()
+            except TclError:
+                pass
+
+        if threading.current_thread() is threading.main_thread():
+            safe_quit_destroy()
+        else:
+            root.after(0, safe_quit_destroy)
+    except Exception as e:
+        if c.DEBUGGING:
+            print(f"[WARN] handle_exit GUI shutdown failed: {e}")
+
+    try:
+        sys.exit(0)
+    except SystemExit:
         pass
-    sys.exit(0)
 
 
 def handle_debugging_toggle():
@@ -82,6 +98,6 @@ def register_handlers(root, tree_manager, controls):
         'capture': lambda: handle_capture(root, tree_manager, controls),
         'snippet': lambda: handle_snippet(root, tree_manager, controls),
         'layout_capture': lambda: handle_layout_capture(root, tree_manager, controls),
-        'exit': lambda: handle_exit(root, tree_manager, controls),
+        'exit': lambda: handle_exit(root),
         'debug': lambda: handle_debugging_toggle()
     }

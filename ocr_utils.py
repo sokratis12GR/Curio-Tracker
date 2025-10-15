@@ -71,6 +71,8 @@ def normalize_for_search(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s.strip().lower()
 
+def remove_possessive_s(text: str) -> str:
+    return re.sub(r"\b(\w+)(?:'s|’s)\b", r"\1", text)
 
 #####################################
 # helpers for body armour ordering  # 
@@ -369,6 +371,7 @@ def parse_item_name(item) -> str:
             item_text = "\n".join([str(line) for line in item_text.lines])
     return item_text
 
+
 #########################################################################
 #                                                                       #
 #        Builds the Item for the Image Rendering via CSV / OCR          #
@@ -389,7 +392,9 @@ def build_parsed_item(
         stack_size="",
         chaos_value="",
         divine_value="",
-        tier=""
+        tier="",
+        picked=False,
+        owned=False,
 ):
     ts = parse_timestamp(timestamp)
 
@@ -448,7 +453,9 @@ def build_parsed_item(
         blueprint_type=blueprint_type,
         area_level=area_level,
         record_number=record,
-        tier=tier
+        tier=tier,
+        picked=picked,
+        owned=owned
     )
     if item_type == c.EXPERIMENTAL_TYPE:
         implicits_lines = experimental_items.get(term_title, [])

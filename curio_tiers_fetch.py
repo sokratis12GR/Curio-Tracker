@@ -59,5 +59,3 @@ def run_fetch_curios(force=False):
 
     update_lock(OUTPUT_TIERS_CSV)
     log_message(f"[INFO] Lock file updated: {LOCK_FILE}")
-
-# run_fetch_curios(True)

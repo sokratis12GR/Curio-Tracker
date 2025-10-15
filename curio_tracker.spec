@@ -37,6 +37,7 @@ datas = [
     ('tree_utils.py', '.'),
     ('version_utils.py', '.'),
     ('update_checker.py', '.'),
+    ('curio_collection_fetch.py', '.'),
 ]
 
 # ---- Add all files from /gui ----
@@ -57,6 +58,16 @@ for root, _, files in os.walk(assets_dir):
         rel_path = os.path.relpath(root, assets_dir)
         # The destination path inside the exe
         dest_dir = os.path.join("assets", rel_path)
+        datas.append((src_file, dest_dir))
+
+# ---- Add all files from /ctk_themes ----
+themes_dir = os.path.abspath("ctk_themes")
+for root, _, files in os.walk(themes_dir):
+    for f in files:
+        src_file = os.path.join(root, f)
+        rel_path = os.path.relpath(root, themes_dir)
+        # The destination path inside the exe
+        dest_dir = os.path.join("ctk_themes", rel_path)
         datas.append((src_file, dest_dir))
 
 # ---- Find Python DLL dynamically ----
@@ -113,6 +124,7 @@ a = Analysis(
         'PIL',
         'pygetwindow',
         'termcolor'
+        'customtkinter'
     ],
     hookspath=['.'],
     runtime_hooks=[],

@@ -1,11 +1,14 @@
 import csv
 import os
 import sys
+import threading
+import time
 
 import config as c
 from ocr_utils import smart_title_case, format_currency_value
 
 _DATASETS = None
+
 
 def get_data_path(filename: str) -> str:
     appdata = os.getenv('APPDATA') or os.path.expanduser('~')
@@ -92,6 +95,7 @@ def load_currency_dataset(file_path: str) -> dict:
         dataset[league][term] = {"chaos": chaos, "divine": divine}
     return dataset
 
+
 def load_tiers_dataset(file_path: str, debugging=False) -> dict:
     def parser(row):
         if len(row) >= 2:
@@ -111,9 +115,11 @@ SETTINGS_PATH = get_data_path(c.settings_file_name)
 LOCK_FILE = get_data_path(c.lock_file_name)
 OUTPUT_CURRENCY_CSV = get_data_path(c.currency_fetch_file_name)
 OUTPUT_TIERS_CSV = get_data_path(c.tiers_fetch_file_name)
+OUTPUT_COLLECTION_CSV = get_data_path(c.collection_fetch_file_name)
 INTERNAL_ALL_TYPES_CSV = get_resource_path(c.file_all_valid_heist_terms)
 INTERNAL_EXPERIMENTAL_CSV = get_resource_path(c.file_experimental_items)
 INTERNAL_BODY_ARMORS_TXT = get_resource_path(c.file_body_armors)
+
 
 def get_datasets(load_external=True, force_reload=False):
     global _DATASETS
@@ -122,13 +128,15 @@ def get_datasets(load_external=True, force_reload=False):
             "terms": load_csv_with_types(INTERNAL_ALL_TYPES_CSV),
             "experimental": load_experimental_csv(INTERNAL_EXPERIMENTAL_CSV),
             "body_armors": load_body_armors(INTERNAL_BODY_ARMORS_TXT),
-            "currency": [],
-            "tiers": ""
+            "currency": {},
+            "tiers": {},
+            "collection": {}
         }
         if load_external:
             if os.path.exists(OUTPUT_CURRENCY_CSV):
                 _DATASETS["currency"] = load_currency_dataset(OUTPUT_CURRENCY_CSV)
             if os.path.exists(OUTPUT_TIERS_CSV):
                 _DATASETS["tiers"] = load_tiers_dataset(OUTPUT_TIERS_CSV)
+            if os.path.exists(OUTPUT_COLLECTION_CSV):
+                _DATASETS["collection"] = load_tiers_dataset(OUTPUT_COLLECTION_CSV)
     return _DATASETS
-

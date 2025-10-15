@@ -21,7 +21,7 @@ SETTINGS_PATH = os.path.join(base_path, "user_settings.ini")
 DEFAULT_SETTINGS = {
     'User': {
         'poe_league': '3.26',
-        'poe_user': 'sokratis12GR',
+        'poe_user': 'sokratis12GR#6608',
     },
     'Hotkeys': {
         'capture_key': 'f2',
@@ -32,6 +32,8 @@ DEFAULT_SETTINGS = {
     },
     'DEFAULT': {
         'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+    },
+    'Application': {
         'time_last_dupe_check_seconds': '60'
     }
 }
@@ -68,7 +70,7 @@ def initialize_settings():
     snippet_key = get_setting('Hotkeys', 'snippet_key')
     enable_debugging_key = get_setting('Hotkeys', 'debug_key')
     pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
-    time_last_dupe_check_seconds = int(get_setting('DEFAULT', 'time_last_dupe_check_seconds', '60'))
+    time_last_dupe_check_seconds = int(get_setting('Application', 'time_last_dupe_check_seconds', 60))
 
 
 settings = DEFAULT_SETTINGS
@@ -79,15 +81,29 @@ OCR_DEBUGGING = False
 CSV_DEBUGGING = False
 ENABLE_LOGGING = True
 
+# Update these every league.
 LEAGUE = "Mercenaries"
+FIXED_LADDER_IDENTIFIER = "Mercenaries_of_Trarthus"
 LEAGUES_TO_FETCH = [
     LEAGUE,
     f"Hardcore {LEAGUE}",
     "Standard"
 ]
+IS_SSF = False
+ENABLE_POELADDER = False
+
+POELADDER_LADDERS = {
+    "SSF Standard": "SSF_Standard",
+    "SSF Mercenaries": "SSF_Mercenaries_of_Trarthus",
+    "Mercenaries": "Mercenaries_of_Trarthus",
+    "Standard": "Standard",
+    "SSF Hardcore Mercenaries": "SSF_Mercenaries_of_Trarthus_HC",
+    "SSF Hardcore": "SSF_Hardcore",
+}
+
 
 poe_league = "3.26"
-poe_user = "sokratis12GR"
+poe_user = "sokratis12GR#6608"
 
 # Default values of blueprint layouts
 default_bp_lvl = "83"
@@ -102,14 +118,48 @@ league_versions = [
     "3.20", "3.19", "3.18", "3.17", "3.16", "3.15",
     "3.14", "3.13", "3.12"
 ]
+theme_modes = [
+    "LIGHT", "DARK"
+]
 time_options = [
     "All", "Last hour", "Last 2 hours", "Last 12 hours", "Today", "Last 24 hours",
     "Last week", "Last 2 weeks", "Last month", "Last year", "Custom..."
 ]
+
+TREE_COLUMNS = [
+    {"id": "record", "label": "Record", "width": 100, "sort_reverse": True, "visible": True},
+    {"id": "item", "label": "Item / Enchant", "width": 420, "sort_reverse": False, "visible": True},
+    {"id": "value", "label": "Estimated Value", "width": 140, "sort_reverse": False, "visible": True},
+    {"id": "numeric_value", "label": "Numeric Value", "width": 100, "sort_reverse": False, "visible": False},
+    {"id": "stack_size", "label": "Stack Size", "width": 100, "sort_reverse": False, "visible": True},
+    {"id": "tier", "label": "Tier", "width": 100, "sort_reverse": False, "visible": True},
+    {"id": "type", "label": "Type", "width": 120, "sort_reverse": True, "visible": True},
+    {"id": "owned", "label": "Owned?", "width": 140, "sort_reverse": False, "visible": True},
+    {"id": "picked", "label": "Picked?", "width": 140, "sort_reverse": False, "visible": True},
+    {"id": "area_level", "label": "Area Level", "width": 100, "sort_reverse": False, "visible": True},
+    {"id": "layout", "label": "BP Layout", "width": 200, "sort_reverse": False, "visible": True},
+    {"id": "player", "label": "Found by", "width": 120, "sort_reverse": False, "visible": True},
+    {"id": "league", "label": "League", "width": 100, "sort_reverse": False, "visible": True},
+    {"id": "time", "label": "Time", "width": 150, "sort_reverse": True, "visible": True},
+]
+
+COLOR = {
+    "enchant": "#b4b4ff",
+    "currency": "#aa9e82",
+    "scarab": "#aa9e82",
+    "rare": "#ffff77",
+    "experimental": "#ffff77",
+    "replica": "#af6025",
+    "replacement": "#af6025",
+}
+
+DEFAULT_THEME_MODE = "DARK"
+MIN_DUPE_DURATION = 30
+MAX_DUPE_DURATION = 240
 TOP_RIGHT_CUT_WIDTH = 170
 TOP_RIGHT_CUT_HEIGHT = 100
 
-IMAGE_COL_WIDTH = 200
+IMAGE_COL_WIDTH = 265
 ROW_HEIGHT = 40
 
 # Type constants
@@ -135,6 +185,7 @@ settings_file_name = "user_settings.ini"
 lock_file_name = "fetch/last_run.lock"
 currency_fetch_file_name = "fetch/heist_item_currency_values.csv"
 tiers_fetch_file_name = "fetch/heist_item_tiers_data.csv"
+collection_fetch_file_name = "fetch/heist_item_collection_data.csv"
 
 ### CSV Header Format -- Adjusted to support the format of the "PoE Curio Case Rates" Project: https://docs.google.com/spreadsheets/d/1dDDMRc3GAE4G0X-lJeLXSHaGtLLNf612nrFiOyCo0Vs/edit?gid=710775455#gid=710775455
 csv_record_header = "Record #"
@@ -157,6 +208,8 @@ csv_variant_header = "Variant"
 csv_flag_header = "Flag?"
 csv_time_header = "Time"
 csv_tier_header = "Tier"
+csv_picked_header = "Picked"
+csv_owned_header = "Owned"
 
 csv_type_header = "Type"
 csv_value_header = "Value"
@@ -169,8 +222,8 @@ file_experimental_items = "experimental_items.csv"
 target_application = "Path of Exile"
 not_found_target_txt = "Path of Exile window not found."
 not_found_target_snippet_txt = "Path of Exile window not found. Exiting snippet."
-snippet_txt_too_small = "⚠️ Selected region is too small or invalid."
-snippet_txt_failed = "⚠️ Screenshot capture failed."
+snippet_txt_too_small = "Selected region is too small or invalid."
+snippet_txt_failed = "Screenshot capture failed."
 listening_keybinds_txt = "Listening for keybinds... Press your exit key to stop."
 
 ## Matches Info
@@ -188,51 +241,21 @@ time_column_index = 16  # 17th column of the .csv file contains the time var
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
 
 ## Replica / Unique: #AF6025
-### Lower
-replica_l_hue = 5
-replica_l_sat = 100
-replica_l_val = 80
-### Upper
-replica_u_hue = 25
-replica_u_sat = 255
-replica_u_val = 255
+replica_l_hsv = [5, 100, 80]
+replica_u_hsv = [25, 255, 255]
 
 ## Rare / Experimental: #D9C850
-### Lower
-rare_l_hue = 20
-rare_l_sat = 50
-rare_l_val = 160
-### Upper
-rare_u_hue = 40
-rare_u_sat = 255
-rare_u_val = 255
+rare_l_hsv = [20, 50, 160]
+rare_u_hsv = [40, 255, 255]
 
 ## Currency Item: #AA9E82
-### Lower
-currency_l_hue = 15
-currency_l_sat = 0
-currency_l_val = 90
-### Upper
-currency_u_hue = 45
-currency_u_sat = 100
-currency_u_val = 220
+currency_l_hsv = [15, 0, 90]
+currency_u_hsv = [45, 100, 220]
 
 ## Scarabs (new gray): #B7B8B8
-### Lower
-scarab_l_hue = 0
-scarab_l_sat = 0
-scarab_l_val = 150
-### Upper
-scarab_u_hue = 180
-scarab_u_sat = 10
-scarab_u_val = 255
+scarab_l_hsv = [0, 0, 150]
+scarab_u_hsv = [180, 10, 255]
 
 ## Enchants (blue-gray): #5C7E9D
-### Lower
-enchant_l_hue = 95
-enchant_l_sat = 15
-enchant_l_val = 70
-### Upper
-enchant_u_hue = 130
-enchant_u_sat = 90
-enchant_u_val = 255
+enchant_l_hsv = [95, 15, 70]
+enchant_u_hsv = [130, 90, 255]

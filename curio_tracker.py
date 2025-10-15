@@ -22,7 +22,7 @@ from termcolor import colored
 import config as c
 import ocr_utils as utils
 import toasts
-from config import csv_file_path, LEAGUE
+from config import csv_file_path
 from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
@@ -34,6 +34,7 @@ blueprint_area_level = c.default_bp_lvl
 blueprint_layout = c.default_bp_area
 poe_user = c.poe_user
 league_version = c.poe_league
+duplicate_duration_time = c.time_last_dupe_check_seconds
 
 stack_sizes = {}
 
@@ -44,11 +45,14 @@ parsed_items = []
 
 full_currency = datasets.get("currency") or {}
 
+
 def on_league_change(new_league: str):
     global CURRENCY_DATASET
     CURRENCY_DATASET = full_currency.get(new_league, {})
+    log_message("League changed to " + new_league)
     if c.DEBUGGING:
         log_currency_dataset(CURRENCY_DATASET)
+
 
 def log_currency_dataset(dataset):
     if not dataset:
@@ -61,6 +65,7 @@ def log_currency_dataset(dataset):
         values_str = json.dumps(values, ensure_ascii=False)
         log_message(f"  - {term}: {values_str}")
 
+
 CURRENCY_DATASET = {}
 
 TIERS_DATASET = datasets["tiers"]
@@ -68,6 +73,7 @@ experimental_items = datasets["experimental"]
 term_types = datasets["terms"]
 all_terms = set(term_types.keys())
 body_armors = datasets["body_armors"]
+collection_dataset = datasets["collection"]
 
 
 def build_enchant_type_lookup(term_types):
@@ -143,16 +149,11 @@ def filter_item_text(image_np, fullscreen=False):
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
     color_ranges = {
-        "unique": ([c.replica_l_hue, c.replica_l_sat, c.replica_l_val],
-                   [c.replica_u_hue, c.replica_u_sat, c.replica_u_val]),
-        "rare": ([c.rare_l_hue, c.rare_l_sat, c.rare_l_val],
-                 [c.rare_u_hue, c.rare_u_sat, c.rare_u_val]),
-        "currency": ([c.currency_l_hue, c.currency_l_sat, c.currency_l_val],
-                     [c.currency_u_hue, c.currency_u_sat, c.currency_u_val]),
-        "scarab": ([c.scarab_l_hue, c.scarab_l_sat, c.scarab_l_val],
-                   [c.scarab_u_hue, c.scarab_u_sat, c.scarab_u_val]),
-        "enchant": ([c.enchant_l_hue, c.enchant_l_sat, c.enchant_l_val],
-                    [c.enchant_u_hue, c.enchant_u_sat, c.enchant_u_val]),
+        "unique": (c.replica_l_hsv, c.replica_u_hsv),
+        "rare": (c.rare_l_hsv, c.rare_u_hsv),
+        "currency": (c.currency_l_hsv, c.currency_u_hsv),
+        "scarab": (c.scarab_l_hsv, c.scarab_u_hsv),
+        "enchant": (c.enchant_l_hsv, c.enchant_u_hsv),
     }
 
     # Create combined mask
@@ -231,7 +232,7 @@ def extract_currency_value(text, matched_term, term_types):
 #################################################
 # Check if a term or combo term is in the text. #
 #################################################
-def is_term_match(term, text):
+def is_term_match(term, text) -> bool:
     def normalize_lines(text):
         return [utils.normalize_for_search(line) for line in text.splitlines()]
 
@@ -278,10 +279,10 @@ recent_terms = []
 
 def is_duplicate_recent_entry(value, path=csv_file_path):
     current_time = datetime.now()
-
+    dupe_duration = int(duplicate_duration_time or 60)
     # Check in-memory recent terms first
     for term, ts in recent_terms:
-        if term == value and (current_time - ts).total_seconds() < c.time_last_dupe_check_seconds:
+        if term == value and (current_time - ts).total_seconds() < dupe_duration:
             return True
 
     # Check CSV for older duplicates
@@ -294,7 +295,7 @@ def is_duplicate_recent_entry(value, path=csv_file_path):
                     continue
                 try:
                     entry_time = datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S")
-                    if (current_time - entry_time).total_seconds() < c.time_last_dupe_check_seconds:
+                    if (current_time - entry_time).total_seconds() < dupe_duration:
                         if value in row.values():  # Check if value exists anywhere in the row
                             return True
                 except ValueError:
@@ -314,13 +315,17 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
     global non_dup_count
 
     all_candidates = []
-    terms_source = all_terms
+    original_terms_source = all_terms
+    original_text = text
 
-    for term in terms_source:
-        term_title = utils.smart_title_case(term)
-        if is_term_match(term_title, text):
+    terms_source = [utils.remove_possessive_s(t) for t in original_terms_source]
+    text_clean = utils.remove_possessive_s(text)
+
+    for original_term, cleaned_term in zip(original_terms_source, terms_source):
+        term_title = utils.smart_title_case(cleaned_term)
+        if is_term_match(term_title, text_clean):
             duplicate = is_duplicate_recent_entry(term_title)
-            all_candidates.append((term_title, duplicate))
+            all_candidates.append((original_term, duplicate))
 
     #########################################################################################
     # SPECIFICALLY FOR ENCHANTS TO NOT COUNT TWICE FOR MATCHES i.e                          #
@@ -501,7 +506,9 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
             stack_size if (int(stack_size) > 0 and utils.is_currency_or_scarab(item_type)) else "",
             "",
             False,
-            timestamp
+            timestamp,
+            False,
+            False,
         ]
 
     try:
@@ -518,7 +525,8 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                     c.csv_weapon_enchant_header, c.csv_armor_enchant_header,
                     c.csv_scarab_header, c.csv_currency_header,
                     c.csv_stack_size_header, c.csv_variant_header,
-                    c.csv_flag_header, c.csv_time_header
+                    c.csv_flag_header, c.csv_time_header,
+                    c.csv_picked_header, c.csv_owned_header
                 ])
 
             for match in matched_terms:
@@ -533,6 +541,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                 chaos_est = estimated_value.get("chaos")
                 divine_est = estimated_value.get("divine")
                 tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
+                owned = collection_dataset.get(term_title, True).get("owned", False)
                 if allow_dupes or not duplicate:
                     record_number = get_next_record_number()
                     mark_term_as_captured(term_title)
@@ -551,7 +560,9 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                         league=league_version,
                         chaos_value=chaos_est,
                         divine_value=divine_est,
-                        tier=tier
+                        tier=tier,
+                        picked=False,
+                        owned=False
                     )
                     parsed_items.append(item)
 
@@ -672,7 +683,6 @@ def upgrade_csv_with_record_numbers(file_path):
 
 def init_csv():
     log_message("Starting Heist Curio Tracker...")
-    # Ensure the CSV file has Record # permanently
     upgrade_csv_with_record_numbers(c.csv_file_path)
 
 
@@ -705,6 +715,8 @@ def _parse_items_from_rows(rows):
         variant = row.get(c.csv_variant_header, "")
         # duplicate = row.get(c.csv_flag_header, "FALSE").upper() == "TRUE" # Why was I even calling this????? xd
         timestamp = row.get(c.csv_time_header, "")
+        picked = row.get(c.csv_picked_header, "")
+        owned = row.get(c.csv_owned_header, "")
 
         for col_name, inferred_type in column_to_type.items():
             value = row.get(col_name)
@@ -736,7 +748,9 @@ def _parse_items_from_rows(rows):
                 stack_size=stack_size,
                 chaos_value=chaos_est,
                 divine_value=divine_est,
-                tier=tier
+                tier=tier,
+                picked=picked,
+                owned=owned
             )
             parsed_items.append(item)
 
@@ -939,6 +953,14 @@ def capture_layout(root):
         toasts.show_message(root, status)
         log_message(status)
         attempt += 1
+
+
+def set_duplicate_duration(duration: int):
+    from settings import set_setting
+    global duplicate_duration_time
+    duplicate_duration_time = duration
+    set_setting('Application', 'time_last_dupe_check_seconds', duration)
+    log_message(f"Time between-duplicates check set to: {duration}s")
 
 
 def validate_attempt(print_text):

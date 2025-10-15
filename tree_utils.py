@@ -3,6 +3,7 @@ from PIL import Image
 
 item_counters = {}  # global dict to track counts per item name
 
+
 def get_item_name_str(item):
     name = getattr(item, 'itemName', 'Unknown')
     if hasattr(name, 'lines'):

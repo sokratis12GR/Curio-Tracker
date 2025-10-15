@@ -221,7 +221,7 @@ def start_recording_popup(index, button_list, root, update_info_labels):
         if len(_current_keys) >= 1:
             combo_str = '+'.join(format_key(k) for k in _current_keys)
             btn = button_list[_recording_index]
-            btn.after(0, lambda b=btn, t=combo_str: b.config(text=t))
+            btn.after(0, lambda b=btn, t=combo_str: b.configure(text=t))
             update_keybind(keybinds[_recording_index][2], combo_str)
             update_info_labels()
 
@@ -292,7 +292,7 @@ def cancel_recording_popup(button_list=None):
             name = keybinds[_recording_index][2]
             btn = button_list[_recording_index]
             combo = get_display_hotkey(name)
-            btn.after(0, lambda b=btn, t=combo: b.config(text=t))
+            btn.after(0, lambda b=btn, t=combo: b.configure(text=t))
         if DEBUGGING:
             print("[INFO] Recording cancelled.")
     except Exception:
@@ -366,6 +366,7 @@ def stop_global_listener():
 
 # ---------------- Initialize ----------------
 init_from_settings()
+
 
 def start_controller_thread():
     t = threading.Thread(target=controller_listener, daemon=True)
