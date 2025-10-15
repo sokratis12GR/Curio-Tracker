@@ -95,8 +95,6 @@ def build_lookup_dict(category_data):
 
 
 def fetch_all_items(league: str):
-    print(f"\n=== Fetching items for {league} ===")
-
     category_data = {}
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [

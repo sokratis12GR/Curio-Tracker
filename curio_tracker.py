@@ -26,6 +26,7 @@ from config import csv_file_path
 from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
+from settings import get_setting
 
 datasets = get_datasets(force_reload=True)
 
@@ -47,15 +48,19 @@ full_currency = datasets.get("currency") or {}
 collection_dataset = datasets.get("collection") or {}
 
 
-def on_league_change(new_league: str):
+def on_league_change():
     global CURRENCY_DATASET, COLLECTION_DATASET_ACTIVE
+    new_league = get_setting("Application", "data_league", c.LEAGUE)
     CURRENCY_DATASET = full_currency.get(new_league, {})
-
-    league_collection = collection_dataset.get(new_league, {})
+    poeladder_new_league = get_setting("Application", "poeladder_data_league", c.FIXED_LADDER_IDENTIFIER)
+    league_collection = collection_dataset.get(poeladder_new_league, {})
     COLLECTION_DATASET_ACTIVE = {term: data.get("owned", False) for term, data in league_collection.items()}
-    log_message(f"League changed to {new_league}, loaded {len(COLLECTION_DATASET_ACTIVE)} curios")
+    log_message(f"League changed to poe.ninja: {new_league} | poeladder: {poeladder_new_league}")
 
     if c.DEBUGGING:
+        log_message(f"DataSet Keys: {collection_dataset.keys()}")
+        log_message(f"Collections: {league_collection.items()}")
+        log_message(f"Collection Active {COLLECTION_DATASET_ACTIVE.items()}")
         log_currency_dataset(CURRENCY_DATASET)
         log_message(f"[DEBUG] Loaded {len(COLLECTION_DATASET_ACTIVE)} curios for {new_league}")
 
@@ -330,7 +335,7 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
     for original_term, cleaned_term in zip(original_terms_source, terms_source):
         term_title = utils.smart_title_case(cleaned_term)
         if is_term_match(term_title, text_clean):
-            duplicate = is_duplicate_recent_entry(term_title)
+            duplicate = is_duplicate_recent_entry(original_term)
             all_candidates.append((original_term, duplicate))
 
     #########################################################################################

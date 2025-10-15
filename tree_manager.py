@@ -6,7 +6,7 @@ from customtkinter import *
 from pytz import InvalidTimeError
 
 import ocr_utils as utils
-from config import ROW_HEIGHT, layout_keywords, TREE_COLUMNS
+from config import ROW_HEIGHT, layout_keywords, TREE_COLUMNS, DEBUGGING
 from csv_manager import CSVManager
 from gui.custom_hours_popup import CustomHoursPopup
 from gui.item_overview_frame import ItemOverviewFrame
@@ -280,22 +280,35 @@ class TreeManager:
             return
 
         col_name = displayed_columns[col_index]
-        if col_name not in ("owned", "picked"):
+        if col_name.lower() != "picked":
             return
 
-        # --- Toggle value ---
-        current_state = self.checkbox_states.get((row_id, col_name), False)
-        new_state = not current_state
-        self.checkbox_states[(row_id, col_name)] = new_state
+        current_value = str(self.tree.set(row_id, col_name)).strip().lower()
+        if current_value in ("true", "yes"):
+            new_state = False
+            new_text = "No"
+        else:
+            new_state = True
+            new_text = "Yes"
 
         # Update the tree display
-        self.tree.set(row_id, col_name, "✓" if new_state else "")
+        self.tree.set(row_id, col_name, new_text)
 
-        # Update item object
+        self.checkbox_states[(row_id, col_name)] = new_state
+
         item = self.csv_row_map.get(row_id)
-        if item:
-            setattr(item, col_name, new_state)
-            self.modify_csv_record(row_id, getattr(item, "itemName", ""), updates={col_name.capitalize(): new_state})
+        if not item:
+            return
+
+        if getattr(item, "enchants", None) and len(item.enchants) > 0:
+            item_text = "\n".join([str(e) for e in item.enchants])
+        else:
+            item_text = getattr(item, "itemName", "Unknown")
+            if hasattr(item_text, "lines"):
+                item_text = "\n".join([str(line) for line in item_text.lines])
+
+        setattr(item, col_name, new_state)
+        self.modify_csv_record(row_id, item_text, updates={"Picked": new_state})
 
     def on_tree_double_click(self, event):
         # Identify row and column
@@ -311,7 +324,8 @@ class TreeManager:
 
         # Map to actual column name
         col_name = displayed_columns[col_idx_displayed]
-        print(f"row_id: {row_id}, col_id: {col_id}, col_name: {col_name}")
+        if DEBUGGING:
+            print(f"row_id: {row_id}, col_id: {col_id}, col_name: {col_name}")
 
         bbox = self.tree.bbox(row_id, col_name)
         if not bbox:

@@ -54,7 +54,7 @@ LEAGUE = "Mercenaries"
 
 def initialize_settings():
     global capture_key, exit_key, layout_capture_key, snippet_key, enable_debugging_key
-    global pytesseract_path, time_last_dupe_check_seconds
+    global pytesseract_path, time_last_dupe_check_seconds, LEAGUE
     from settings import get_setting, set_setting, write_settings
 
     # Ensure defaults exist

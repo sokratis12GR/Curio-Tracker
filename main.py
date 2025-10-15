@@ -121,13 +121,11 @@ def main():
 
     def initialize_app():
         try:
-            data_league = get_setting('Application', 'data_league', LEAGUE)
             player = get_setting("User", "poe_user", tracker.poe_user)
-            is_ssf = get_setting("Application", "is_ssf", IS_SSF)
-            datasets = load_data(data_league)
             fetch_tiers.run_fetch_curios()
             fetch_collection.run_fetch_curios_threaded(player)
-            schedule_auto_update(root, player, data_league, is_ssf)
+            load_data()
+            schedule_auto_update(root, player)
             set_tesseract_path()
             tracker.init_csv()
             initialize_settings()
@@ -155,12 +153,11 @@ def start_main_app(root, theme_mode, theme_manager):
     if platform.startswith("win"):
         root.after(200, lambda: root.iconbitmap(get_resource_path("assets/icon.ico")))
 
-    data_league = get_setting('Application', 'data_league', LEAGUE)
     tracker.poe_user = get_setting("User", "poe_user", tracker.poe_user)
     tracker.league_version = get_setting("User", "poe_league", tracker.league_version)
     tracker.blueprint_layout = get_setting("Blueprint", "layout", tracker.blueprint_layout)
     tracker.blueprint_area_level = get_setting("Blueprint", "area_level", tracker.blueprint_area_level)
-    tracker.on_league_change(data_league)
+    tracker.on_league_change()
 
     layout = create_layout(root)
     treeview = CustomTreeview(layout['tree_frame'], theme_mode, TREE_COLUMNS)
@@ -220,7 +217,7 @@ def start_main_app(root, theme_mode, theme_manager):
 
 UPDATE_INTERVAL_MS = 30 * 60 * 1000  # 30 minutes in milliseconds
 
-def schedule_auto_update(root, player, data_league, is_ssf):
+def schedule_auto_update(root, player):
 
     def auto_fetch():
         threading.Thread(target=fetch_collection.run_fetch_curios_threaded, args=(player,), daemon=True).start()
@@ -230,7 +227,7 @@ def schedule_auto_update(root, player, data_league, is_ssf):
     root.after(0, auto_fetch)
 
 
-def load_data(league, force_refresh=False):
+def load_data(force_refresh=False):
     try:
         log_message("[INFO] Starting data load...")
 
@@ -243,7 +240,8 @@ def load_data(league, force_refresh=False):
 
         datasets = get_datasets(force_reload=True)
         tracker.full_currency = datasets.get("currency", {})
-        tracker.on_league_change(league)
+        tracker.collection_dataset = datasets.get("collection", {})
+        tracker.on_league_change()
 
         log_message("[INFO] Data load complete.")
 

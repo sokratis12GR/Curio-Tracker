@@ -127,13 +127,13 @@ def load_collection_dataset(file_path: str, debugging: bool = False) -> dict:
             if not name:
                 continue
 
-            league = str(row.get("league", "Unknown")).strip() or "Unknown"
+            league = str(row.get("ladder_identifier", "Unknown")).strip() or "Unknown"
 
             curios_by_league[league][name] = {
                 "owned": str(row.get("owned", "FALSE")).strip().upper() == "TRUE",
                 "location": str(row.get("location", "")).strip(),
                 "ladder_identifier": str(row.get("ladder_identifier", "")).strip(),
-                "league": league,
+                "league": str(row.get("league", "")).strip(),
             }
 
             if debugging:

@@ -181,7 +181,12 @@ class UnifiedSettingsSection:
     def _toggle_ssf_league(self):
         enabled = self.is_ssf_league_var.get()
         set_setting("Application", "is_ssf", enabled)
-        log_message("SSF", enabled)
+        data_league = get_setting("Application", "data_league")
+        mutated_val = "SSF " + data_league if enabled else data_league
+        for ladder_key, ladder_identifier in c.POELADDER_LADDERS.items():
+            if ladder_key == mutated_val:
+                set_setting("Application", "poeladder_data_league", ladder_identifier)
+        self.tracker.on_league_change()
 
     def _toggle_poeladder(self):
         enabled = self.enable_poeladder_var.get()
@@ -202,7 +207,12 @@ class UnifiedSettingsSection:
         if not val:
             return
         set_setting("Application", "data_league", val)
-        self.tracker.on_league_change(val)
+        is_ssf = get_setting("Application", "is_ssf")
+        mutated_val = "SSF " + val if is_ssf else val
+        for ladder_key, ladder_identifier in c.POELADDER_LADDERS.items():
+            if ladder_key == mutated_val:
+                set_setting("Application", "poeladder_data_league", ladder_identifier)
+        self.tracker.on_league_change()
 
     def _update_tracker_poe_player(self, *_):
         val = self.poe_player_var.get()

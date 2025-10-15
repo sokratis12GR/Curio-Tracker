@@ -27,8 +27,6 @@ def fetch_curios(player: str, ladder_identifier: str):
     encoded_player = urllib.parse.quote(safe_player, safe="")
     url = API_URL.format(player=encoded_player)
 
-    # full_url = f"{url}?ladderIdentifier={urllib.parse.quote(ladder_identifier)}"
-
     try:
         resp = SESSION.get(url, params={"ladderIdentifier": ladder_identifier}, timeout=30)
         resp.raise_for_status()
@@ -62,15 +60,12 @@ def fetch_all_ladders(player: str):
             try:
                 curios = future.result()
                 if curios:
-                    # Strip "Replica " prefix and map league label
-                    league_label = ladder_key.replace("SSF ", "")
                     for entry in curios:
                         name = entry.get("name")
                         if isinstance(name, str) and name.startswith("Replica "):
                             entry["name"] = name[len("Replica "):]
-                        entry["league"] = league_label
+                        entry["league"] = ladder_key
                     all_curios.extend(curios)
-                    log_message(f"[INFO] {ladder_key}: fetched {len(curios)} curios.")
                 else:
                     log_message(f"[WARN] {ladder_key}: no curios fetched.")
             except Exception as e:
@@ -94,12 +89,23 @@ def run_fetch_curios_threaded(player: str):
         df = pd.DataFrame(all_curios)
         df.to_csv(OUTPUT_COLLECTION_CSV, index=False)
         log_message(f"[INFO] Saved combined curios CSV: {OUTPUT_COLLECTION_CSV} with {len(df)} rows.")
+        if "owned" in df.columns:
+            owned_series = df["owned"] == True
 
-        # Optionally, print summary per league
-        summary = df.groupby("league").size().to_dict()
-        log_message("[INFO] Summary of curios fetched per league:")
-        for league, count in summary.items():
-            log_message(f"  {league:<20} | {count} items")
+            owned_summary = (
+                df.groupby("league")["owned"]
+                .apply(lambda x: (x == True).sum())
+                .to_dict()
+            )
+            total_summary = df.groupby("league").size().to_dict()
+
+            log_message("[INFO] Owned curios per league:")
+            for league, owned_count in owned_summary.items():
+                total_count = total_summary.get(league, 0)
+                log_message(f"  {league:<20} | {owned_count} owned / {total_count} total")
+        else:
+            log_message("[WARN] 'owned' column not found in curios data.")
+
 
     finally:
         IS_FETCHING = False
