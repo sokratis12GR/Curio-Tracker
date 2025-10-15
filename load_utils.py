@@ -1,8 +1,6 @@
 import csv
 import os
 import sys
-import threading
-import time
 
 import config as c
 from ocr_utils import smart_title_case, format_currency_value
@@ -110,6 +108,43 @@ def load_tiers_dataset(file_path: str, debugging=False) -> dict:
     return {term: data for term, data in rows if term}
 
 
+import pandas as pd
+from collections import defaultdict
+
+
+def load_collection_dataset(file_path: str, debugging: bool = False) -> dict:
+    try:
+        df = pd.read_csv(file_path)
+
+        required_cols = {"name", "owned", "location", "ladder_identifier", "league"}
+        if not required_cols.issubset(df.columns):
+            return {}
+
+        curios_by_league = defaultdict(dict)
+
+        for _, row in df.iterrows():
+            name = str(row["name"]).strip()
+            if not name:
+                continue
+
+            league = str(row.get("league", "Unknown")).strip() or "Unknown"
+
+            curios_by_league[league][name] = {
+                "owned": str(row.get("owned", "FALSE")).strip().upper() == "TRUE",
+                "location": str(row.get("location", "")).strip(),
+                "ladder_identifier": str(row.get("ladder_identifier", "")).strip(),
+                "league": league,
+            }
+
+            if debugging:
+                print(f"{league} | {name}: {curios_by_league[league][name]}")
+
+        return dict(curios_by_league)
+
+    except Exception as e:
+        return {}
+
+
 LOG_FILE = get_data_path(c.logs_file_name)
 SETTINGS_PATH = get_data_path(c.settings_file_name)
 LOCK_FILE = get_data_path(c.lock_file_name)
@@ -138,5 +173,5 @@ def get_datasets(load_external=True, force_reload=False):
             if os.path.exists(OUTPUT_TIERS_CSV):
                 _DATASETS["tiers"] = load_tiers_dataset(OUTPUT_TIERS_CSV)
             if os.path.exists(OUTPUT_COLLECTION_CSV):
-                _DATASETS["collection"] = load_tiers_dataset(OUTPUT_COLLECTION_CSV)
+                _DATASETS["collection"] = load_collection_dataset(OUTPUT_COLLECTION_CSV)
     return _DATASETS

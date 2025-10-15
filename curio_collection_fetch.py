@@ -1,6 +1,7 @@
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import pandas as pd
 import requests
 
@@ -16,7 +17,6 @@ IS_FETCHING = False
 HEADERS = {"User-Agent": "fetch-poeladder-player-curios/1.0"}
 API_URL = "https://poeladder.com/api/v1/users/{player}/curio"
 
-
 # === SESSION FOR THREAD-SAFE REQUESTS ===
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -27,8 +27,7 @@ def fetch_curios(player: str, ladder_identifier: str):
     encoded_player = urllib.parse.quote(safe_player, safe="")
     url = API_URL.format(player=encoded_player)
 
-    full_url = f"{url}?ladderIdentifier={urllib.parse.quote(ladder_identifier)}"
-    print(f"Fetching curios for {player} using URL:\n{full_url}")
+    # full_url = f"{url}?ladderIdentifier={urllib.parse.quote(ladder_identifier)}"
 
     try:
         resp = SESSION.get(url, params={"ladderIdentifier": ladder_identifier}, timeout=30)

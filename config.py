@@ -50,6 +50,7 @@ info_show_keys_snippet = None
 info_show_keys_layout = None
 info_show_keys_exit = None
 
+LEAGUE = "Mercenaries"
 
 def initialize_settings():
     global capture_key, exit_key, layout_capture_key, snippet_key, enable_debugging_key
@@ -71,6 +72,7 @@ def initialize_settings():
     enable_debugging_key = get_setting('Hotkeys', 'debug_key')
     pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
     time_last_dupe_check_seconds = int(get_setting('Application', 'time_last_dupe_check_seconds', 60))
+    LEAGUE = get_setting('Application', 'data_league')
 
 
 settings = DEFAULT_SETTINGS
@@ -82,7 +84,6 @@ CSV_DEBUGGING = False
 ENABLE_LOGGING = True
 
 # Update these every league.
-LEAGUE = "Mercenaries"
 FIXED_LADDER_IDENTIFIER = "Mercenaries_of_Trarthus"
 LEAGUES_TO_FETCH = [
     LEAGUE,

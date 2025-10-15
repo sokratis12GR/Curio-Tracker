@@ -44,14 +44,20 @@ listener_ref = None
 parsed_items = []
 
 full_currency = datasets.get("currency") or {}
+collection_dataset = datasets.get("collection") or {}
 
 
 def on_league_change(new_league: str):
-    global CURRENCY_DATASET
+    global CURRENCY_DATASET, COLLECTION_DATASET_ACTIVE
     CURRENCY_DATASET = full_currency.get(new_league, {})
-    log_message("League changed to " + new_league)
+
+    league_collection = collection_dataset.get(new_league, {})
+    COLLECTION_DATASET_ACTIVE = {term: data.get("owned", False) for term, data in league_collection.items()}
+    log_message(f"League changed to {new_league}, loaded {len(COLLECTION_DATASET_ACTIVE)} curios")
+
     if c.DEBUGGING:
         log_currency_dataset(CURRENCY_DATASET)
+        log_message(f"[DEBUG] Loaded {len(COLLECTION_DATASET_ACTIVE)} curios for {new_league}")
 
 
 def log_currency_dataset(dataset):
@@ -67,13 +73,13 @@ def log_currency_dataset(dataset):
 
 
 CURRENCY_DATASET = {}
+COLLECTION_DATASET_ACTIVE = {}
 
 TIERS_DATASET = datasets["tiers"]
 experimental_items = datasets["experimental"]
 term_types = datasets["terms"]
 all_terms = set(term_types.keys())
 body_armors = datasets["body_armors"]
-collection_dataset = datasets["collection"]
 
 
 def build_enchant_type_lookup(term_types):
@@ -541,7 +547,8 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                 chaos_est = estimated_value.get("chaos")
                 divine_est = estimated_value.get("divine")
                 tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
-                owned = collection_dataset.get(term_title, True).get("owned", False)
+                owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
+
                 if allow_dupes or not duplicate:
                     record_number = get_next_record_number()
                     mark_term_as_captured(term_title)
@@ -562,7 +569,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                         divine_value=divine_est,
                         tier=tier,
                         picked=False,
-                        owned=False
+                        owned=owned
                     )
                     parsed_items.append(item)
 
@@ -716,7 +723,7 @@ def _parse_items_from_rows(rows):
         # duplicate = row.get(c.csv_flag_header, "FALSE").upper() == "TRUE" # Why was I even calling this????? xd
         timestamp = row.get(c.csv_time_header, "")
         picked = row.get(c.csv_picked_header, "")
-        owned = row.get(c.csv_owned_header, "")
+        # owned = row.get(c.csv_owned_header, "")
 
         for col_name, inferred_type in column_to_type.items():
             value = row.get(col_name)
@@ -728,6 +735,7 @@ def _parse_items_from_rows(rows):
             estimated_value = CURRENCY_DATASET.get(term_title, {})
             chaos_est = estimated_value.get("chaos")
             divine_est = estimated_value.get("divine")
+            owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
 
             tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
             duplicate = False  # Just predefining
