@@ -5,6 +5,7 @@ import os
 import glob
 import sysconfig
 import shutil
+import customtkinter
 from PyInstaller.utils.hooks import collect_dynamic_libs
 
 # ---- Collect dynamic libraries ----
@@ -69,6 +70,9 @@ for root, _, files in os.walk(themes_dir):
         # The destination path inside the exe
         dest_dir = os.path.join("ctk_themes", rel_path)
         datas.append((src_file, dest_dir))
+
+ctk_path = os.path.dirname(customtkinter.__file__)
+datas.append((ctk_path, "customtkinter"))
 
 # ---- Find Python DLL dynamically ----
 dll_dir = sysconfig.get_config_var('BINDIR')
