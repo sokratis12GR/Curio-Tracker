@@ -8,6 +8,7 @@ import requests
 from config import POELADDER_LADDERS
 from load_utils import OUTPUT_COLLECTION_CSV
 from logger import log_message
+from ocr_utils import smart_title_case
 
 # === THREADING FLAGS ===
 FETCH_DONE = threading.Event()
@@ -61,7 +62,7 @@ def fetch_all_ladders(player: str):
                 curios = future.result()
                 if curios:
                     for entry in curios:
-                        name = entry.get("name")
+                        name = smart_title_case(entry.get("name"))
                         if isinstance(name, str) and name.startswith("Replica "):
                             entry["name"] = name[len("Replica "):]
                         entry["league"] = ladder_key
