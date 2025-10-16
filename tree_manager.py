@@ -19,7 +19,8 @@ def _get_row_tag(index):
 
 
 class TreeManager:
-    def __init__(self, tree, mode):
+    def __init__(self, root, tree, mode):
+        self.root = root
         self.display_columns = None
         self.overview_frame = None
         self.tree = tree
@@ -129,7 +130,7 @@ class TreeManager:
         display_text = ""
         if utils.is_unique(item_type):
             display_text = "☑" if owned else "☐"
-        picked_text = "☑" if picked else "☐"
+        picked_text = "☑" if picked in ("TRUE", True) else "☐"
 
         # ---- Insert into Treeview ----
         iid = item_key
@@ -418,7 +419,7 @@ class TreeManager:
             print("[WARN] Item has no Record #, cannot modify CSV")
             return
 
-        self.csv_manager.modify_record(record_number, item_name, updates=updates, delete=delete)
+        self.csv_manager.modify_record(self.root, record_number, item_name, updates=updates, delete=delete)
 
     def bind_overview(self, overview_frame: ItemOverviewFrame):
         self.overview_frame = overview_frame

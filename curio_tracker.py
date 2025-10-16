@@ -519,7 +519,6 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
             False,
             timestamp,
             False,
-            False,
         ]
 
     try:
@@ -650,7 +649,6 @@ def upgrade_csv_with_record_numbers(file_path):
 
     header = reader[0]
 
-    # Case 1: No "Record #" column → add it
     if c.csv_record_header not in header:
         header = [c.csv_record_header] + header
         upgraded_rows = [header]
@@ -693,9 +691,68 @@ def upgrade_csv_with_record_numbers(file_path):
     log_message(f"[INFO] Refreshed missing '{c.csv_record_header}' values → {file_path}")
 
 
+def upgrade_csv_with_picked_column(file_path):
+
+    if not os.path.exists(file_path):
+        log_message(f"[INFO] CSV file '{file_path}' not found. Skipping picked-column upgrade.")
+        return
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        reader = list(csv.reader(f))
+
+    if not reader:
+        log_message(f"[INFO] CSV '{file_path}' is empty. Nothing to upgrade.")
+        return
+
+    header = reader[0]
+
+    if c.csv_picked_header not in header:
+        header.append(c.csv_picked_header)
+        upgraded_rows = [header]
+
+        for row in reader[1:]:
+            while len(row) < len(header):
+                row.append("")
+            row[-1] = "False"
+            upgraded_rows.append(row)
+
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerows(upgraded_rows)
+
+        log_message(f"[INFO] Added missing '{c.csv_picked_header}' column → {file_path}")
+        return
+
+    picked_index = header.index(c.csv_picked_header)
+    rows = reader[1:]
+
+    updated_rows = [header]
+    needs_update = False
+
+    for row in rows:
+        row = row[:]  # copy to avoid mutation
+        while len(row) <= picked_index:
+            row.append("")
+        if row[picked_index].strip() == "":
+            row[picked_index] = "False"
+            needs_update = True
+        updated_rows.append(row)
+
+    if not needs_update:
+        log_message(f"[INFO] '{c.csv_picked_header}' column already complete. No changes made.")
+        return
+
+    with open(file_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerows(updated_rows)
+
+    log_message(f"[INFO] Filled missing '{c.csv_picked_header}' values → {file_path}")
+
+
 def init_csv():
     log_message("Starting Heist Curio Tracker...")
     upgrade_csv_with_record_numbers(c.csv_file_path)
+    upgrade_csv_with_picked_column(c.csv_file_path)
 
 
 def _parse_items_from_rows(rows):

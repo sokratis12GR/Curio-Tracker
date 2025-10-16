@@ -21,7 +21,7 @@ class CSVManager:
             writer.writeheader()
             writer.writerows(rows)
 
-    def modify_record(self, record_number, item_name, updates=None, delete=False):
+    def modify_record(self, root, record_number, item_name, updates=None, delete=False):
         updates = updates or {}
 
         if not self.csv_path.exists():
@@ -65,10 +65,17 @@ class CSVManager:
             updated_lines.append(",".join(cols))
 
         if updated:
-            with self.csv_path.open("w", encoding="utf-8") as f:
-                f.write("\n".join(updated_lines) + "\n")
-            action = "Deleted" if delete else "Updated"
-            log_message(f"[INFO] {action} Record #{record_number}: '{item_name}' in CSV")
+            try:
+                with self.csv_path.open("w", encoding="utf-8") as f:
+                    f.write("\n".join(updated_lines) + "\n")
+                action = "Deleted" if delete else "Updated"
+                log_message(f"[INFO] {action} Record #{record_number}: '{item_name}' in CSV")
+            except PermissionError as e:
+                import toasts
+                toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
+                log_message(f"[ERROR] PermissionError: {e}")
+            except OSError as e:
+                log_message(f"[ERROR] CSV write failed: {e}")
         else:
             action = "delete" if delete else "update"
             log_message(f"[INFO] No matching record found to {action} for Record #{record_number}: '{item_name}'")

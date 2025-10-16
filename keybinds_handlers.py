@@ -6,12 +6,13 @@ import config as c
 import curio_tracker as tracker
 import toasts
 from settings import get_setting
+from tree_manager import TreeManager
 
 exit_event = threading.Event()
 are_toasts_enabled = get_setting('Application', 'are_toasts_enabled', True)  # default: toasts enabled
 
 
-def handle_capture(root, tree_manager, controls):
+def handle_capture(root, tree_manager: TreeManager, controls):
     tracker.capture_once(root)
 
     if c.DEBUGGING:
@@ -25,10 +26,9 @@ def handle_capture(root, tree_manager, controls):
 
     # Controls now manage the total count label
     root.after(0, controls.update_total_items_count)
-    root.after(0, tree_manager.update_visible_images)
 
 
-def handle_snippet(root, tree_manager, controls):
+def handle_snippet(root, tree_manager: TreeManager, controls):
     def process_items(items):
         items = items or []
         if not items:
@@ -45,7 +45,6 @@ def handle_snippet(root, tree_manager, controls):
 
             # Updated: use controls for total count
             root.after(0, controls.update_total_items_count)
-            root.after(0, tree_manager.update_visible_images)
 
         root.after(0, show_items)
 

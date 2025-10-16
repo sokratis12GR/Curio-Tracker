@@ -164,7 +164,7 @@ def start_main_app(root, theme_mode, theme_manager):
     tree = treeview.tree
     left_frame = layout['left_frame']
     right_frame = layout['right_frame']
-    tree_manager = TreeManager(tree, theme_mode)
+    tree_manager = TreeManager(root, tree, theme_mode)
 
     for col in tree_manager.tree_columns:
         tree.heading(col["id"], command=lambda c=col["id"]: tree_manager.sort_tree(c))
