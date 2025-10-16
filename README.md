@@ -16,7 +16,7 @@ F3 - Well every tool needs a way to exit it, so this is all it does, closes the 
 
 ### Example Usages of the tool:
 
-<img width="1919" height="1024" alt="image" src="https://github.com/user-attachments/assets/c6d1ff86-6313-4a88-a5c0-97adc2509689" />
+<img width="1917" height="1030" alt="image" src="https://github.com/user-attachments/assets/e6bfbebd-131d-4883-9175-028e3aca3895" />
 
 ## Toasts when capturing a curio that showcase the captured item(s) in the top right of the screen:
 
@@ -25,7 +25,7 @@ F3 - Well every tool needs a way to exit it, so this is all it does, closes the 
 
 ## Sorting
 
-<img width="1918" height="1030" alt="image" src="https://github.com/user-attachments/assets/68bb3ee9-4a90-406b-8484-fb7c7fe7dcce" />
+<img width="1917" height="1030" alt="image" src="https://github.com/user-attachments/assets/2a69cdb0-8531-4ec3-88a8-734b5ce8e59d" />
 
 It will save the data in a `.csv` file (`saves/matches.csv`) like the following (supported by google sheets, excel and
 so on)
@@ -36,7 +36,7 @@ Example `matches.csv` output:
 
 ## Light Mode
 
-<img width="1918" height="1029" alt="image" src="https://github.com/user-attachments/assets/a7107fe2-f117-4967-a3c0-f3bd9d2d5cfb" />
+<img width="1912" height="1028" alt="image" src="https://github.com/user-attachments/assets/a1de9e14-d7b5-4c97-b5b1-81c3baec00cd" />
 
 # Extras
 
@@ -44,6 +44,7 @@ Example `matches.csv` output:
     - Allows deletion of entries via the tree view, just select the item and press the delete btn.
     - Allows correcting stack size in case an incorrect value was captured via the UI, it saves automatically and
       updates the estimated value.
+- PoE ladder integration with the help of thanks to the help of [halfacandan](https://github.com/halfacandan) and the poeladder community
 - Economy Support (Estimated Value) - Pulls from poe.ninja the item's estimated value
 - Support for older data sets, automatically converts the old matches.csv versions into an up-to-date supported version.
 
@@ -68,6 +69,7 @@ at [Create Issue](https://github.com/sokratis12GR/Curio-Tracker/issues/new).
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/sokratis12gr/curio-tracker)
 
 ***Appreciate any feedback ^^***
+
 
 
 
