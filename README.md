@@ -1,18 +1,20 @@
 # Curio Tracker
 
-This tool allows you to quickly take a screenshot of the grand heist curio displays and save them as rewards data so
+This tool allows you to quickly take a screenshot of the **grand heist curio displays** and save them as reward data so
 that you can quickly analyze the kind of loot you found during your runs.
 
+Each capture has a toast in the top right as a notification which shows you the captured items, their value (poe.ninja), rarity and ownership status (poeladder).
+
+## Keybinds (Adjustable):
 F5 - Captures the current layout (i.e layout: Prohibited Library, ilvl: 83), should always start with this when entering
 the Grand Heist as it will make every reward saved bound to that layout and ilvl.
 
-F2 - Screen capture the entire screen, it will take a screenshot of the current screen, read the text on it and save the
-data in a .csv output, it reads duplicates (in the last 60 seconds) and doesn't save them in the file.
+F2 - Screen capture the entire screen, takes a screenshot of the current screen, reads the text on it and save the
+data in a .csv output as well as adding it on the display tree, checks for duplicates (in the last 60 seconds - adjustable) and doesn't save them in the file/tool.
 
-F4 - Provides you with a small snippet tool in case you like to manually take a screenshot of the item name/enchant and
-allows for duplicate values so if a wing had 2 or more of the same reward this is recommended.
+F4 - Enter the snippet tool, allows for selection capture of a region, bypasses the duplicate check (allows for duplicate captures) - Recommended for capturing currency/scarabs.
 
-F3 - Well every tool needs a way to exit it, so this is all it does, closes the tool.
+F3 - Closes the tool.
 
 ### Example Usages of the tool:
 
@@ -29,10 +31,10 @@ F3 - Well every tool needs a way to exit it, so this is all it does, closes the 
 
 It will save the data in a `.csv` file (`saves/matches.csv`) like the following (supported by google sheets, excel and
 so on)
-<img width="1263" height="713" alt="image" src="https://github.com/user-attachments/assets/04e8fd60-4c86-4b40-9ddb-c4471e1fb97e" />
+<img width="1069" height="966" alt="image" src="https://github.com/user-attachments/assets/74bd3890-abbe-4ab1-a7d6-f64bf5c63640" />
 
 Example `matches.csv` output:
-<img width="1284" height="766" alt="image" src="https://github.com/user-attachments/assets/5447ab65-7bad-47e1-a058-d5afb381f2b1" />
+<img width="1685" height="741" alt="image" src="https://github.com/user-attachments/assets/5daa892a-a293-4281-bebc-f58e04c68420" />
 
 ## Light Mode
 
@@ -50,7 +52,15 @@ Example `matches.csv` output:
 
 # SETUP (Quick)
 
-Go to releases https://github.com/sokratis12GR/Curio-Tracker/releases, download the latest `Heist Curio Tracker.exe`
+Go to releases [All Releases](https://github.com/sokratis12GR/Curio-Tracker/releases) -> Download the latest `Heist Curio Tracker.exe`.
+
+## Setup for PoELadder / poe.ninja:
+To setup the poeladder function you need to go to https://www.pathofexile.com/my-account, from there under your avatar you will see your profile name#tag, you will need to use that to get the correct poeladder data.
+
+<img width="218" height="172" alt="image" src="https://github.com/user-attachments/assets/e9400d62-612e-4ef4-ab00-6c9711dacbee" />
+
+
+Open the tool -> File -> Settings -> PoE Profile: i.e `sokratis12GR#6608` | Data League: `Mercenaries` -> "Fetch Data"/Restart the app.
 
 # Video on how to use:
 
@@ -69,6 +79,7 @@ at [Create Issue](https://github.com/sokratis12GR/Curio-Tracker/issues/new).
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/sokratis12gr/curio-tracker)
 
 ***Appreciate any feedback ^^***
+
 
 
 
