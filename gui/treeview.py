@@ -3,6 +3,7 @@ from tkinter import ttk
 import customtkinter as ctk
 
 from config import ROW_HEIGHT
+from settings import get_setting
 
 
 class CustomTreeview:
@@ -28,7 +29,12 @@ class CustomTreeview:
             tree.heading(col["id"], text=col["label"])
             tree.column(col["id"], width=col["width"], anchor="center", stretch=True)
 
-        display_cols = [col["id"] for col in self.columns_config if col["id"] != "numeric_value"]
+        display_cols = [
+            col["id"]
+            for col in self.columns_config
+            if col["id"] != "numeric_value"
+               and not (col["id"] == "owned" and not get_setting("Application", "enable_poeladder", False))
+        ]
         tree["displaycolumns"] = tuple(display_cols)
 
         tree.grid(row=0, column=0, sticky="nsew")

@@ -40,7 +40,7 @@ class TreeToggles:
 
         for idx, col in enumerate(self.tm.tree_columns):
             col_name = col["id"]
-            if col_name == "numeric_value":
+            if col_name == "numeric_value" or (not get_setting("Application", "enable_poeladder", False) and col_name == "owned"):
                 continue
             saved_state = get_setting("Columns", col_name, True)
             var = BooleanVar(value=saved_state)

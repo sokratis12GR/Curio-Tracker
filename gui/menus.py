@@ -27,7 +27,7 @@ def create_settings_menu(root, tracker, theme_manager, tree_manager, update_info
         elif choice == "Settings":
             show_settings_popup(root, tracker, theme_manager, tree_manager)
         elif choice == "Check for Updates":
-            check_for_updates(root, theme_manager)
+            check_for_updates(root)
         elif choice == "Exit":
             root.destroy()
 

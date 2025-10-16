@@ -12,7 +12,7 @@ def version_tuple(v: str):
     return tuple(int(x) for x in v.strip("v").split("."))
 
 
-def check_for_updates(root, theme_manager):
+def check_for_updates(root):
     msgbox = CTkMessageBox(root, min_size=(300, 20), max_size=(300, 100))
     try:
         url = "https://api.github.com/repos/sokratis12GR/Curio-Tracker/releases/latest"
@@ -23,15 +23,20 @@ def check_for_updates(root, theme_manager):
         latest = data.get("tag_name", "").strip()
         release_url = data.get("html_url", "")
 
+        if "-dev" in VERSION.lower():
+            show_update_popup(root, latest, release_url)
+            return
+
         if latest and version_tuple(latest) > version_tuple(VERSION):
-            show_update_popup(root, theme_manager, latest, release_url)
+            show_update_popup(root, latest, release_url)
         else:
             msgbox.showinfo("Up to Date", f"You are using the latest version ({VERSION}).")
     except Exception as e:
         msgbox.showerror("Update Check Failed", f"Could not check for updates:\n{e}")
 
 
-def show_update_popup(root, theme_manager, latest_version, release_url):
+
+def show_update_popup(root, latest_version, release_url):
     popup = ctk.CTkToplevel(root)
     popup.title("Update Available")
     popup.resizable(False, False)
@@ -39,12 +44,6 @@ def show_update_popup(root, theme_manager, latest_version, release_url):
     popup.minsize(250,220)
     popup.grab_set()
     popup.focus_force()
-
-    # Theme colors
-    if getattr(theme_manager, "current_mode", "LIGHT").upper() == "DARK":
-        accent = "#5865f2"
-    else:
-        accent = "#0078d7"
 
     frm = ctk.CTkFrame(popup)
     frm.pack(padx=20, pady=20, fill="both", expand=True)
@@ -70,7 +69,7 @@ def show_update_popup(root, theme_manager, latest_version, release_url):
             width=180,
         ).pack(pady=(5, 0))
     except Exception as e:
-        print(f"⚠️ Could not load GitHub icon: {e}")
+        print(f"Could not load GitHub icon: {e}")
         ctk.CTkButton(frm, text="Download Latest Release", command=open_github, width=180).pack(pady=(5, 0))
 
     ctk.CTkButton(frm, text="Close", command=popup.destroy, width=100).pack(pady=(15, 0))

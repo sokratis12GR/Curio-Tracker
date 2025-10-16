@@ -10,6 +10,7 @@ from config import ROW_HEIGHT, layout_keywords, TREE_COLUMNS, DEBUGGING
 from csv_manager import CSVManager
 from gui.custom_hours_popup import CustomHoursPopup
 from gui.item_overview_frame import ItemOverviewFrame
+from settings import get_setting
 from tree_utils import get_item_name_str, generate_item_id
 
 
@@ -19,17 +20,13 @@ def _get_row_tag(index):
 
 class TreeManager:
     def __init__(self, tree, mode):
+        self.display_columns = None
         self.overview_frame = None
         self.tree = tree
         self.csv_manager = CSVManager()
         self.tree_columns = TREE_COLUMNS
         self.columns = [col["id"] for col in TREE_COLUMNS]
-        self.display_columns = [
-            col["id"]
-            for col in TREE_COLUMNS
-            if col.get("visible", True) and col["id"] != "numeric_value"
-        ]
-        self.tree["displaycolumns"] = tuple(self.display_columns)
+        self.update_visible_columns()
         self.row_height = ROW_HEIGHT
         self.current_mode = mode
         self._custom_popup_open = False
@@ -71,6 +68,18 @@ class TreeManager:
 
         self.toggle_frame = None
         self.col_vars = {}
+        self.tree_lock = threading.Lock()
+
+    def update_visible_columns(self):
+        enabled_poeladder = get_setting("Application", "enable_poeladder", False)
+        self.display_columns = [
+            col["id"]
+            for col in self.tree_columns
+            if col.get("visible", True)
+               and col["id"] != "numeric_value"
+               and not (col["id"] == "owned" and not enabled_poeladder)
+        ]
+        self.tree["displaycolumns"] = tuple(self.display_columns)
 
     def add_item_to_tree(self, item, insert_at_top=True):
 
@@ -115,8 +124,12 @@ class TreeManager:
         blueprint_type = getattr(item, "blueprint_type", "Prohibited Library")
         logged_by = getattr(item, "logged_by", "")
         league = getattr(item, "league", "3.26")
-        owned = getattr(item, "owned", "")
-        picked = getattr(item, "picked", "")
+        owned = getattr(item, "owned", False)
+        picked = getattr(item, "picked", False)
+        display_text = ""
+        if utils.is_unique(item_type):
+            display_text = "☑" if owned else "☐"
+        picked_text = "☑" if picked else "☐"
 
         # ---- Insert into Treeview ----
         iid = item_key
@@ -134,8 +147,8 @@ class TreeManager:
             "league": league,
             "time": display_time,
             "record": record_number,
-            "owned": owned,
-            "picked": picked,
+            "owned": display_text,
+            "picked": picked_text,
         }
 
         self.checkbox_states[(iid, "owned")] = owned
@@ -197,13 +210,15 @@ class TreeManager:
             self.csv_row_map.pop(iid, None)
 
     def _add_items_in_batches(self, items, batch_size=200, start_index=0, post_callback=None):
+        if self.should_cancel_process:
+            return
         end_index = min(start_index + batch_size, len(items))
         batch = items[start_index:end_index]
 
         for item in batch:
             self.add_item_to_tree(item, insert_at_top=False)
 
-        if end_index < len(items) and not self.should_cancel_process:
+        if end_index < len(items):
             self.tree.after(
                 15,
                 self._add_items_in_batches,
@@ -218,13 +233,16 @@ class TreeManager:
             if post_callback:
                 post_callback()
 
-    def load_all_items_threaded(self, tracker, post_callback=None):
+    def load_all_items_threaded(self, tracker, post_callback=None, limit=None):
         self.clear_tree()
         self.should_cancel_process = False
 
         def worker():
             all_items = tracker.load_all_parsed_items_from_csv()
             all_items.sort(key=lambda item: getattr(item, "time", datetime.min), reverse=True)
+
+            if limit is not None:
+                all_items = all_items[:limit]
 
             self.tree.after(
                 50,
@@ -284,12 +302,12 @@ class TreeManager:
             return
 
         current_value = str(self.tree.set(row_id, col_name)).strip().lower()
-        if current_value in ("true", "yes"):
+        if current_value in ("TRUE", "true", "yes", "☑"):
             new_state = False
-            new_text = "No"
-        else:
+            new_text = "☐"
+        elif current_value in ("FALSE", "false", "no", "☐"):
             new_state = True
-            new_text = "Yes"
+            new_text = "☑"
 
         # Update the tree display
         self.tree.set(row_id, col_name, new_text)
@@ -300,12 +318,7 @@ class TreeManager:
         if not item:
             return
 
-        if getattr(item, "enchants", None) and len(item.enchants) > 0:
-            item_text = "\n".join([str(e) for e in item.enchants])
-        else:
-            item_text = getattr(item, "itemName", "Unknown")
-            if hasattr(item_text, "lines"):
-                item_text = "\n".join([str(line) for line in item_text.lines])
+        item_text = utils.parse_item_name(item)
 
         setattr(item, col_name, new_state)
         self.modify_csv_record(row_id, item_text, updates={"Picked": new_state})
@@ -337,12 +350,7 @@ class TreeManager:
             return
 
         item_type = getattr(item, "type", None)
-        if getattr(item, "enchants", None) and len(item.enchants) > 0:
-            item_text = "\n".join([str(e) for e in item.enchants])
-        else:
-            item_text = getattr(item, "itemName", "Unknown")
-            if hasattr(item_text, "lines"):
-                item_text = "\n".join([str(line) for line in item_text.lines])
+        item_text = utils.parse_item_name(item)
 
         old_value = self.tree.set(row_id, col_name)
 
@@ -572,6 +580,27 @@ class TreeManager:
         for index, iid in enumerate(self.tree.get_children()):
             tag = _get_row_tag(index)
             self.tree.item(iid, tags=(tag,))
+
+    def refresh_treeview(self, tracker=None):
+        print("[DEBUG] Refreshing treeview...")
+
+        previous_count = len(self.all_item_iids)
+        print(f"[DEBUG] Previously loaded {previous_count} items")
+
+        self.clear_tree()
+        self.update_visible_columns()
+
+        if tracker is not None and previous_count > 0:
+            self.load_all_items_threaded(tracker, limit=previous_count)
+        elif tracker is not None:
+            self.load_all_items_threaded(tracker)
+        else:
+            print("[WARN] No tracker passed to refresh_treeview.")
+
+        self.filter_tree_by_time()
+        self.reapply_row_formatting()
+
+        print("[DEBUG] Treeview refresh complete.")
 
     def filter_tree_by_time(self, *args):
         current_search = self.search_var.get()

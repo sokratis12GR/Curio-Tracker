@@ -56,7 +56,8 @@ def create_toast(root, message, image=None, duration=None, is_missing=False):
     toast.attributes("-toolwindow", True)
 
     # Add green border if item is owned
-    border_color = "green" if is_missing else "black"
+    missing_color = get_setting("Application", "collection_missing_color", "#00FF00")
+    border_color = missing_color if is_missing else "black"
     border_thickness = 3 if is_missing else 0
 
     frame = tk.Frame(
