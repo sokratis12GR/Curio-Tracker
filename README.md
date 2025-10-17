@@ -22,8 +22,7 @@ F3 - Closes the tool.
 
 ## Toasts when capturing a curio that showcase the captured item(s) in the top right of the screen:
 
-<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/343496ad-6b80-4e1d-b11d-80cfa1b08a9a" />
-<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/ce8faa22-eb30-4c74-8be2-b63939fcd878" />
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/34404e62-c6bf-48f1-9fbf-670ec2246cf0" />
 
 ## Sorting
 
@@ -79,6 +78,7 @@ at [Create Issue](https://github.com/sokratis12GR/Curio-Tracker/issues/new).
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/sokratis12gr/curio-tracker)
 
 ***Appreciate any feedback ^^***
+
 
 
 
