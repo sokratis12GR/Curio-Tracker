@@ -19,6 +19,10 @@ F4 - Enter the snippet tool, allows for selection capture of a region, bypasses 
 
 F3 - Closes the tool.
 
+Alt+1 - Duplicates the latest saved entry
+
+Alt+2 - Deletes the latest saved entry (must be loaded in the tool)
+
 ### Example Usages of the tool:
 
 <img width="1917" height="1030" alt="image" src="https://github.com/user-attachments/assets/e6bfbebd-131d-4883-9175-028e3aca3895" />
