@@ -18,12 +18,12 @@ VSVersionInfo(
           [ 
             StringStruct('CompanyName', 'Sokratis Fotkatzikis'),
             StringStruct('FileDescription', 'Heist Curio Tracker'),
-            StringStruct('FileVersion', '1.2.6.3'),
+            StringStruct('FileVersion', '1.2.6.4'),
             StringStruct('InternalName', 'Heist Curio Tracker'),
             StringStruct('LegalCopyright', '© 2025 Sokratis Fotkatzikis'),
             StringStruct('OriginalFilename', 'Heist Curio Tracker.exe'),
             StringStruct('ProductName', 'Heist Curio Tracker'),
-            StringStruct('ProductVersion', '0.2.6.3'),
+            StringStruct('ProductVersion', '0.2.6.4'),
           ]
         )
       ]
