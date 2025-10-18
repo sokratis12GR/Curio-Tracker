@@ -79,7 +79,7 @@ class LeftFrameControls:
             ("Load Latest Wing", lambda: self.load_latest_item_wrapper(5)),
             ("Load Custom Amount", self.load_custom_amount_wrapper),
             ("Load All Data", self.load_all_data_wrapper),
-            ("Clear Tree", self.tree_manager.clear_tree)
+            ("Clear Tree", self.tree_manager.force_clear_tree)
         ]
 
         rows_used = 0

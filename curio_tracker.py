@@ -85,6 +85,7 @@ experimental_items = datasets["experimental"]
 term_types = datasets["terms"]
 all_terms = set(term_types.keys())
 body_armors = datasets["body_armors"]
+owned_items = {}
 
 
 def build_enchant_type_lookup(term_types):
@@ -536,7 +537,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                     c.csv_scarab_header, c.csv_currency_header,
                     c.csv_stack_size_header, c.csv_variant_header,
                     c.csv_flag_header, c.csv_time_header,
-                    c.csv_picked_header, c.csv_owned_header
+                    c.csv_picked_header
                 ])
 
             for match in matched_terms:
@@ -692,7 +693,6 @@ def upgrade_csv_with_record_numbers(file_path):
 
 
 def upgrade_csv_with_picked_column(file_path):
-
     if not os.path.exists(file_path):
         log_message(f"[INFO] CSV file '{file_path}' not found. Skipping picked-column upgrade.")
         return
@@ -784,8 +784,8 @@ def _parse_items_from_rows(rows):
         variant = row.get(c.csv_variant_header, "")
         # duplicate = row.get(c.csv_flag_header, "FALSE").upper() == "TRUE" # Why was I even calling this????? xd
         timestamp = row.get(c.csv_time_header, "")
-        picked = row.get(c.csv_picked_header, "")
         # owned = row.get(c.csv_owned_header, "")
+        picked = row.get(c.csv_picked_header, False)
 
         for col_name, inferred_type in column_to_type.items():
             value = row.get(col_name)
@@ -801,7 +801,6 @@ def _parse_items_from_rows(rows):
 
             tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
             duplicate = False  # Just predefining
-
             # Build parsed item directly from CSV header values
             item = build_parsed_item(
                 record=record_number,
@@ -819,8 +818,8 @@ def _parse_items_from_rows(rows):
                 chaos_value=chaos_est,
                 divine_value=divine_est,
                 tier=tier,
-                picked=picked,
-                owned=owned
+                owned=owned,
+                picked=picked
             )
             parsed_items.append(item)
 
@@ -864,6 +863,61 @@ def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
 def load_all_parsed_items_from_csv():
     rows = _parse_rows_from_csv(c.csv_file_path)
     return _parse_items_from_rows(rows)
+
+
+def duplicate_latest_csv_entry(root, csv_file_path):
+    # Check file existence
+    if not os.path.exists(csv_file_path):
+        log_message(f"[ERROR] CSV file not found: {csv_file_path}")
+        return
+
+    # Read all rows
+    with open(csv_file_path, "r", encoding="utf-8") as f:
+        reader = list(csv.reader(f))
+
+    if len(reader) <= 1:
+        log_message("[ERROR] CSV file has no entries to duplicate.")
+        return
+
+    header = reader[0]
+    last_row = reader[-1].copy()
+
+    try:
+        record_idx = header.index(c.csv_record_header)
+    except ValueError:
+        record_idx = None
+
+    try:
+        time_idx = header.index(c.csv_time_header)
+    except ValueError:
+        time_idx = None
+
+    if record_idx is not None:
+        try:
+            new_record_num = str(int(last_row[record_idx]) + 1)
+        except ValueError:
+            new_record_num = "1"
+        last_row[record_idx] = new_record_num
+
+    if time_idx is not None:
+        last_row[time_idx] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    try:
+        with open(csv_file_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(last_row)
+    except PermissionError:
+        toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
+        log_message(f"[ERROR] PermissionError: {csv_file_path}")
+    except IOError:
+        log_message(f"[ERROR] CSV file could not be opened: {csv_file_path}")
+
+    log_message(f"[INFO] Duplicated latest entry → Record {last_row[record_idx] if record_idx is not None else 'N/A'}")
+
+    rows = [dict(zip(header, last_row))]
+    duplicated_items = _parse_items_from_rows(rows)
+    return duplicated_items[0] if duplicated_items else None
+
 
 
 #####################################################
@@ -1040,4 +1094,4 @@ def validate_attempt(print_text):
 
 
 if __name__ == "__main__":
-    print("Run GUI instead: python gui.py")
+    pass

@@ -5,6 +5,7 @@ from tkinter import TclError
 import config as c
 import curio_tracker as tracker
 import toasts
+from ocr_utils import parse_item_name
 from settings import get_setting
 from tree_manager import TreeManager
 
@@ -92,11 +93,55 @@ def handle_debugging_toggle():
         tracker.log_message(f"Debugging Mode: {"Enabled" if c.DEBUGGING else "Disabled"}")
 
 
+def handle_duplicate_latest(root, tree_manager: TreeManager, controls):
+    duplicated_item = tracker.duplicate_latest_csv_entry(root, c.csv_file_path)
+
+    if are_toasts_enabled:
+        toasts.show(root, duplicated_item)
+    tree_manager.add_item_to_tree(duplicated_item)
+    root.after(0, controls.update_total_items_count)
+
+
+def handle_delete_latest(root, tree_manager: TreeManager, controls):
+    if not tree_manager.all_item_iids:
+        toasts.show_message(root, "No entries available to delete.", duration=3000)
+        return
+
+    latest_iid = max(
+        tree_manager.all_item_iids,
+        key=lambda iid: tree_manager.item_time_map.get(iid, None) or 0
+    )
+
+    item = tree_manager.csv_row_map.get(latest_iid)
+    if not item:
+        print(f"[WARN] Could not find item object for {latest_iid}")
+        return
+
+    record_number = getattr(item, "record_number", None)
+    item_name = parse_item_name(item)
+
+    deleted = tree_manager.delete_item_from_tree(
+        record_number=record_number,
+        item_name=item_name,
+        confirm=False
+    )
+
+    if deleted:
+        if are_toasts_enabled:
+            toasts.show_message(root, f"Deleted latest entry: {item_name}", duration=3000)
+        root.after(0, controls.update_total_items_count)
+    else:
+        if are_toasts_enabled:
+            toasts.show_message(root, "Failed to delete latest entry.", duration=3000)
+
+
 def register_handlers(root, tree_manager, controls):
     return {
         'capture': lambda: handle_capture(root, tree_manager, controls),
         'snippet': lambda: handle_snippet(root, tree_manager, controls),
         'layout_capture': lambda: handle_layout_capture(root, tree_manager, controls),
         'exit': lambda: handle_exit(root),
+        'duplicate_latest': lambda: handle_duplicate_latest(root, tree_manager, controls),
+        'delete_latest': lambda: handle_delete_latest(root, tree_manager, controls),
         'debug': lambda: handle_debugging_toggle()
     }

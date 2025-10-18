@@ -34,6 +34,8 @@ keybinds = [
     ("Capture Layout", hotkey_default('layout_capture'), 'layout_capture'),
     ("Capture Snippet", hotkey_default('snippet'), 'snippet'),
     ("Exit", hotkey_default('exit'), 'exit'),
+    ("Duplicate Latest", hotkey_default('duplicate_latest'), 'duplicate_latest'),
+    ("Delete Latest", hotkey_default('delete_latest'), 'delete_latest'),
     ("Debugging", hotkey_default('debug'), 'debug'),
 ]
 
@@ -42,6 +44,8 @@ DEFAULT_KEYBINDS = [
     ("Capture Layout", 'f5', 'layout_capture'),
     ("Capture Snippet", 'f4', 'snippet'),
     ("Exit", 'f3', 'exit'),
+    ("Duplicate Latest", 'alt+1', 'duplicate_latest'),
+    ("Delete Latest", 'alt+2', 'delete_latest'),
     ("Debugging", 'alt+d', 'debug'),
 ]
 

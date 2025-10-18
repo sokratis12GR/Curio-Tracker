@@ -130,7 +130,7 @@ class TreeManager:
         display_text = ""
         if utils.is_unique(item_type):
             display_text = "☑" if owned else "☐"
-        picked_text = "☑" if picked in ("TRUE", True) else "☐"
+        picked_text = "☑" if picked in ("True", "TRUE", True) else "☐"
 
         # ---- Insert into Treeview ----
         iid = item_key
@@ -152,9 +152,6 @@ class TreeManager:
             "picked": picked_text,
         }
 
-        self.checkbox_states[(iid, "owned")] = owned
-        self.checkbox_states[(iid, "picked")] = picked
-
         # Build values tuple in order of self.columns
         values = tuple(values_map.get(col, "") for col in self.columns)
 
@@ -175,6 +172,10 @@ class TreeManager:
         })
 
         self.reapply_row_formatting()
+
+    def force_clear_tree(self):
+        self.should_cancel_process = True
+        self.clear_tree()
 
     def clear_tree(self):
         self.tree.delete(*self.tree.get_children())
@@ -209,6 +210,59 @@ class TreeManager:
             self.all_item_iids.discard(iid)
             self.item_time_map.pop(iid, None)
             self.csv_row_map.pop(iid, None)
+
+    def delete_item_from_tree(self, record_number=None, item_name=None, confirm=True):
+        if record_number is not None:
+            iid = f"rec_{record_number}"
+        else:
+            iid = None
+            for i in self.all_item_iids:
+                item = self.csv_row_map.get(i)
+                if not item:
+                    continue
+                name_str = utils.parse_item_name(item)
+                if name_str == item_name:
+                    iid = i
+                    break
+
+        if not iid or not self.tree.exists(iid):
+            print(f"[WARN] Item not found in tree (record={record_number}, name={item_name})")
+            return False
+
+        if confirm:
+            msg = f"Are you sure you want to delete this record?\n\n{item_name or iid}"
+            if not messagebox.askyesno("Confirm Deletion", msg):
+                return False
+
+        # Perform the deletion
+        row_values = self.tree.item(iid)['values']
+        item_index = self.columns.index("item")
+        item_value = row_values[item_index]
+        self.modify_csv_record(iid, item_value, delete=True)
+
+        self.tree.delete(iid)
+        self.all_item_iids.discard(iid)
+        self.item_time_map.pop(iid, None)
+        self.csv_row_map.pop(iid, None)
+
+        print(f"[INFO] Deleted record {record_number or iid} successfully.")
+        return True
+
+    def delete_latest_entry(self):
+        if not self.all_item_iids:
+            messagebox.showinfo("Info", "No entries available to delete.")
+            return
+
+        latest_iid = max(
+            self.all_item_iids,
+            key=lambda iid: self.item_time_map.get(iid, datetime.min)
+        )
+
+        record_number = None
+        if latest_iid.startswith("rec_"):
+            record_number = latest_iid.replace("rec_", "")
+
+        self.delete_item_from_tree(record_number=record_number)
 
     def _add_items_in_batches(self, items, batch_size=200, start_index=0, post_callback=None):
         if self.should_cancel_process:
@@ -302,6 +356,9 @@ class TreeManager:
         if col_name.lower() != "picked":
             return
 
+        new_text = "☐"
+        new_state = False
+
         current_value = str(self.tree.set(row_id, col_name)).strip().lower()
         if current_value in ("TRUE", "true", "yes", "☑"):
             new_state = False
@@ -312,8 +369,6 @@ class TreeManager:
 
         # Update the tree display
         self.tree.set(row_id, col_name, new_text)
-
-        self.checkbox_states[(row_id, col_name)] = new_state
 
         item = self.csv_row_map.get(row_id)
         if not item:

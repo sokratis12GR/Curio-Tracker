@@ -28,7 +28,9 @@ DEFAULT_SETTINGS = {
         'exit_key': 'f3',
         'layout_capture_key': 'f5',
         'snippet_key': 'f4',
-        'debug_key': 'alt+d'
+        'debug_key': 'alt+d',
+        'duplicate_latest_key': 'alt+1',
+        'delete_latest_key': 'alt+2'
     },
     'DEFAULT': {
         'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe',
@@ -42,6 +44,8 @@ capture_key = None
 exit_key = None
 layout_capture_key = None
 snippet_key = None
+duplicate_latest_key = None
+delete_latest_key = None
 enable_debugging_key = None
 pytesseract_path = None
 time_last_dupe_check_seconds = None
@@ -52,8 +56,9 @@ info_show_keys_exit = None
 
 LEAGUE = "Mercenaries"
 
+
 def initialize_settings():
-    global capture_key, exit_key, layout_capture_key, snippet_key, enable_debugging_key
+    global capture_key, exit_key, layout_capture_key, snippet_key, duplicate_latest_key, delete_latest_key, enable_debugging_key
     global pytesseract_path, time_last_dupe_check_seconds, LEAGUE
     from settings import get_setting, set_setting, write_settings
 
@@ -69,6 +74,8 @@ def initialize_settings():
     exit_key = get_setting('Hotkeys', 'exit_key')
     layout_capture_key = get_setting('Hotkeys', 'layout_capture_key')
     snippet_key = get_setting('Hotkeys', 'snippet_key')
+    duplicate_latest_key = get_setting('Hotkeys', 'duplicate_latest_key')
+    delete_latest_key = get_setting('Hotkeys', 'delete_latest_key')
     enable_debugging_key = get_setting('Hotkeys', 'debug_key')
     pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
     time_last_dupe_check_seconds = int(get_setting('Application', 'time_last_dupe_check_seconds', 60))
@@ -101,7 +108,6 @@ POELADDER_LADDERS = {
     "SSF Hardcore Mercenaries": "SSF_Mercenaries_of_Trarthus_HC",
     "SSF Hardcore": "SSF_Hardcore",
 }
-
 
 poe_league = "3.26"
 poe_user = "sokratis12GR#6608"
