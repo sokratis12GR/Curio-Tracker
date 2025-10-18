@@ -245,7 +245,6 @@ class TreeManager:
         self.item_time_map.pop(iid, None)
         self.csv_row_map.pop(iid, None)
 
-        print(f"[INFO] Deleted record {record_number or iid} successfully.")
         return True
 
     def delete_latest_entry(self):
@@ -253,16 +252,21 @@ class TreeManager:
             messagebox.showinfo("Info", "No entries available to delete.")
             return
 
-        latest_iid = max(
-            self.all_item_iids,
-            key=lambda iid: self.item_time_map.get(iid, datetime.min)
-        )
+        max_record_number = -1
+        for iid in self.all_item_iids:
+            if iid.startswith("rec_"):
+                try:
+                    rec_num = int(iid.replace("rec_", ""))
+                    if rec_num > max_record_number:
+                        max_record_number = rec_num
+                except ValueError:
+                    continue
 
-        record_number = None
-        if latest_iid.startswith("rec_"):
-            record_number = latest_iid.replace("rec_", "")
+        if max_record_number == -1:
+            messagebox.showinfo("Info", "No record entries found to delete.")
+            return
 
-        self.delete_item_from_tree(record_number=record_number)
+        self.delete_item_from_tree(record_number=max_record_number)
 
     def _add_items_in_batches(self, items, batch_size=200, start_index=0, post_callback=None):
         if self.should_cancel_process:

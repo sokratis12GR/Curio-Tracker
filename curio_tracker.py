@@ -23,12 +23,14 @@ import config as c
 import ocr_utils as utils
 import toasts
 from config import csv_file_path
+from csv_manager import CSVManager
 from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
 from settings import get_setting
 
 datasets = get_datasets(force_reload=True)
+csv_mgr = CSVManager()
 
 # default values in case they only run area lvl 83 blueprints
 blueprint_area_level = c.default_bp_lvl
@@ -555,7 +557,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                 owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
 
                 if allow_dupes or not duplicate:
-                    record_number = get_next_record_number()
+                    record_number = csv_mgr.get_next_record_number()
                     mark_term_as_captured(term_title)
 
                     item = build_parsed_item(
@@ -592,170 +594,13 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
         log_message(f"[ERROR] CSV write failed: {e}")
 
 
-LAST_RECORD_NUMBER = 0
-
-
-def get_next_record_number():
-    global LAST_RECORD_NUMBER
-    if LAST_RECORD_NUMBER == 0:
-        try:
-            with open(csv_file_path, "r", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-                if len(rows) <= 1:
-                    LAST_RECORD_NUMBER = 0
-                else:
-                    last_row = rows[-1]
-                    try:
-                        LAST_RECORD_NUMBER = int(last_row[0]) if last_row[0].isdigit() else 0
-                    except ValueError as e:
-                        LAST_RECORD_NUMBER = 0
-        except FileNotFoundError:
-            LAST_RECORD_NUMBER = 0
-    LAST_RECORD_NUMBER += 1
-    return LAST_RECORD_NUMBER
-
-
-def _parse_rows_from_csv(csv_file_path):
-    try:
-        with open(csv_file_path, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-    except FileNotFoundError:
-        log_message(f"[DEBUG] CSV file '{csv_file_path}' not found.")
-        return []
-
-    if not rows:
-        log_message("[DEBUG] CSV file is empty.")
-        return []
-
-    # Ensure every row has a Record #
-    if "Record #" not in rows[0]:
-        log_message("[DEBUG] Adding missing 'Record #' column to rows")
-        for i, row in enumerate(rows, start=1):
-            row["Record #"] = str(i)
-
-    return rows
-
-
-def upgrade_csv_with_record_numbers(file_path):
-    if not os.path.exists(file_path):
-        log_message(f"[INFO] CSV file '{file_path}' not found. Skipping upgrade.")
-        return
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        reader = list(csv.reader(f))
-    if not reader:
-        return
-
-    header = reader[0]
-
-    if c.csv_record_header not in header:
-        header = [c.csv_record_header] + header
-        upgraded_rows = [header]
-        for i, row in enumerate(reader[1:], start=1):
-            upgraded_rows.append([str(i)] + row)
-
-        with open(file_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerows(upgraded_rows)
-
-        log_message(f"[INFO] Added 'Record #' column and generated IDs → {file_path}")
-        return
-
-    # Case 2: "Record #" exists → check for missing/empty values
-    record_index = header.index(c.csv_record_header)
-    rows = reader[1:]
-
-    needs_update = any(
-        len(row) <= record_index or row[record_index].strip() == ""
-        for row in rows
-    )
-
-    if not needs_update:
-        log_message(f"[INFO] '{c.csv_record_header}' column already complete. No changes made.")
-        return
-
-    # Case 3: Regenerate Record # column
-    upgraded_rows = [header]
-    for i, row in enumerate(rows, start=1):
-        row = row[:]  # copy
-        if len(row) <= record_index:
-            row.extend([""] * (record_index - len(row) + 1))
-        row[record_index] = str(i)
-        upgraded_rows.append(row)
-
-    with open(file_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerows(upgraded_rows)
-
-    log_message(f"[INFO] Refreshed missing '{c.csv_record_header}' values → {file_path}")
-
-
-def upgrade_csv_with_picked_column(file_path):
-    if not os.path.exists(file_path):
-        log_message(f"[INFO] CSV file '{file_path}' not found. Skipping picked-column upgrade.")
-        return
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        reader = list(csv.reader(f))
-
-    if not reader:
-        log_message(f"[INFO] CSV '{file_path}' is empty. Nothing to upgrade.")
-        return
-
-    header = reader[0]
-
-    if c.csv_picked_header not in header:
-        header.append(c.csv_picked_header)
-        upgraded_rows = [header]
-
-        for row in reader[1:]:
-            while len(row) < len(header):
-                row.append("")
-            row[-1] = "False"
-            upgraded_rows.append(row)
-
-        with open(file_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerows(upgraded_rows)
-
-        log_message(f"[INFO] Added missing '{c.csv_picked_header}' column → {file_path}")
-        return
-
-    picked_index = header.index(c.csv_picked_header)
-    rows = reader[1:]
-
-    updated_rows = [header]
-    needs_update = False
-
-    for row in rows:
-        row = row[:]  # copy to avoid mutation
-        while len(row) <= picked_index:
-            row.append("")
-        if row[picked_index].strip() == "":
-            row[picked_index] = "False"
-            needs_update = True
-        updated_rows.append(row)
-
-    if not needs_update:
-        log_message(f"[INFO] '{c.csv_picked_header}' column already complete. No changes made.")
-        return
-
-    with open(file_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerows(updated_rows)
-
-    log_message(f"[INFO] Filled missing '{c.csv_picked_header}' values → {file_path}")
-
-
 def init_csv():
     log_message("Starting Heist Curio Tracker...")
-    upgrade_csv_with_record_numbers(c.csv_file_path)
-    upgrade_csv_with_picked_column(c.csv_file_path)
+    csv_mgr.upgrade_with_record_numbers()
+    csv_mgr.upgrade_with_picked_column()
 
 
-def _parse_items_from_rows(rows):
+def parse_items_from_rows(rows):
     debug = c.DEBUGGING
     parsed_items = []
 
@@ -831,7 +676,7 @@ def _parse_items_from_rows(rows):
 
 
 def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
-    rows = _parse_rows_from_csv(c.csv_file_path)
+    rows = csv_mgr.load_csv_dict()
     if not rows:
         return []
 
@@ -846,7 +691,7 @@ def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
         timestamps.append(ts)
 
     if not any(timestamps):
-        return _parse_items_from_rows(last_rows)
+        return parse_items_from_rows(last_rows)
 
     newest_ts = max(t for t in timestamps if t is not None)
     recent_rows = [
@@ -856,68 +701,13 @@ def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
 
     recent_rows = recent_rows[-max_items:]
 
-    return _parse_items_from_rows(recent_rows)
+    return parse_items_from_rows(recent_rows)
 
 
 # ---------- Load All Items ----------
 def load_all_parsed_items_from_csv():
-    rows = _parse_rows_from_csv(c.csv_file_path)
-    return _parse_items_from_rows(rows)
-
-
-def duplicate_latest_csv_entry(root, csv_file_path):
-    # Check file existence
-    if not os.path.exists(csv_file_path):
-        log_message(f"[ERROR] CSV file not found: {csv_file_path}")
-        return
-
-    # Read all rows
-    with open(csv_file_path, "r", encoding="utf-8") as f:
-        reader = list(csv.reader(f))
-
-    if len(reader) <= 1:
-        log_message("[ERROR] CSV file has no entries to duplicate.")
-        return
-
-    header = reader[0]
-    last_row = reader[-1].copy()
-
-    try:
-        record_idx = header.index(c.csv_record_header)
-    except ValueError:
-        record_idx = None
-
-    try:
-        time_idx = header.index(c.csv_time_header)
-    except ValueError:
-        time_idx = None
-
-    if record_idx is not None:
-        try:
-            new_record_num = str(int(last_row[record_idx]) + 1)
-        except ValueError:
-            new_record_num = "1"
-        last_row[record_idx] = new_record_num
-
-    if time_idx is not None:
-        last_row[time_idx] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-    try:
-        with open(csv_file_path, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(last_row)
-    except PermissionError:
-        toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
-        log_message(f"[ERROR] PermissionError: {csv_file_path}")
-    except IOError:
-        log_message(f"[ERROR] CSV file could not be opened: {csv_file_path}")
-
-    log_message(f"[INFO] Duplicated latest entry → Record {last_row[record_idx] if record_idx is not None else 'N/A'}")
-
-    rows = [dict(zip(header, last_row))]
-    duplicated_items = _parse_items_from_rows(rows)
-    return duplicated_items[0] if duplicated_items else None
-
+    rows = csv_mgr.load_csv_dict()
+    return parse_items_from_rows(rows)
 
 
 #####################################################

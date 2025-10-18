@@ -5,6 +5,7 @@ from tkinter import TclError
 import config as c
 import curio_tracker as tracker
 import toasts
+from csv_manager import CSVManager
 from ocr_utils import parse_item_name
 from settings import get_setting
 from tree_manager import TreeManager
@@ -94,7 +95,9 @@ def handle_debugging_toggle():
 
 
 def handle_duplicate_latest(root, tree_manager: TreeManager, controls):
-    duplicated_item = tracker.duplicate_latest_csv_entry(root, c.csv_file_path)
+    csv_manager = CSVManager()
+    latest_dupe = csv_manager.duplicate_latest(root)
+    duplicated_item = tracker.parse_items_from_rows([latest_dupe])[0]
 
     if are_toasts_enabled:
         toasts.show(root, duplicated_item)
