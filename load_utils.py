@@ -151,6 +151,7 @@ LOCK_FILE = get_data_path(c.lock_file_name)
 OUTPUT_CURRENCY_CSV = get_data_path(c.currency_fetch_file_name)
 OUTPUT_TIERS_CSV = get_data_path(c.tiers_fetch_file_name)
 OUTPUT_COLLECTION_CSV = get_data_path(c.collection_fetch_file_name)
+OUTPUT_LEAGUES_CSV = get_data_path(c.poeladder_leagues_fetch_file_name)
 INTERNAL_ALL_TYPES_CSV = get_resource_path(c.file_all_valid_heist_terms)
 INTERNAL_EXPERIMENTAL_CSV = get_resource_path(c.file_experimental_items)
 INTERNAL_BODY_ARMORS_TXT = get_resource_path(c.file_body_armors)
@@ -174,4 +175,7 @@ def get_datasets(load_external=True, force_reload=False):
                 _DATASETS["tiers"] = load_tiers_dataset(OUTPUT_TIERS_CSV)
             if os.path.exists(OUTPUT_COLLECTION_CSV):
                 _DATASETS["collection"] = load_collection_dataset(OUTPUT_COLLECTION_CSV)
+            if os.path.exists(OUTPUT_LEAGUES_CSV):
+                df = pd.read_csv(OUTPUT_LEAGUES_CSV)
+                _DATASETS["leagues"] = df.set_index("league_name").to_dict(orient="index")
     return _DATASETS
