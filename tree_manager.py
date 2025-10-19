@@ -652,8 +652,8 @@ class TreeManager:
 
         if tracker is not None and previous_count > 0:
             self.load_all_items_threaded(tracker, limit=previous_count)
-        elif tracker is not None:
-            self.load_all_items_threaded(tracker)
+        # elif tracker is not None:
+        #     self.load_all_items_threaded(tracker)
         else:
             print("[WARN] No tracker passed to refresh_treeview.")
 
