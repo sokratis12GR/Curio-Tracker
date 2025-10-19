@@ -1,3 +1,4 @@
+import re
 from tkinter import colorchooser
 
 import customtkinter as ctk
@@ -6,6 +7,7 @@ from customtkinter import CTkFrame
 import config as c
 import curio_collection_fetch
 import toasts
+from load_utils import get_datasets
 from logger import log_message
 from settings import get_setting, set_setting
 from themes import apply_theme
@@ -59,13 +61,18 @@ class SettingsPopup:
 # -------------------------------
 class UnifiedSettingsSection:
     def __init__(self, parent, tracker, theme_manager, tree_manager: TreeManager):
-        self.fetch_collection_btn = None
-        self.color_preview = None
         self.parent = parent
         self.tracker = tracker
         self.theme_manager = theme_manager
         self.tree_manager = tree_manager
+        self.dynamic_data_league_cb = None
+        self.poe_entry = None
+        self.fetch_collection_btn = None
+        self.color_preview = None
 
+        self.datasets = get_datasets()
+        self.leagues_dict = self.datasets.get("leagues", {})  # dict keyed by league_name
+        self.poeladder_leagues = list(self.leagues_dict.keys())
         # Variables
         self.theme_selector_var = ctk.StringVar(value=get_setting("Application", "theme_mode", c.DEFAULT_THEME_MODE))
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
@@ -80,7 +87,8 @@ class UnifiedSettingsSection:
         self.collection_missing_color_var = ctk.StringVar(
             value=get_setting("Application", "collection_missing_color", "#FF0000")  # default red
         )
-
+        self.dynamic_data_league_var = ctk.StringVar(
+            value=get_setting("Application", "poeladder_ggg_league", c.FIXED_LADDER_IDENTIFIER))
         self.dupe_label = None
 
     def build(self, frame, row_start):
@@ -108,8 +116,15 @@ class UnifiedSettingsSection:
         row += 1
 
         ctk.CTkLabel(frame, text="PoE Profile (player#1234):").grid(row=row, column=0, sticky="w")
-        poe_entry = ctk.CTkEntry(frame, textvariable=self.poe_player_var, width=170)
-        poe_entry.grid(row=row, column=1, sticky="w")
+        self.poe_entry = ctk.CTkEntry(
+            frame,
+            textvariable=self.poe_player_var,
+            width=170
+        )
+        self.poe_entry.grid(row=row, column=1, sticky="w")
+        self.poe_entry.configure(
+            validate="key",
+            validatecommand=(self.poe_entry.register(self._validate_poe_live), "%P"))
         self.poe_player_var.trace_add("write", self._update_tracker_poe_player)
         row += 1
 
@@ -121,11 +136,35 @@ class UnifiedSettingsSection:
         row += 1
 
         # ---- Data League ----
-        ctk.CTkLabel(frame, text="Data League:").grid(row=row, column=0, sticky="w")
+        ctk.CTkLabel(frame, text="(poe.ninja) Data League:").grid(row=row, column=0, sticky="w")
         league_cb2 = ctk.CTkComboBox(frame, variable=self.data_league_var, values=c.LEAGUES_TO_FETCH, width=170)
         league_cb2.grid(row=row, column=1, sticky="w")
         self.data_league_var.trace_add("write", self._on_data_league_change)
         row += 1
+
+        add_separator(frame, row)
+        row += 1
+
+        ctk.CTkCheckBox(frame, text="Enable PoE Ladder", variable=self.enable_poeladder_var,
+                        command=self._toggle_poeladder).grid(
+            row=row, column=0, columnspan=1, sticky="w"
+        )
+        row += 1
+
+        ctk.CTkLabel(frame, text="(poeladder.com) Collection League:").grid(row=row, column=0, sticky="w")
+
+        self.dynamic_data_league_cb = ctk.CTkComboBox(
+            frame,
+            variable=self.dynamic_data_league_var,
+            values=self.poeladder_leagues,
+            width=370,
+            state="normal" if self.enable_poeladder_var.get() else "disabled"
+        )
+        row += 1
+        self.dynamic_data_league_cb.grid(row=row, column=0, columnspan=2, sticky="w")
+        self.dynamic_data_league_var.trace_add("write", self._on_dynamic_league_change)
+        row += 1
+
         fetch_btn_state = "normal" if self.enable_poeladder_var.get() else "disabled"
         self.fetch_collection_btn = ctk.CTkButton(frame, text="Fetch Collection", state=fetch_btn_state,
                                                   command=self._fetch_poeladder,
@@ -133,15 +172,10 @@ class UnifiedSettingsSection:
         self.fetch_collection_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(5, 10))
         row += 1
 
-        ctk.CTkCheckBox(frame, text="Enable PoE Ladder", variable=self.enable_poeladder_var,
-                        command=self._toggle_poeladder).grid(
-            row=row, column=0, columnspan=1, sticky="w"
-        )
-
-        ctk.CTkCheckBox(frame, text="SSF", variable=self.is_ssf_league_var, command=self._toggle_ssf_league).grid(
-            row=row, column=1, columnspan=1, sticky="w"
-        )
-        row += 1
+        # ctk.CTkCheckBox(frame, text="SSF", variable=self.is_ssf_league_var, command=self._toggle_ssf_league).grid(
+        #     row=row, column=1, columnspan=1, sticky="w"
+        # )
+        # row += 1
 
         add_separator(frame, row)
         row += 1
@@ -191,6 +225,13 @@ class UnifiedSettingsSection:
 
         return row
 
+
+    def _validate_poe_live(self, proposed_value):
+        if re.match(r"^[A-Za-z0-9_#]*$", proposed_value):
+            return True
+        self.parent.bell()
+        return False
+
     # ---- Handlers ----
     def _update_application_theme(self, *_):
         val = self.theme_selector_var.get()
@@ -220,30 +261,75 @@ class UnifiedSettingsSection:
         set_setting("Application", "toasts_duration_seconds", dur)
         toasts.set_toast_duration(dur)
 
-    def _toggle_ssf_league(self):
-        enabled = self.is_ssf_league_var.get()
-        set_setting("Application", "is_ssf", enabled)
-        data_league = get_setting("Application", "data_league")
-        mutated_val = "SSF " + data_league if enabled else data_league
-        for ladder_key, ladder_identifier in c.POELADDER_LADDERS.items():
-            if ladder_key == mutated_val:
-                set_setting("Application", "poeladder_data_league", ladder_identifier)
-        self.tracker.on_league_change()
-        self.tree_manager.refresh_treeview(self.tracker)
+    # def _toggle_ssf_league(self):
+    #     enabled = self.is_ssf_league_var.get()
+    #     set_setting("Application", "is_ssf", enabled)
+    #     data_league = get_setting("Application", "data_league")
+    #     mutated_val = "SSF " + data_league if enabled else data_league
+    #
+    #     player = self.poe_player_var.get()
+    #     player_ladders = curio_collection_fetch.PLAYER_LADDERS.get(player, {})
+    #
+    #     for ladder_key, ladder_identifier in player_ladders.items():
+    #         if ladder_key == mutated_val:
+    #             set_setting("Application", "poeladder_data_league", ladder_identifier)
+    #
+    #     self.tracker.on_league_change()
+    #     self.tree_manager.refresh_treeview(self.tracker)
 
     def _toggle_poeladder(self):
         enabled = self.enable_poeladder_var.get()
         set_setting("Application", "enable_poeladder", enabled)
         log_message("poeladder", enabled)
+
         fetch_btn_state = "normal" if enabled else "disabled"
         if hasattr(self, "fetch_collection_btn"):
             self.fetch_collection_btn.configure(state=fetch_btn_state)
-        # self.tree_manager.refresh_treeview(self.tracker)
+
+        if self.dynamic_data_league_cb:
+            cb_state = "normal" if enabled else "disabled"
+            self.dynamic_data_league_cb.configure(state=cb_state)
+
+        self.tree_manager.refresh_treeview(self.tracker)
 
     def _fetch_poeladder(self):
-        player = self.poe_player_var.get()
+        player = self.poe_player_var.get().strip()
+
+        # Validate PoE username
+        if not re.match(r"^[A-Za-z0-9_]+#[0-9]{4}$", player):
+            toasts.show_message(self.parent, "Invalid PoE profile! Must be in format 'player#1234'.")
+            self.poe_entry.focus_set()
+            return
+
         log_message(f"Fetching poeladder collection for {player}")
         curio_collection_fetch.run_fetch_curios_threaded(player)
+
+        player_ladders = curio_collection_fetch.PLAYER_LADDERS.get(player, {})
+        self.league_display_mapping = {**player_ladders}
+
+        leagues = list(self.league_display_mapping.keys())
+        self.dynamic_data_league_cb.configure(values=leagues)
+
+        saved_identifier = get_setting("Application", "poeladder_ggg_league", c.FIXED_LADDER_IDENTIFIER)
+        selected_name = next(
+            (name for name, ident in self.league_display_mapping.items() if ident == saved_identifier),
+            leagues[0] if leagues else ""
+        )
+        self.dynamic_data_league_var.set(selected_name)
+
+    def _on_dynamic_league_change(self, *_):
+        league_name = self.dynamic_data_league_var.get()
+        if not league_name:
+            return
+
+        ladder_identifier = self.league_display_mapping.get(league_name)
+        if ladder_identifier:
+            set_setting("Application", "poeladder_ggg_league", league_name)
+            set_setting("Application", "poeladder_league_identifier", ladder_identifier)
+            log_message(f"PoELadder League set to {league_name} ({ladder_identifier})")
+
+            self.tracker.on_league_change()
+            self.tree_manager.refresh_treeview(self.tracker)
 
     def _update_dupe_slider(self):
         val = int(self.dupe_duration.get())
@@ -258,11 +344,7 @@ class UnifiedSettingsSection:
         if not val:
             return
         set_setting("Application", "data_league", val)
-        is_ssf = get_setting("Application", "is_ssf")
-        mutated_val = "SSF " + val if is_ssf else val
-        for ladder_key, ladder_identifier in c.POELADDER_LADDERS.items():
-            if ladder_key == mutated_val:
-                set_setting("Application", "poeladder_data_league", ladder_identifier)
+
         self.tracker.on_league_change()
         self.tree_manager.refresh_treeview(self.tracker)
 

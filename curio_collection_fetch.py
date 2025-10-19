@@ -5,14 +5,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import requests
 
-from config import POELADDER_LADDERS
-from load_utils import OUTPUT_COLLECTION_CSV
+from load_utils import OUTPUT_COLLECTION_CSV, OUTPUT_LEAGUES_CSV
 from logger import log_message
 from ocr_utils import smart_title_case
 
 # === THREADING FLAGS ===
 FETCH_DONE = threading.Event()
 IS_FETCHING = False
+PLAYER_LADDERS = {}
 
 # === CONFIG ===
 HEADERS = {"User-Agent": "fetch-poeladder-player-curios/1.0"}
@@ -21,6 +21,56 @@ API_URL = "https://poeladder.com/api/v1/users/{player}/curio"
 # === SESSION FOR THREAD-SAFE REQUESTS ===
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
+
+
+def save_leagues_dataset(player: str, ladders: dict):
+    if not ladders:
+        return
+
+    df = pd.DataFrame([
+        {"league_name": league_name, "ladder_identifier": ladder_id, "player": player}
+        for league_name, ladder_id in ladders.items()
+    ])
+
+    df.to_csv(OUTPUT_LEAGUES_CSV, index=False, encoding="utf-8")
+    log_message(f"[INFO] Saved leagues dataset: {OUTPUT_LEAGUES_CSV} ({len(df)} entries)")
+
+
+def fetch_player_ladders(player: str):
+    global PLAYER_LADDERS
+    safe_player = player.replace("#", "-")
+    encoded_player = urllib.parse.quote(safe_player, safe="")
+    url = API_URL.format(player=encoded_player)
+
+    try:
+        resp = SESSION.get(url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.exceptions.RequestException as e:
+        log_message(f"[ERROR] Failed to fetch ladders for {player}: {e}")
+        return PLAYER_LADDERS.get(player, {})
+
+    if not isinstance(data, list):
+        log_message(f"[WARN] Unexpected ladder data format for {player}")
+        return PLAYER_LADDERS.get(player, {})
+
+    ladders = {}
+    for entry in data:
+        ref_url = entry.get("$ref")
+        poe_name = entry.get("poeLadderLeagueName")
+        if not ref_url or not poe_name:
+            continue
+        parsed = urllib.parse.urlparse(ref_url)
+        query = urllib.parse.parse_qs(parsed.query)
+        ladder_id = query.get("ladderIdentifier", [None])[0]
+        if ladder_id:
+            ladders[poe_name] = ladder_id
+
+    PLAYER_LADDERS[player] = ladders
+
+    save_leagues_dataset(player, ladders)
+
+    return ladders
 
 
 def fetch_curios(player: str, ladder_identifier: str):
@@ -50,10 +100,17 @@ def fetch_curios(player: str, ladder_identifier: str):
 def fetch_all_ladders(player: str):
     all_curios = []
 
-    with ThreadPoolExecutor(max_workers=min(len(POELADDER_LADDERS), 4)) as executor:
+    ladders = fetch_player_ladders(player)
+    if not ladders:
+        log_message(f"[ERROR] No ladders found for {player}.")
+        return all_curios
+
+    log_message(f"[INFO] Found {len(ladders)} ladders for {player}: {list(ladders.keys())}")
+
+    with ThreadPoolExecutor(max_workers=min(len(ladders), 4)) as executor:
         future_to_ladder = {
             executor.submit(fetch_curios, player, ladder_identifier): ladder_key
-            for ladder_key, ladder_identifier in POELADDER_LADDERS.items()
+            for ladder_key, ladder_identifier in ladders.items()
         }
 
         for future in as_completed(future_to_ladder):

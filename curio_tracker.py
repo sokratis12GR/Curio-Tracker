@@ -52,12 +52,17 @@ collection_dataset = datasets.get("collection") or {}
 
 def on_league_change():
     global CURRENCY_DATASET, COLLECTION_DATASET_ACTIVE
+
     new_league = get_setting("Application", "data_league", c.LEAGUE)
     CURRENCY_DATASET = full_currency.get(new_league, {})
-    poeladder_new_league = get_setting("Application", "poeladder_data_league", c.FIXED_LADDER_IDENTIFIER)
-    league_collection = collection_dataset.get(poeladder_new_league, {})
+
+    poeladder_identifier = get_setting("Application", "poeladder_league_identifier", c.FIXED_LADDER_IDENTIFIER)
+    poeladder_display_name = get_setting("Application", "poeladder_ggg_league", poeladder_identifier)
+
+    league_collection = collection_dataset.get(poeladder_identifier, {})
     COLLECTION_DATASET_ACTIVE = {term: data.get("owned", False) for term, data in league_collection.items()}
-    log_message(f"League changed to poe.ninja: {new_league} | poeladder: {poeladder_new_league}")
+
+    log_message(f"League changed to poe.ninja: {new_league} | poeladder: {poeladder_display_name} ({poeladder_identifier})")
 
     if c.DEBUGGING:
         log_message(f"DataSet Keys: {collection_dataset.keys()}")
@@ -65,6 +70,7 @@ def on_league_change():
         log_message(f"Collection Active {COLLECTION_DATASET_ACTIVE.items()}")
         log_currency_dataset(CURRENCY_DATASET)
         log_message(f"[DEBUG] Loaded {len(COLLECTION_DATASET_ACTIVE)} curios for {new_league}")
+
 
 
 def log_currency_dataset(dataset):

@@ -100,14 +100,14 @@ LEAGUES_TO_FETCH = [
 IS_SSF = False
 ENABLE_POELADDER = False
 
-POELADDER_LADDERS = {
-    "SSF Standard": "SSF_Standard",
-    "SSF Mercenaries": "SSF_Mercenaries_of_Trarthus",
-    "Mercenaries": "Mercenaries_of_Trarthus",
-    "Standard": "Standard",
-    "SSF Hardcore Mercenaries": "SSF_Mercenaries_of_Trarthus_HC",
-    "SSF Hardcore": "SSF_Hardcore",
-}
+# POELADDER_LADDERS = {
+#     "SSF Standard": "SSF_Standard",
+#     "SSF Mercenaries": "SSF_Mercenaries_of_Trarthus",
+#     "Mercenaries": "Mercenaries_of_Trarthus",
+#     "Standard": "Standard",
+#     "SSF Hardcore Mercenaries": "SSF_Mercenaries_of_Trarthus_HC",
+#     "SSF Hardcore": "SSF_Hardcore",
+# }
 
 poe_league = "3.26"
 poe_user = "sokratis12GR#6608"
@@ -193,6 +193,7 @@ lock_file_name = "fetch/last_run.lock"
 currency_fetch_file_name = "fetch/heist_item_currency_values.csv"
 tiers_fetch_file_name = "fetch/heist_item_tiers_data.csv"
 collection_fetch_file_name = "fetch/heist_item_collection_data.csv"
+poeladder_leagues_fetch_file_name = "fetch/poeladder_leagues.csv"
 
 ### CSV Header Format -- Adjusted to support the format of the "PoE Curio Case Rates" Project: https://docs.google.com/spreadsheets/d/1dDDMRc3GAE4G0X-lJeLXSHaGtLLNf612nrFiOyCo0Vs/edit?gid=710775455#gid=710775455
 csv_record_header = "Record #"
