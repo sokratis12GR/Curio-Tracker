@@ -1,4 +1,6 @@
 import re
+import threading
+import webbrowser
 from tkinter import colorchooser
 
 import customtkinter as ctk
@@ -69,6 +71,7 @@ class UnifiedSettingsSection:
         self.poe_entry = None
         self.fetch_collection_btn = None
         self.color_preview = None
+        self.poeladder_label = None
         self.width = 220
         self.long_width = 420
 
@@ -138,8 +141,15 @@ class UnifiedSettingsSection:
         add_separator(frame, row)
         row += 1
 
-        ctk.CTkLabel(frame, text="PoE Ladder", font=("Segoe UI", 13, "bold")).grid(row=row, column=0, columnspan=2, sticky="w")
+        self.poeladder_label = ctk.CTkLabel(frame, text="PoE Ladder", font=("Segoe UI", 13, "bold"))
+        self.poeladder_label.grid(row=row, column=0, columnspan=2, sticky="w")
+
+        self.poeladder_label = ctk.CTkLabel(frame, text="(How to setup)", font=("Segoe UI", 9, "bold", "underline"), cursor="hand2")
+        self.poeladder_label.grid(row=row, column=0, columnspan=2, sticky="w", padx=75)
+        self.poeladder_label.bind(
+            "<Button-1>", self.open_poeladder_link)
         row += 1
+
         ctk.CTkCheckBox(frame, text="Enable Integration", variable=self.enable_poeladder_var,
                         command=self._toggle_poeladder).grid(
             row=row, column=0, columnspan=1, sticky="w"
@@ -214,12 +224,15 @@ class UnifiedSettingsSection:
 
         return row
 
-
     def _validate_poe_live(self, proposed_value):
         if re.match(r"^[A-Za-z0-9_#]*$", proposed_value):
             return True
         self.parent.bell()
         return False
+
+    def open_poeladder_link(self, event=None):
+        webbrowser.open(
+            "https://poeladder.com/faqs#How_do_I_know_which_item_to_pick_from_a_Curio_box_when_I_run_a_Grand_Heist_Wing")
 
     # ---- Handlers ----
     def _update_application_theme(self, *_):
@@ -289,7 +302,11 @@ class UnifiedSettingsSection:
             leagues[0] if leagues else ""
         )
         self.dynamic_data_league_var.set(selected_name)
-        self.tracker.on_league_change()
+        threading.Thread(target=self._threaded_on_league_change, daemon=True).start()
+        self.tree_manager.refresh_treeview(self.tracker)
+
+    def _threaded_on_league_change(self):
+        self.parent.after(0, lambda: self.tracker.on_league_change())
 
     def _on_dynamic_league_change(self, *_):
         league_name = self.dynamic_data_league_var.get()
