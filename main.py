@@ -154,7 +154,6 @@ def start_main_app(root, theme_mode, theme_manager):
         root.after(200, lambda: root.iconbitmap(get_resource_path("assets/icon.ico")))
 
     tracker.poe_user = get_setting("User", "poe_user", tracker.poe_user)
-    tracker.league_version = get_setting("User", "poe_league", tracker.league_version)
     tracker.blueprint_layout = get_setting("Blueprint", "layout", tracker.blueprint_layout)
     tracker.blueprint_area_level = get_setting("Blueprint", "area_level", tracker.blueprint_area_level)
     tracker.on_league_change()

@@ -25,7 +25,7 @@ class SettingsPopup:
 
         self.popup = ctk.CTkToplevel(parent)
         self.popup.title("Application Settings")
-        self.popup.geometry("420x540")
+        self.popup.geometry("470x540")
         self.popup.resizable(False, False)
         self.popup.grab_set()
         self.popup.focus_force()
@@ -69,6 +69,8 @@ class UnifiedSettingsSection:
         self.poe_entry = None
         self.fetch_collection_btn = None
         self.color_preview = None
+        self.width = 220
+        self.long_width = 420
 
         self.datasets = get_datasets()
         self.leagues_dict = self.datasets.get("leagues", {})  # dict keyed by league_name
@@ -82,7 +84,6 @@ class UnifiedSettingsSection:
             value=get_setting("Application", "enable_poeladder", c.ENABLE_POELADDER))
         self.data_league_var = ctk.StringVar(value=get_setting("Application", "data_league", c.LEAGUE))
         self.poe_player_var = ctk.StringVar(value=get_setting("User", "poe_user", ""))
-        self.user_league_var = ctk.StringVar(value=get_setting("User", "poe_league", c.poe_league))
         self.dupe_duration = ctk.IntVar(value=get_setting("Application", "time_last_dupe_check_seconds", 60))
         self.collection_missing_color_var = ctk.StringVar(
             value=get_setting("Application", "collection_missing_color", "#FF0000")  # default red
@@ -102,7 +103,7 @@ class UnifiedSettingsSection:
 
         # ---- Theme ----
         ctk.CTkLabel(frame, text="Theme (requires restart):").grid(row=row, column=0, sticky="w")
-        theme_cb = ctk.CTkComboBox(frame, variable=self.theme_selector_var, values=c.theme_modes, width=170)
+        theme_cb = ctk.CTkComboBox(frame, variable=self.theme_selector_var, values=c.theme_modes, width=self.width)
         theme_cb.grid(row=row, column=1, sticky="w")
         self.theme_selector_var.trace_add("write", self._update_application_theme)
         row += 1
@@ -119,7 +120,7 @@ class UnifiedSettingsSection:
         self.poe_entry = ctk.CTkEntry(
             frame,
             textvariable=self.poe_player_var,
-            width=170
+            width=self.width
         )
         self.poe_entry.grid(row=row, column=1, sticky="w")
         self.poe_entry.configure(
@@ -128,16 +129,9 @@ class UnifiedSettingsSection:
         self.poe_player_var.trace_add("write", self._update_tracker_poe_player)
         row += 1
 
-        # ---- Player League ----
-        ctk.CTkLabel(frame, text="League Version:").grid(row=row, column=0, sticky="w")
-        league_cb = ctk.CTkComboBox(frame, variable=self.user_league_var, values=c.league_versions, width=170)
-        league_cb.grid(row=row, column=1, sticky="w")
-        self.user_league_var.trace_add("write", self._update_tracker_league)
-        row += 1
-
         # ---- Data League ----
         ctk.CTkLabel(frame, text="(poe.ninja) Data League:").grid(row=row, column=0, sticky="w")
-        league_cb2 = ctk.CTkComboBox(frame, variable=self.data_league_var, values=c.LEAGUES_TO_FETCH, width=170)
+        league_cb2 = ctk.CTkComboBox(frame, variable=self.data_league_var, values=c.LEAGUES_TO_FETCH, width=self.width)
         league_cb2.grid(row=row, column=1, sticky="w")
         self.data_league_var.trace_add("write", self._on_data_league_change)
         row += 1
@@ -145,37 +139,33 @@ class UnifiedSettingsSection:
         add_separator(frame, row)
         row += 1
 
-        ctk.CTkCheckBox(frame, text="Enable PoE Ladder", variable=self.enable_poeladder_var,
+        ctk.CTkLabel(frame, text="PoE Ladder - Configuration", font=("Segoe UI", 13, "bold")).grid(row=row, column=0, columnspan=2, sticky="w")
+        row += 1
+        ctk.CTkCheckBox(frame, text="Enable Integration", variable=self.enable_poeladder_var,
                         command=self._toggle_poeladder).grid(
             row=row, column=0, columnspan=1, sticky="w"
         )
         row += 1
 
-        ctk.CTkLabel(frame, text="(poeladder.com) Collection League:").grid(row=row, column=0, sticky="w")
+        ctk.CTkLabel(frame, text="Collection League:").grid(row=row, column=0, sticky="w")
 
         self.dynamic_data_league_cb = ctk.CTkComboBox(
             frame,
             variable=self.dynamic_data_league_var,
             values=self.poeladder_leagues,
-            width=370,
+            width=self.width,
             state="normal" if self.enable_poeladder_var.get() else "disabled"
         )
-        row += 1
-        self.dynamic_data_league_cb.grid(row=row, column=0, columnspan=2, sticky="w")
+        self.dynamic_data_league_cb.grid(row=row, column=1, columnspan=1, sticky="w")
         self.dynamic_data_league_var.trace_add("write", self._on_dynamic_league_change)
         row += 1
 
         fetch_btn_state = "normal" if self.enable_poeladder_var.get() else "disabled"
         self.fetch_collection_btn = ctk.CTkButton(frame, text="Fetch Collection", state=fetch_btn_state,
                                                   command=self._fetch_poeladder,
-                                                  width=370)
+                                                  width=self.long_width)
         self.fetch_collection_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(5, 10))
         row += 1
-
-        # ctk.CTkCheckBox(frame, text="SSF", variable=self.is_ssf_league_var, command=self._toggle_ssf_league).grid(
-        #     row=row, column=1, columnspan=1, sticky="w"
-        # )
-        # row += 1
 
         add_separator(frame, row)
         row += 1
@@ -192,7 +182,7 @@ class UnifiedSettingsSection:
         row += 1
 
         ctk.CTkLabel(frame, text="Duration (sec):").grid(row=row, column=0, sticky="w")
-        duration_entry = ctk.CTkEntry(frame, textvariable=self.toasts_duration_var, width=170)
+        duration_entry = ctk.CTkEntry(frame, textvariable=self.toasts_duration_var, width=self.width)
         duration_entry.grid(row=row, column=1, sticky="w")
         self.toasts_duration_var.trace_add("write", self._update_toasts_duration)
         row += 1
@@ -261,22 +251,6 @@ class UnifiedSettingsSection:
         set_setting("Application", "toasts_duration_seconds", dur)
         toasts.set_toast_duration(dur)
 
-    # def _toggle_ssf_league(self):
-    #     enabled = self.is_ssf_league_var.get()
-    #     set_setting("Application", "is_ssf", enabled)
-    #     data_league = get_setting("Application", "data_league")
-    #     mutated_val = "SSF " + data_league if enabled else data_league
-    #
-    #     player = self.poe_player_var.get()
-    #     player_ladders = curio_collection_fetch.PLAYER_LADDERS.get(player, {})
-    #
-    #     for ladder_key, ladder_identifier in player_ladders.items():
-    #         if ladder_key == mutated_val:
-    #             set_setting("Application", "poeladder_data_league", ladder_identifier)
-    #
-    #     self.tracker.on_league_change()
-    #     self.tree_manager.refresh_treeview(self.tracker)
-
     def _toggle_poeladder(self):
         enabled = self.enable_poeladder_var.get()
         set_setting("Application", "enable_poeladder", enabled)
@@ -316,12 +290,16 @@ class UnifiedSettingsSection:
             leagues[0] if leagues else ""
         )
         self.dynamic_data_league_var.set(selected_name)
+        self.tracker.on_league_change()
 
     def _on_dynamic_league_change(self, *_):
         league_name = self.dynamic_data_league_var.get()
         if not league_name:
             return
 
+        player = self.poe_player_var.get().strip()
+        player_ladders = curio_collection_fetch.PLAYER_LADDERS.get(player, {})
+        self.league_display_mapping = {**player_ladders}
         ladder_identifier = self.league_display_mapping.get(league_name)
         if ladder_identifier:
             set_setting("Application", "poeladder_ggg_league", league_name)
@@ -354,13 +332,6 @@ class UnifiedSettingsSection:
             return
         set_setting("User", "poe_user", val)
         self.tracker.poe_user = val
-
-    def _update_tracker_league(self, *_):
-        val = self.user_league_var.get()
-        if not val:
-            return
-        set_setting("User", "poe_league", val)
-        self.tracker.league_version = val
 
 
 # -------------------------------

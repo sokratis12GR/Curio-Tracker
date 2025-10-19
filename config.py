@@ -18,9 +18,10 @@ os.makedirs(base_path, exist_ok=True)
 SETTINGS_PATH = os.path.join(base_path, "user_settings.ini")
 
 # -------------------- Default Settings --------------------
+LEAGUE = "Mercenaries"
+
 DEFAULT_SETTINGS = {
     'User': {
-        'poe_league': '3.26',
         'poe_user': 'sokratis12GR#6608',
     },
     'Hotkeys': {
@@ -36,7 +37,8 @@ DEFAULT_SETTINGS = {
         'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe',
     },
     'Application': {
-        'time_last_dupe_check_seconds': '60'
+        'time_last_dupe_check_seconds': '60',
+        'data_league': f'{LEAGUE}'
     }
 }
 
@@ -54,7 +56,6 @@ info_show_keys_snippet = None
 info_show_keys_layout = None
 info_show_keys_exit = None
 
-LEAGUE = "Mercenaries"
 
 
 def initialize_settings():

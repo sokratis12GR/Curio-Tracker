@@ -288,7 +288,7 @@ class TreeManager:
             )
         else:
             self.reapply_row_formatting()
-            self.filter_tree_by_time()
+            self.sort_tree("record")
             if post_callback:
                 post_callback()
 
@@ -325,7 +325,7 @@ class TreeManager:
         for item in parsed:
             self.add_item_to_tree(item)
 
-        self.filter_tree_by_time()
+        self.sort_tree("record")
         self.reapply_row_formatting()
 
     def load_latest_item(self, tracker):
@@ -338,7 +338,7 @@ class TreeManager:
         item = parsed[0]
         self.add_item_to_tree(item)
 
-        self.filter_tree_by_time()
+        self.sort_tree("record")
         self.reapply_row_formatting()
 
     def on_tree_click(self, event):
