@@ -147,7 +147,7 @@ def main():
 
 def start_main_app(root, theme_mode, theme_manager):
     root.title("Heist Curio Tracker")
-    root.geometry("1020x650")
+    root.geometry("1100x720")
     root.resizable(True, True)
 
     if platform.startswith("win"):
