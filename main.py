@@ -84,7 +84,7 @@ import curio_keybinds
 import curio_tiers_fetch as fetch_tiers
 import curio_collection_fetch as fetch_collection
 import curio_tracker as tracker
-from config import DEBUGGING, initialize_settings, LEAGUE, TREE_COLUMNS, IS_SSF
+from config import DEBUGGING, initialize_settings, TREE_COLUMNS
 from gui.controls import LeftFrameControls
 from gui.layout import create_layout
 from gui.menus import create_settings_menu
@@ -216,8 +216,8 @@ def start_main_app(root, theme_mode, theme_manager):
 
 UPDATE_INTERVAL_MS = 30 * 60 * 1000  # 30 minutes in milliseconds
 
-def schedule_auto_update(root, player):
 
+def schedule_auto_update(root, player):
     def auto_fetch():
         threading.Thread(target=fetch_collection.run_fetch_curios_threaded, args=(player,), daemon=True).start()
         root.after(UPDATE_INTERVAL_MS, auto_fetch)

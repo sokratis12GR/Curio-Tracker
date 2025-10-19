@@ -2,7 +2,7 @@
 
 from customtkinter import *
 
-from config import league_versions, layout_keywords, time_options
+from config import layout_keywords, time_options
 from gui.custom_load_popup import CustomLoader
 from gui.info_frame import InfoPanelPopup
 from settings import set_setting
@@ -21,7 +21,6 @@ class LeftFrameControls:
         # --- StringVars
         self.vars = {
             "poe_player": StringVar(value=getattr(tracker, "poe_user", "")),
-            "league": StringVar(value=getattr(tracker, "league_version", league_versions[0])),
             "blueprint_type": StringVar(value=tracker.blueprint_layout),
             "area_level": StringVar(value=str(tracker.blueprint_area_level)),
             "search": StringVar(value=""),

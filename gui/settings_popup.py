@@ -79,7 +79,6 @@ class UnifiedSettingsSection:
         self.theme_selector_var = ctk.StringVar(value=get_setting("Application", "theme_mode", c.DEFAULT_THEME_MODE))
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
-        self.is_ssf_league_var = ctk.BooleanVar(value=get_setting("Application", "is_ssf", c.IS_SSF))
         self.enable_poeladder_var = ctk.BooleanVar(
             value=get_setting("Application", "enable_poeladder", c.ENABLE_POELADDER))
         self.data_league_var = ctk.StringVar(value=get_setting("Application", "data_league", c.LEAGUE))
@@ -96,7 +95,7 @@ class UnifiedSettingsSection:
         row = row_start
 
         # ---- Header ----
-        ctk.CTkLabel(frame, text="Application Settings", font=("Segoe UI", 15, "bold")).grid(
+        ctk.CTkLabel(frame, text="Application", font=("Segoe UI", 15, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(5, 10)
         )
         row += 1
@@ -111,7 +110,7 @@ class UnifiedSettingsSection:
         row += 1
 
         # ---- Player ----
-        ctk.CTkLabel(frame, text="Player & League Setup", font=("Segoe UI", 13, "bold")).grid(
+        ctk.CTkLabel(frame, text="Player & League", font=("Segoe UI", 13, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(5, 5)
         )
         row += 1
@@ -139,7 +138,7 @@ class UnifiedSettingsSection:
         add_separator(frame, row)
         row += 1
 
-        ctk.CTkLabel(frame, text="PoE Ladder - Configuration", font=("Segoe UI", 13, "bold")).grid(row=row, column=0, columnspan=2, sticky="w")
+        ctk.CTkLabel(frame, text="PoE Ladder", font=("Segoe UI", 13, "bold")).grid(row=row, column=0, columnspan=2, sticky="w")
         row += 1
         ctk.CTkCheckBox(frame, text="Enable Integration", variable=self.enable_poeladder_var,
                         command=self._toggle_poeladder).grid(
@@ -171,7 +170,7 @@ class UnifiedSettingsSection:
         row += 1
 
         # ---- Toasts ----
-        ctk.CTkLabel(frame, text="Toasts / Notifications", font=("Segoe UI", 13, "bold")).grid(
+        ctk.CTkLabel(frame, text="Toasts (Notifications)", font=("Segoe UI", 13, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(5, 5)
         )
         row += 1

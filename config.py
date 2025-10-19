@@ -121,11 +121,7 @@ layout_keywords = [
     "Bunker", "Records Office", "Mansion", "Smuggler's Den", "Underbelly",
     "Laboratory", "Prohibited Library", "Repository", "Tunnels"
 ]
-league_versions = [
-    "3.26", "3.25", "3.24", "3.23", "3.22", "3.21",
-    "3.20", "3.19", "3.18", "3.17", "3.16", "3.15",
-    "3.14", "3.13", "3.12"
-]
+
 theme_modes = [
     "LIGHT", "DARK"
 ]
