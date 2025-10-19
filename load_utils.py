@@ -99,9 +99,11 @@ def load_tiers_dataset(file_path: str, debugging=False) -> dict:
         if len(row) >= 2:
             term = smart_title_case(row[0].strip())
             tier = format_currency_value(row[1])
+            wiki = row[2]
+            img = row[3]
             if debugging:
-                print(f"{term}: {tier}")
-            return term, {"tier": tier}
+                print(f"{term}: {tier} | {wiki} | {img}")
+            return term, {"tier": tier, "wiki": wiki, "img": img}
         return None
 
     rows = load_csv(file_path, row_parser=parser)

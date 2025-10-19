@@ -559,7 +559,10 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                 estimated_value = CURRENCY_DATASET.get(term_title, {})
                 chaos_est = estimated_value.get("chaos")
                 divine_est = estimated_value.get("divine")
-                tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
+                item_data_set = TIERS_DATASET.get(term_title, {})
+                tier = item_data_set.get("tier", "")
+                wiki = item_data_set.get("wiki", "")
+                img = item_data_set.get("img", "")
                 owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
 
                 if allow_dupes or not duplicate:
@@ -582,7 +585,9 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                         divine_value=divine_est,
                         tier=tier,
                         picked=False,
-                        owned=owned
+                        owned=owned,
+                        wiki=wiki,
+                        img=img
                     )
                     parsed_items.append(item)
 
@@ -650,7 +655,10 @@ def parse_items_from_rows(rows):
             divine_est = estimated_value.get("divine")
             owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
 
-            tier = TIERS_DATASET.get(term_title, {}).get("tier", "")
+            item_data_set = TIERS_DATASET.get(term_title, {})
+            tier = item_data_set.get("tier", "")
+            wiki = item_data_set.get("wiki", "")
+            img = item_data_set.get("img", "")
             duplicate = False  # Just predefining
             # Build parsed item directly from CSV header values
             item = build_parsed_item(
@@ -670,7 +678,9 @@ def parse_items_from_rows(rows):
                 divine_value=divine_est,
                 tier=tier,
                 owned=owned,
-                picked=picked
+                picked=picked,
+                wiki=wiki,
+                img=img
             )
             parsed_items.append(item)
 

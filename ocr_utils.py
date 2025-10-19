@@ -395,6 +395,8 @@ def build_parsed_item(
         tier="",
         picked=False,
         owned=False,
+        wiki="",
+        img=""
 ):
     ts = parse_timestamp(timestamp)
 
@@ -455,7 +457,9 @@ def build_parsed_item(
         record_number=record,
         tier=tier,
         picked=picked,
-        owned=owned
+        owned=owned,
+        wiki=wiki,
+        img=img,
     )
     if item_type == c.EXPERIMENTAL_TYPE:
         implicits_lines = experimental_items.get(term_title, [])
