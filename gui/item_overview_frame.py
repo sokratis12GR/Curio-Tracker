@@ -204,6 +204,7 @@ class ItemOverviewFrame:
         if wiki_url:
             field_lbl, value_lbl = self.label_pairs["Wiki"]
             value_lbl.configure(font=("Roboto", 12, "underline"), text="Open Wiki Page", cursor="hand2")
-            value_lbl.bind("<Button-1>", lambda e: webbrowser.open(wiki_url))
+            value_lbl.unbind("<Button-1>")
+            value_lbl.bind("<Button-1>", lambda e, url=wiki_url: webbrowser.open(url))
             field_lbl.grid()
             value_lbl.grid()
