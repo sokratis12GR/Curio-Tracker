@@ -8,6 +8,7 @@ from customtkinter import *
 from customtkinter import CTkImage
 
 from config import IMAGE_COL_WIDTH, ROW_HEIGHT
+from fonts import make_font
 from ocr_utils import parse_item_name
 from renderer import render_item
 from tree_utils import pad_image
@@ -21,9 +22,10 @@ class ItemOverviewFrame:
 
         self.frame = CTkFrame(
             parent,
-            corner_radius=10,
-            border_width=3,
-            border_color="white"
+            corner_radius=6,
+            border_width=1,
+            border_color=("#e0e0e0", "#40444b"),
+            fg_color=("#f4f6f8", "#2f3136")
         )
         self.frame.grid(row=row_index_start, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
 
@@ -40,7 +42,7 @@ class ItemOverviewFrame:
         self.title_label = CTkLabel(
             self.frame,
             text="Item Overview",
-            font=("Roboto", 16, "bold"),
+            font=make_font(16, "bold"),
             anchor="center",
             justify="center"
         )
@@ -75,7 +77,7 @@ class ItemOverviewFrame:
         self.item_name_label = CTkLabel(
             self.frame,
             text="",
-            font=("Roboto", 11, "bold"),
+            font=make_font(11, "bold"),
             anchor="center",
             justify="center",
             wraplength=260
@@ -146,9 +148,13 @@ class ItemOverviewFrame:
             "Picked": picked
         }
 
-        name = parse_item_name(item)
-        self.item_name_label.configure(text=name)
-        self.item_name_label.grid(sticky="n")
+        name = parse_item_name(item) if item else ""
+        if name:
+            self.item_name_label.configure(text=name)
+            self.item_name_label.grid(sticky="n")
+        else:
+            self.item_name_label.configure(text="")
+            self.item_name_label.grid_remove()
 
         for field, value in data.items():
             if value not in (None, "", "N/A", 0):
@@ -203,7 +209,7 @@ class ItemOverviewFrame:
 
         if wiki_url:
             field_lbl, value_lbl = self.label_pairs["Wiki"]
-            value_lbl.configure(font=("Roboto", 12, "underline"), text="Open Wiki Page", cursor="hand2")
+            value_lbl.configure(font=make_font(12, underline=True), text="Open Wiki Page", cursor="hand2")
             value_lbl.unbind("<Button-1>")
             value_lbl.bind("<Button-1>", lambda e, url=wiki_url: webbrowser.open(url))
             field_lbl.grid()

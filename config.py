@@ -92,25 +92,15 @@ CSV_DEBUGGING = False
 ENABLE_LOGGING = True
 
 # Update these every league.
-FIXED_LADDER_IDENTIFIER = "Mercenaries_of_Trarthus"
+FIXED_LADDER_IDENTIFIER = "Keepers"
 LEAGUES_TO_FETCH = [
     LEAGUE,
     f"Hardcore {LEAGUE}",
     "Standard"
 ]
-IS_SSF = False
 ENABLE_POELADDER = False
 
-# POELADDER_LADDERS = {
-#     "SSF Standard": "SSF_Standard",
-#     "SSF Mercenaries": "SSF_Mercenaries_of_Trarthus",
-#     "Mercenaries": "Mercenaries_of_Trarthus",
-#     "Standard": "Standard",
-#     "SSF Hardcore Mercenaries": "SSF_Mercenaries_of_Trarthus_HC",
-#     "SSF Hardcore": "SSF_Hardcore",
-# }
-
-poe_league = "3.26"
+poe_league = "3.27"
 poe_user = "sokratis12GR#6608"
 
 # Default values of blueprint layouts
@@ -244,6 +234,8 @@ exiting_prompt = "👋 Exiting."
 time_column_index = 16  # 17th column of the .csv file contains the time var
 
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
+CHAOS_COLOR = "#d6b85a"
+available_fonts = ["Segoe UI", "Roboto",  "Arial", "Calibri", "Comic Sans MS"]
 
 ## Replica / Unique: #AF6025
 replica_l_hsv = [5, 100, 80]

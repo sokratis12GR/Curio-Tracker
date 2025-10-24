@@ -4,6 +4,7 @@ import customtkinter as ctk
 import requests
 from PIL import Image
 
+from fonts import make_font
 from gui.ctksimplebox import CTkMessageBox
 from version_utils import VERSION
 
@@ -35,22 +36,21 @@ def check_for_updates(root):
         msgbox.showerror("Update Check Failed", f"Could not check for updates:\n{e}")
 
 
-
 def show_update_popup(root, latest_version, release_url):
     popup = ctk.CTkToplevel(root)
     popup.title("Update Available")
     popup.resizable(False, False)
     popup.transient(root)
-    popup.minsize(250,220)
+    popup.minsize(250, 220)
     popup.grab_set()
     popup.focus_force()
 
     frm = ctk.CTkFrame(popup)
     frm.pack(padx=20, pady=20, fill="both", expand=True)
 
-    ctk.CTkLabel(frm, text="Update Available", font=("Segoe UI", 14, "bold")).pack(pady=(0, 5))
-    ctk.CTkLabel(frm, text=f"Your version: {VERSION}", font=("Segoe UI", 11)).pack()
-    ctk.CTkLabel(frm, text=f"Latest version: {latest_version}", font=("Segoe UI", 11, "bold")).pack(pady=(0, 10))
+    ctk.CTkLabel(frm, text="Update Available", font=make_font(14, "bold")).pack(pady=(0, 5))
+    ctk.CTkLabel(frm, text=f"Your version: {VERSION}", font=make_font(11)).pack()
+    ctk.CTkLabel(frm, text=f"Latest version: {latest_version}", font=make_font(11, "bold")).pack(pady=(0, 10))
 
     def open_github():
         webbrowser.open_new(release_url)

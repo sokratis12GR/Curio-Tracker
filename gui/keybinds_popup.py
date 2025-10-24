@@ -3,6 +3,7 @@
 from customtkinter import CTkLabel, CTkToplevel, CTkButton, CTkFrame
 
 import curio_keybinds
+from fonts import make_font
 
 
 class KeybindsPopup:
@@ -25,7 +26,7 @@ class KeybindsPopup:
         title = CTkLabel(
             frame,
             text="Configure Your Keybinds",
-            font=("Segoe UI", 14, "bold")
+            font=make_font(14, "bold")
         )
         title.grid(row=0, column=0, columnspan=2, pady=(0, 15))
 
@@ -43,7 +44,7 @@ class KeybindsPopup:
             row = start_row + i
 
             # Label
-            CTkLabel(frame, text=label_text + ":", font=("Segoe UI", 11, "bold")).grid(
+            CTkLabel(frame, text=label_text + ":", font=make_font(11, "bold")).grid(
                 row=row, column=0, sticky="w", padx=5, pady=4
             )
 

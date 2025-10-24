@@ -4,7 +4,9 @@ from sys import platform
 import customtkinter
 from customtkinter import *
 
+from fonts import init_font_var, make_font
 from gui.item_overview_frame import ItemOverviewFrame
+from gui.total_frame import TotalFrame
 from logger import log_message
 
 _original_destroy = customtkinter.CTkButton.destroy
@@ -99,14 +101,16 @@ from tree_manager import TreeManager
 
 def main():
     root = CTk()
+    init_font_var(root)
     root.withdraw()
+
 
     loading = CTkToplevel(root)
     loading.title("Loading...")
     loading.geometry("300x120")
     loading.resizable(False, False)
 
-    CTkLabel(loading, text="Initializing, please wait...", font=('Segoe UI', 11)).pack(pady=20)
+    CTkLabel(loading, text="Initializing, please wait...", font=make_font(11)).pack(pady=20)
     progress = CTkProgressBar(loading, mode='indeterminate')
     progress.pack(fill="x", padx=20)
     progress.start()
@@ -171,6 +175,9 @@ def start_main_app(root, theme_mode, theme_manager):
     toggle_frame = layout['toggle_frame']
     tree_toggles = TreeToggles(toggle_frame, tree, tree_manager)
     tree_toggles.frame.grid(row=0, column=0, sticky="e", padx=5)
+    total_frame = TotalFrame(layout['total_frame'], tree_manager)
+    tree_manager.total_frame = total_frame
+    total_frame.frame.pack(anchor="w")
 
     left_controls = LeftFrameControls(
         parent=left_frame,
@@ -181,8 +188,6 @@ def start_main_app(root, theme_mode, theme_manager):
     left_controls.refresh_ui()
 
     row_index = left_controls.get_current_row()
-    # info_panel = InfoPanel(parent=left_frame, row_index_start=row_index)
-    # row_index = info_panel.get_current_row()
     item_overview = ItemOverviewFrame(left_frame, row_index_start=row_index)
     tree_manager.bind_overview(item_overview)
 
@@ -193,6 +198,8 @@ def start_main_app(root, theme_mode, theme_manager):
         tree_manager=tree_manager,
         update_info_callback=None,
     )
+    from fonts import update_all_fonts
+    update_all_fonts(root)
 
     handlers = register_handlers(root, tree_manager, controls=left_controls)
     curio_keybinds.handlers = handlers

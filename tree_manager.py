@@ -67,7 +67,7 @@ class TreeManager:
         self.tree.bind("<Double-1>", self.on_tree_double_click)
         self.tree.bind("<Delete>", self.delete_selected_items)
 
-        self.toggle_frame = None
+        self.total_frame = None
         self.col_vars = {}
         self.tree_lock = threading.Lock()
 
@@ -172,10 +172,12 @@ class TreeManager:
         })
 
         self.reapply_row_formatting()
+        self.update_total_labels()
 
     def force_clear_tree(self):
         self.should_cancel_process = True
         self.clear_tree()
+        self.update_total_labels()
 
     def clear_tree(self):
         self.tree.delete(*self.tree.get_children())
@@ -210,6 +212,7 @@ class TreeManager:
             self.all_item_iids.discard(iid)
             self.item_time_map.pop(iid, None)
             self.csv_row_map.pop(iid, None)
+            self.update_total_labels()
 
     def delete_item_from_tree(self, record_number=None, item_name=None, confirm=True):
         if record_number is not None:
@@ -244,6 +247,7 @@ class TreeManager:
         self.all_item_iids.discard(iid)
         self.item_time_map.pop(iid, None)
         self.csv_row_map.pop(iid, None)
+        self.update_total_labels()
 
         return True
 
@@ -382,6 +386,7 @@ class TreeManager:
 
         setattr(item, col_name, new_state)
         self.modify_csv_record(row_id, item_text, updates={"Picked": new_state})
+        self.update_total_labels()
 
     def on_tree_double_click(self, event):
         # Identify row and column
@@ -495,6 +500,61 @@ class TreeManager:
         item = self.csv_row_map.get(iid)
         if hasattr(self, "overview_frame"):
             self.overview_frame.update_item(item)
+
+    def calculate_totals(self):
+        total_chaos = 0.0
+        total_divine = 0.0
+        picked_chaos = 0.0
+        picked_divine = 0.0
+
+        for iid in self.all_item_iids:
+            if not self.tree.exists(iid):
+                continue
+
+            item = self.csv_row_map.get(iid)
+            if not item:
+                continue
+
+            chaos_value = utils.convert_to_float(getattr(item, "chaos_value", 0))
+            divine_value = utils.convert_to_float(getattr(item, "divine_value", 0))
+            stack_size, _ = utils.get_stack_size(item)
+
+            chaos_value *= stack_size
+            divine_value *= stack_size
+
+            total_chaos += chaos_value
+            total_divine += divine_value
+
+            picked_value = self.tree.set(iid, "picked")
+            if str(picked_value).strip() in ("☑", "True", "true", "YES", "yes"):
+                picked_chaos += chaos_value
+                picked_divine += divine_value
+
+        return total_chaos, total_divine, picked_chaos, picked_divine
+
+    def update_total_labels(self):
+        if not hasattr(self, "total_frame") or not self.total_frame:
+            return
+
+        total_chaos, total_divine, picked_chaos, picked_divine = self.calculate_totals()
+
+        mode = self.total_frame.value_mode.get()
+        if mode == "Divine":
+            total_value = total_divine
+            total_picked_value = picked_divine
+            suffix = " Divines"
+        else:
+            total_value = total_chaos
+            total_picked_value = picked_chaos
+            suffix = " Chaos"
+
+        # Only show suffix if value is non-zero
+        total_text = f"Total Value: {total_value:.2f}{suffix}" if total_value else ""
+        picked_text = f"Picked Value: {total_picked_value:.2f}{suffix}" if total_picked_value else ""
+
+        # Update labels
+        self.total_frame.total_value_label.configure(text=total_text)
+        self.total_frame.total_picked_label.configure(text=picked_text)
 
     # ---------- Sorting ----------
     def sort_tree(self, column):
@@ -649,6 +709,7 @@ class TreeManager:
 
         self.clear_tree()
         self.update_visible_columns()
+        self.update_total_labels()
 
         if tracker is not None and previous_count > 0:
             self.load_all_items_threaded(tracker, limit=previous_count)

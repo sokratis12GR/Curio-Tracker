@@ -3,6 +3,7 @@ from tkinter import ttk
 import customtkinter as ctk
 
 from config import ROW_HEIGHT
+from fonts import make_font
 from settings import get_setting
 
 
@@ -51,17 +52,21 @@ class CustomTreeview:
         style.theme_use("default")
 
         if self.theme_mode == "DARK":
-            bg = "#2f3136"
+            bg = "#40444b"
             alt_bg = "#36393f"
             fg = "#dcddde"
             sel_bg = "#5865f2"
             sel_fg = "#ffffff"
+            border_color = "#36393f"
+            heading_bg = "#40444b"
         else:
-            bg = "#f4f6f8"
+            bg = "white"
             alt_bg = "#e8eaed"
             fg = "#000000"
             sel_bg = "#0078d7"
             sel_fg = "#ffffff"
+            border_color = "#e0e0e0"
+            heading_bg = "white"
 
         self.bg = bg
         self.alt_bg = alt_bg
@@ -72,16 +77,30 @@ class CustomTreeview:
             background=bg,
             fieldbackground=bg,
             foreground=fg,
-            borderwidth=2,
             rowheight=ROW_HEIGHT,
-            font=("Roboto", 12),
+            font=make_font(11),
+            borderwidth=1,
+            relief="solid",
+            highlightthickness=1 if self.theme_mode == "LIGHT" else 0,
+            highlightbackground=border_color,
+            highlightcolor=border_color,
         )
+
         style.map(
             "Treeview",
             background=[("selected", sel_bg)],
             foreground=[("selected", sel_fg)],
         )
-        style.configure("Treeview.Heading", background=alt_bg, foreground=fg, font=("Roboto", 12, "bold"))
+
+        style.configure(
+            "Treeview.Heading",
+            background=heading_bg,
+            foreground=fg,
+            font=make_font(11, "bold"),
+            borderwidth=1,
+            relief="solid",
+        )
+
 
     def _add_scrollbars(self):
         v_scroll = ctk.CTkScrollbar(self.parent, command=self.tree.yview)

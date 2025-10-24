@@ -3,6 +3,7 @@ from PIL import Image
 import customtkinter as ctk
 
 import load_utils
+from fonts import make_font
 from version_utils import VERSION
 
 
@@ -81,9 +82,9 @@ class CustomAboutPopup:
         frame.pack(padx=20, pady=20, fill="both", expand=True)
 
         # --- Header ---
-        ctk.CTkLabel(frame, text="Heist Curio Tracker", font=("Segoe UI", 14, "bold")).pack(pady=(0, 5))
-        ctk.CTkLabel(frame, text="Author: Sokratis Fotkatzkis", font=("Segoe UI", 11)).pack()
-        ctk.CTkLabel(frame, text=f"Version: {VERSION}", font=("Segoe UI", 11, "bold")).pack(pady=(0, 10))
+        ctk.CTkLabel(frame, text="Heist Curio Tracker", font=make_font(14, "bold")).pack(pady=(0, 5))
+        ctk.CTkLabel(frame, text="Author: Sokratis Fotkatzkis", font=make_font(11)).pack()
+        ctk.CTkLabel(frame, text=f"Version: {VERSION}", font=make_font(11, "bold")).pack(pady=(0, 10))
 
         # --- Buttons ---
         _add_github_button(frame)

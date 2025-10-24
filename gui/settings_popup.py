@@ -9,6 +9,7 @@ from customtkinter import CTkFrame
 import config as c
 import curio_collection_fetch
 import toasts
+from fonts import font_family_var, update_all_fonts, make_font, init_font_var
 from load_utils import get_datasets
 from logger import log_message
 from settings import get_setting, set_setting
@@ -24,6 +25,7 @@ class SettingsPopup:
         self.tracker = tracker
         self.theme_manager = theme_manager
         self.tree_manager = tree_manager
+        init_font_var(parent)
 
         self.popup = ctk.CTkToplevel(parent)
         self.popup.title("Application Settings")
@@ -36,7 +38,7 @@ class SettingsPopup:
         self.scroll_frame = ctk.CTkScrollableFrame(
             self.popup,
             label_text="Configuration",
-            label_font=("Segoe UI", 14, "bold"),
+            label_font=make_font(14, "bold"),
         )
         self.scroll_frame.pack(fill="both", expand=True, padx=10)
 
@@ -87,6 +89,7 @@ class UnifiedSettingsSection:
         self.data_league_var = ctk.StringVar(value=get_setting("Application", "data_league", c.LEAGUE))
         self.poe_player_var = ctk.StringVar(value=get_setting("User", "poe_user", ""))
         self.dupe_duration = ctk.IntVar(value=get_setting("Application", "time_last_dupe_check_seconds", 60))
+        self.font_selector_var = ctk.StringVar(value=get_setting("Application", "font_family", "Segoe UI"))
         self.collection_missing_color_var = ctk.StringVar(
             value=get_setting("Application", "collection_missing_color", "#FF0000")  # default red
         )
@@ -98,7 +101,7 @@ class UnifiedSettingsSection:
         row = row_start
 
         # ---- Header ----
-        ctk.CTkLabel(frame, text="Application", font=("Segoe UI", 15, "bold")).grid(
+        ctk.CTkLabel(frame, text="Application", font=make_font(15, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(5, 10)
         )
         row += 1
@@ -109,11 +112,17 @@ class UnifiedSettingsSection:
         theme_cb.grid(row=row, column=1, sticky="w")
         self.theme_selector_var.trace_add("write", self._update_application_theme)
         row += 1
+        # ---- Font ----
+        ctk.CTkLabel(frame, text="Font Family (requires restart):").grid(row=row, column=0, sticky="w")
+        font_cb = ctk.CTkComboBox(frame, variable=self.font_selector_var, values=c.available_fonts, width=self.width)
+        font_cb.grid(row=row, column=1, sticky="w")
+        self.font_selector_var.trace_add("write", self._update_application_font)
+        row += 1
         add_separator(frame, row)
         row += 1
 
         # ---- Player ----
-        ctk.CTkLabel(frame, text="Player & League", font=("Segoe UI", 13, "bold")).grid(
+        ctk.CTkLabel(frame, text="Player & League", font=make_font(13, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(5, 5)
         )
         row += 1
@@ -141,10 +150,11 @@ class UnifiedSettingsSection:
         add_separator(frame, row)
         row += 1
 
-        self.poeladder_label = ctk.CTkLabel(frame, text="PoE Ladder", font=("Segoe UI", 13, "bold"))
+        self.poeladder_label = ctk.CTkLabel(frame, text="PoE Ladder", font=make_font(13, "bold"))
         self.poeladder_label.grid(row=row, column=0, columnspan=2, sticky="w")
 
-        self.poeladder_label = ctk.CTkLabel(frame, text="(How to setup)", font=("Segoe UI", 9, "bold", "underline"), cursor="hand2")
+        self.poeladder_label = ctk.CTkLabel(frame, text="(How to setup)", font=make_font(9, "bold", underline=True),
+                                            cursor="hand2")
         self.poeladder_label.grid(row=row, column=0, columnspan=2, sticky="w", padx=75)
         self.poeladder_label.bind(
             "<Button-1>", self.open_poeladder_link)
@@ -180,7 +190,7 @@ class UnifiedSettingsSection:
         row += 1
 
         # ---- Toasts ----
-        ctk.CTkLabel(frame, text="Toasts (Notifications)", font=("Segoe UI", 13, "bold")).grid(
+        ctk.CTkLabel(frame, text="Toasts (Notifications)", font=make_font(13, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(5, 5)
         )
         row += 1
@@ -241,7 +251,17 @@ class UnifiedSettingsSection:
             return
         log_message("Theme Selector", val)
         set_setting("Application", "theme_mode", val)
-        switch_mode(self.tree_manager, self.tracker, val)
+        switch_mode(val)
+
+    def _update_application_font(self, *_):
+        new_family = self.font_selector_var.get()
+        if not new_family:
+            return
+        set_setting("Application", "font_family", new_family)
+        from fonts import font_family_var, _ensure_font_var
+        _ensure_font_var(master=self.parent)
+        font_family_var.set(new_family)
+        update_all_fonts(self.parent)
 
     def _toggle_toasts(self):
         enabled = self.toasts_var.get()
@@ -348,12 +368,13 @@ class UnifiedSettingsSection:
             return
         set_setting("User", "poe_user", val)
         self.tracker.poe_user = val
+        self.tree_manager.total_frame.player_name.set(val)
 
 
 # -------------------------------
 # Helper functions
 # -------------------------------
-def switch_mode(tree_manager: TreeManager, tracker, mode=c.DEFAULT_THEME_MODE):
+def switch_mode(mode=c.DEFAULT_THEME_MODE):
     apply_theme(mode=mode)
 
 

@@ -1,12 +1,12 @@
 import os
 
+import customtkinter
 import customtkinter as ctk
 
 
 def apply_theme(mode):
     mode = mode.upper()
     ctk.set_appearance_mode("dark" if mode != "LIGHT" else "light")
-
 
 class CTkThemes:
     def __init__(self, default_mode="DARK"):

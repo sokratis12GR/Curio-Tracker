@@ -1,17 +1,18 @@
-from tkinter import BooleanVar
+from tkinter import BooleanVar, StringVar
 
-from customtkinter import CTkFrame, CTkButton, CTkCheckBox, CTkToplevel
+from customtkinter import CTkFrame, CTkButton, CTkCheckBox, CTkToplevel, CTkLabel, CTkOptionMenu
 
 from settings import get_setting, set_setting
+from tree_manager import TreeManager
 
 
 class TreeToggles:
-    def __init__(self, parent_frame, tree, tree_manager, theme_manager=None):
+    def __init__(self, parent_frame, tree, tree_manager: TreeManager, theme_manager=None):
         self.tree = tree
         self.tm = tree_manager
         self.theme_manager = theme_manager
         self.frame = CTkFrame(parent_frame)
-        self.frame.grid(row=0, column=0, sticky="w", pady=(5, 0))
+        self.frame.grid(row=0, column=0, sticky="w", pady=(0, 5))
         self.col_vars = {}
         self.toggle_img_btn = None
         self.menu_popup = None
@@ -19,6 +20,7 @@ class TreeToggles:
         self._create_widgets()
 
     def _create_widgets(self):
+        # Columns button
         self.columns_btn = CTkButton(self.frame, text="Columns", command=self.open_menu_popup)
         self.columns_btn.grid(row=0, column=0, padx=0)
 
@@ -40,7 +42,8 @@ class TreeToggles:
 
         for idx, col in enumerate(self.tm.tree_columns):
             col_name = col["id"]
-            if col_name == "numeric_value" or (not get_setting("Application", "enable_poeladder", False) and col_name == "owned"):
+            if col_name == "numeric_value" or (
+                    not get_setting("Application", "enable_poeladder", False) and col_name == "owned"):
                 continue
             saved_state = get_setting("Columns", col_name, True)
             var = BooleanVar(value=saved_state)
@@ -51,7 +54,7 @@ class TreeToggles:
                 variable=var,
                 command=lambda c=col_name, v=var: self.toggle_column(c, v.get())
             )
-            chk.pack(anchor="w", padx=10, pady=2)
+            chk.pack(anchor="w")
             self.toggle_column(col_name, saved_state, save=False)
 
         self.menu_popup.update_idletasks()

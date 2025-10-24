@@ -50,7 +50,7 @@ class LeftFrameControls:
     # --- Time Filter
     def _setup_time_filter(self):
         lbl = CTkLabel(self.parent, text="Time Filter:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2), padx=5)
+        lbl.grid(row=self.row_index, column=0, sticky="w", pady=(5, 2), padx=(5,0))
         self.header_widgets.append(lbl)
 
         time_filter_dropdown = CTkComboBox(
@@ -60,7 +60,7 @@ class LeftFrameControls:
             width=150,
             corner_radius=6,
         )
-        time_filter_dropdown.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
+        time_filter_dropdown.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2), padx=(0,5))
 
         self.row_index += 1
         self.tree_manager.time_filter_var.trace_add("write", lambda *args: self.tree_manager.filter_tree_by_time())
