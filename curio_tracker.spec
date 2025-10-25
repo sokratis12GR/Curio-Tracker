@@ -38,7 +38,7 @@ datas = [
     ('tree_utils.py', '.'),
     ('version_utils.py', '.'),
     ('update_checker.py', '.'),
-    ('font.py', '.'),
+    ('fonts.py', '.'),
     ('currency_utils.py', '.'),
     ('curio_collection_fetch.py', '.'),
 ]
