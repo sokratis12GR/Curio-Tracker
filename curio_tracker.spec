@@ -39,6 +39,7 @@ datas = [
     ('version_utils.py', '.'),
     ('update_checker.py', '.'),
     ('font.py', '.'),
+    ('currency_utils.py', '.'),
     ('curio_collection_fetch.py', '.'),
 ]
 
