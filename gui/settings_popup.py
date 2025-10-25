@@ -113,7 +113,7 @@ class UnifiedSettingsSection:
         self.theme_selector_var.trace_add("write", self._update_application_theme)
         row += 1
         # ---- Font ----
-        ctk.CTkLabel(frame, text="Font Family (requires restart):").grid(row=row, column=0, sticky="w")
+        ctk.CTkLabel(frame, text="Font Family:").grid(row=row, column=0, sticky="w")
         font_cb = ctk.CTkComboBox(frame, variable=self.font_selector_var, values=c.available_fonts, width=self.width)
         font_cb.grid(row=row, column=1, sticky="w")
         self.font_selector_var.trace_add("write", self._update_application_font)
