@@ -433,7 +433,7 @@ class TreeManager:
                 edit_entry.destroy()
 
                 # Validate and update
-                stack_val = utils.convert_to_int(new_value) if new_value != "" else ""
+                stack_val = currency_utils.convert_to_int(new_value) if new_value != "" else ""
                 if stack_val != "" and not (1 <= stack_val <= 40):
                     messagebox.showerror("Invalid Stack Size", "Enter a number between 1–40 or leave blank.")
                     return
@@ -443,8 +443,8 @@ class TreeManager:
                     item.stack_size = stack_val if stack_val != "" else None
 
                     # Reuse utils.calculate_estimate_value
-                    display_value = utils.calculate_estimate_value(item)
-                    numeric_value = utils.convert_to_float(getattr(item, "chaos_value", 0)) * (item.stack_size or 1)
+                    display_value = currency_utils.calculate_estimate_value(item)
+                    numeric_value = currency_utils.convert_to_float(getattr(item, "chaos_value", 0)) * (item.stack_size or 1)
 
                     self.tree.set(row_id, "value", display_value)
                     self.tree.set(row_id, "numeric_value", numeric_value)
