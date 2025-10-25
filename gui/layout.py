@@ -9,16 +9,16 @@ def create_layout(root):
     root.grid_rowconfigure(1, weight=1)  # Main row grows (left + right frames)
 
     # --- Top Frame (menu/toolbar) ---
-    top_frame = CTkFrame(root, height=0, corner_radius=0)
+    top_frame = CTkFrame(root, height=0, corner_radius=6)
     top_frame.grid(row=0, column=0, columnspan=3, sticky="ew", padx=5)
 
     # --- Left Frame ---
     left_frame = CTkFrame(root)
-    left_frame.grid(row=1, column=0, padx=(5, 10), pady=10, sticky="nw")
+    left_frame.grid(row=1, column=0, padx=(5, 10), pady=(2,10), sticky="nw")
 
     # --- Right Frame ---
     right_frame = CTkFrame(root)
-    right_frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+    right_frame.grid(row=1, column=1, padx=10, pady=(2,10), sticky="nsew")
     right_frame.grid_rowconfigure(0, weight=1)
     right_frame.grid_rowconfigure(1, weight=0)
     right_frame.grid_columnconfigure(0, weight=0)
