@@ -20,6 +20,7 @@ from PIL import ImageGrab
 from termcolor import colored
 
 import config as c
+import currency_utils
 import ocr_utils as utils
 import toasts
 from config import csv_file_path
@@ -27,7 +28,7 @@ from csv_manager import CSVManager
 from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
-from settings import get_setting
+from settings import get_setting, set_setting
 
 datasets = get_datasets(force_reload=True)
 csv_mgr = CSVManager()
@@ -49,12 +50,19 @@ parsed_items = []
 full_currency = datasets.get("currency") or {}
 collection_dataset = datasets.get("collection") or {}
 
-
 def on_league_change():
     global CURRENCY_DATASET, COLLECTION_DATASET_ACTIVE
 
     new_league = get_setting("Application", "data_league", c.LEAGUE)
     CURRENCY_DATASET = full_currency.get(new_league, {})
+
+    divine_item = CURRENCY_DATASET.get("Divine Orb")
+    if divine_item:
+        divine_chaos = currency_utils.convert_to_float(divine_item.get("chaos", 0))
+        set_setting("Application", "divine_equivalent", divine_chaos)
+        log_message(f"[DEBUG] Stored divine equivalence for {new_league}: {divine_chaos} Chaos")
+    else:
+        log_message(f"[DEBUG] No Divine Orb found for league {new_league}")
 
     poeladder_identifier = get_setting("Application", "poeladder_league_identifier", c.FIXED_LADDER_IDENTIFIER)
     poeladder_display_name = get_setting("Application", "poeladder_ggg_league", poeladder_identifier)
