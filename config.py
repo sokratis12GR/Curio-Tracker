@@ -17,8 +17,24 @@ os.makedirs(base_path, exist_ok=True)
 
 SETTINGS_PATH = os.path.join(base_path, "user_settings.ini")
 
+import urllib.request
+import json
+
+def fetch_external_config(url="https://sokratis.space/curio_tracker/config.json"):
+    try:
+        print(f"Fetching remote config from {url} ...")
+        with urllib.request.urlopen(url) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        print("Successfully loaded external config.")
+        return data
+    except Exception as e:
+        print(f"Failed to fetch remote config: {e}")
+        return {}
+remote_config = fetch_external_config()
+
+
 # -------------------- Default Settings --------------------
-LEAGUE = "Mercenaries"
+LEAGUE = remote_config.get("data_league")
 
 DEFAULT_SETTINGS = {
     'User': {
@@ -100,7 +116,7 @@ LEAGUES_TO_FETCH = [
 ]
 ENABLE_POELADDER = False
 
-poe_league = "3.27"
+poe_league = remote_config.get("poe_league")
 poe_user = "sokratis12GR#6608"
 
 # Default values of blueprint layouts
