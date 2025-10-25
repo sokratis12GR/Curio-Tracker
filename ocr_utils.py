@@ -71,8 +71,10 @@ def normalize_for_search(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s.strip().lower()
 
+
 def remove_possessive_s(text: str) -> str:
     return re.sub(r"\b(\w+)(?:'s|’s)\b", r"\1", text)
+
 
 #####################################
 # helpers for body armour ordering  # 
@@ -277,72 +279,13 @@ def get_top_right_layout(screen_width, screen_height):
 #        Different bits of helpers                                      #
 #                                                                       #
 #########################################################################
-def convert_to_float(val):
-    try:
-        result_float = float(val)
-    except (ValueError, TypeError):
-        result_float = 0
-    return result_float
+def format_currency_value(value) -> str:
+    if value is None or value == "":
+        return ""
 
-
-def convert_to_int(val):
-    try:
-        result_int = int(val)
-    except (ValueError, TypeError):
-        result_int = 1
-    return result_int
-
-
-def get_stack_size(item):
-    item_type = getattr(item, "type", "N/A")
-
-    stack_size = getattr(item, "stack_size", "")
-
-    stack_size = convert_to_int(stack_size)
-
-    stack_size_txt = (
-        stack_size
-        if stack_size > 0 and is_currency_or_scarab(item_type)
-        else ""
-    )
-    return stack_size, stack_size_txt
-
-
-def calculate_estimate_value(item):
-    chaos_value = getattr(item, "chaos_value", "")
-    divine_value = getattr(item, "divine_value", "")
-    stack_size, _ = get_stack_size(item)
-
-    chaos_float = convert_to_float(chaos_value)
-    divine_float = convert_to_float(divine_value)
-
-    # Multiply by stack size if more than 1
-    if stack_size > 1:
-        chaos_float *= stack_size
-        divine_float *= stack_size
-
-    # Helper to format numbers: drop .0 for integers
-    def format_value(f):
-        if f.is_integer():
-            return str(int(f))
-        return str(round(f, 1))  # keep 1 decimal
-
-    # Determine display value
-    if divine_float >= 0.5:
-        display_value = f"{format_value(divine_float)} Divines"
-    elif chaos_float > 0:
-        display_value = f"{format_value(chaos_float)} Chaos"
-    else:
-        display_value = ""  # show nothing if both are 0 or invalid
-    return display_value
-
-
-def format_currency_value(value: str) -> str:
-    if not value or value.strip() == "":
-        return ""  # no value
     try:
         f = float(value)
-    except ValueError:
+    except (ValueError, TypeError):
         return ""
 
     f_rounded = round(f, 1)

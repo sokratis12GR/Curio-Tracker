@@ -5,6 +5,7 @@ from tkinter import messagebox
 from customtkinter import *
 from pytz import InvalidTimeError
 
+import currency_utils
 import ocr_utils as utils
 from config import ROW_HEIGHT, layout_keywords, TREE_COLUMNS, DEBUGGING
 from csv_manager import CSVManager
@@ -115,10 +116,10 @@ class TreeManager:
         chaos_value = getattr(item, "chaos_value", "")
         item_type = getattr(item, "type", "N/A")
 
-        display_value = utils.calculate_estimate_value(item)
-        numeric_value = utils.convert_to_float(chaos_value)
+        display_value = currency_utils.calculate_estimate_value(item)
+        numeric_value = currency_utils.convert_to_float(chaos_value)
 
-        _, stack_size_txt = utils.get_stack_size(item)
+        _, stack_size_txt = currency_utils.get_stack_size(item)
 
         item_tier = getattr(item, "tier", "")
         area_level = getattr(item, "area_level", "83")
@@ -507,6 +508,10 @@ class TreeManager:
         picked_chaos = 0.0
         picked_divine = 0.0
 
+        league_divine_equiv = currency_utils.convert_to_float(
+            get_setting("Application", "divine_equivalent", 0)
+        )
+
         for iid in self.all_item_iids:
             if not self.tree.exists(iid):
                 continue
@@ -515,12 +520,11 @@ class TreeManager:
             if not item:
                 continue
 
-            chaos_value = utils.convert_to_float(getattr(item, "chaos_value", 0))
-            divine_value = utils.convert_to_float(getattr(item, "divine_value", 0))
-            stack_size, _ = utils.get_stack_size(item)
-
+            chaos_value = currency_utils.convert_to_float(getattr(item, "chaos_value", 0))
+            stack_size, _ = currency_utils.get_stack_size(item)
             chaos_value *= stack_size
-            divine_value *= stack_size
+
+            divine_value = chaos_value / league_divine_equiv if league_divine_equiv > 0 else 0
 
             total_chaos += chaos_value
             total_divine += divine_value
@@ -548,11 +552,9 @@ class TreeManager:
             total_picked_value = picked_chaos
             suffix = " Chaos"
 
-        # Only show suffix if value is non-zero
         total_text = f"Total Value: {total_value:.2f}{suffix}" if total_value else ""
         picked_text = f"Picked Value: {total_picked_value:.2f}{suffix}" if total_picked_value else ""
 
-        # Update labels
         self.total_frame.total_value_label.configure(text=total_text)
         self.total_frame.total_picked_label.configure(text=picked_text)
 

@@ -2,6 +2,7 @@ import tkinter as tk
 
 from PIL import ImageTk
 
+import currency_utils
 import ocr_utils as utils
 from logger import log_message
 from renderer import render_item
@@ -113,8 +114,8 @@ def show(root, item, message=None, duration=None):
 
     if message is None:
         item_text = utils.parse_item_name(item)
-        _, stack_size_txt = utils.get_stack_size(item)
-        display_value = utils.calculate_estimate_value(item)
+        _, stack_size_txt = currency_utils.get_stack_size(item)
+        display_value = currency_utils.calculate_estimate_value(item)
         tier = getattr(item, "tier", "")
 
         added_owned_txt = "Missing\n" if is_missing else ""
