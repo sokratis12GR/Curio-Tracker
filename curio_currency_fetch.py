@@ -26,15 +26,15 @@ ITEMS_TYPE_MAP = get_datasets()["terms"]
 ITEMS_TYPE_MAP["Chaos Orb"] = "Currency"
 
 CATEGORIES_API = {
-    "Currency": "currencyoverview",
-    "Scarabs": "itemoverview",
-    "Unique Flasks": "itemoverview",
-    "Unique Jewels": "itemoverview",
-    "Unique Accessories": "itemoverview",
-    "Unique Armours": "itemoverview",
-    "Unique Weapons": "itemoverview",
-    "Unique Map": "itemoverview",
-    "Base Types": "itemoverview"
+    "Currency": "currency",
+    "Scarabs": "item",
+    "Unique Flasks": "item",
+    "Unique Jewels": "item",
+    "Unique Accessories": "item",
+    "Unique Armours": "item",
+    "Unique Weapons": "item",
+    "Unique Map": "item",
+    "Base Types": "item"
 }
 
 ITEM_TYPE_MAP = {
@@ -68,11 +68,11 @@ SESSION.headers.update({"User-Agent": "fetch-poe-ninja-script/1.0"})
 
 def fetch_category(cat_name, api_endpoint, league):
     params = {"league": league}
-    params["type"] = "Currency" if api_endpoint == "currencyoverview" else ITEM_TYPE_MAP.get(cat_name, cat_name)
+    params["type"] = "Currency" if api_endpoint == "currency" else ITEM_TYPE_MAP.get(cat_name, cat_name)
 
     try:
         resp = SESSION.get(
-            f"https://poe.ninja/api/data/{api_endpoint}",
+            f"https://poe.ninja/poe1/api/economy/stash/current/{api_endpoint}/overview",
             params=params,
             timeout=20
         )
