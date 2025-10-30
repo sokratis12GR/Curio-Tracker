@@ -1,8 +1,11 @@
 import tkinter as tk
+from dataclasses import dataclass
+from typing import Optional
 
 from PIL import ImageTk
 
 import currency_utils
+import fonts
 import ocr_utils as utils
 from logger import log_message
 from renderer import render_item
@@ -56,7 +59,6 @@ def create_toast(root, message, image=None, duration=None, is_missing=False):
     toast.attributes("-topmost", True)
     toast.attributes("-toolwindow", True)
 
-    # Add green border if item is owned
     missing_color = get_setting("Application", "collection_missing_color", "#00FF00")
     border_color = missing_color if is_missing else "black"
     border_thickness = 3 if is_missing else 0
@@ -103,9 +105,7 @@ def create_toast(root, message, image=None, duration=None, is_missing=False):
     return toast
 
 
-
 def show(root, item, message=None, duration=None):
-
     owned = getattr(item, "owned", False)
     type = getattr(item, "type", "")
     is_missing = False
@@ -131,9 +131,98 @@ def show(root, item, message=None, duration=None):
     return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing)
 
 
-
 def show_message(root, message, duration=None):
     return create_toast(root, message, duration=duration)
+
+
+@dataclass
+class CustomToastOptions:
+    is_highlight: bool = False
+    border_color: Optional[str] = None
+    border_thickness: Optional[int] = None
+    show_owned: Optional[bool] = None
+    show_stack_size: Optional[bool] = None
+    show_tier: Optional[bool] = None
+    show_estimated_value: Optional[bool] = None
+    custom_message: Optional[str] = None
+    headline: Optional[str] = None
+
+
+def show_custom(root, item, options: CustomToastOptions):
+    item_text = utils.parse_item_name(item)
+    _, stack_size_txt = currency_utils.get_stack_size(item)
+    display_value = currency_utils.calculate_estimate_value(item)
+    tier = getattr(item, "tier", "")
+    owned = getattr(item, "owned", False)
+    type_ = getattr(item, "type", "")
+
+    is_missing = not owned and utils.is_unique(type_)
+
+    added_owned_txt = "Missing\n" if (options.show_owned if options.show_owned is not None else is_missing) else ""
+    added_stack_size_txt = f" | Stack Size: {stack_size_txt}" if (
+        options.show_stack_size if options.show_stack_size is not None else bool(stack_size_txt)) else ""
+    added_tier_txt = f" | Tier: {tier}" if (options.show_tier if options.show_tier is not None else bool(tier)) else ""
+    added_estimated_value_txt = f"\nEstimated Value: {display_value}" if (
+        options.show_estimated_value if options.show_estimated_value is not None else bool(display_value)) else ""
+
+    main_message = options.custom_message or (
+            added_owned_txt + item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt
+    )
+
+    img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
+    tk_img = ImageTk.PhotoImage(img)
+
+    border_color = options.border_color or (
+        get_setting("Application", "collection_missing_color", "#00FF00") if is_missing else "black")
+    border_thickness = options.border_thickness or (3 if is_missing else 0)
+    if options.is_highlight:
+        border_color = options.border_color or "#FFD700"  # gold
+        border_thickness = options.border_thickness or 4
+
+    toast = create_toast(root, "", image=tk_img, is_missing=False)
+    if toast:
+        try:
+            frame = toast.winfo_children()[0]
+            frame.configure(highlightbackground=border_color, highlightthickness=border_thickness)
+
+            if hasattr(toast, "img_ref"):
+                img_label = frame.winfo_children()[0]
+            else:
+                img_label = tk.Label(frame, image=tk_img, bg="black")
+                img_label.image = tk_img
+                img_label.pack(side="left")
+                toast.img_ref = tk_img
+
+            text_frame = tk.Frame(frame, bg="black", height=ROW_HEIGHT)
+            text_frame.pack(side="left", anchor="w")
+
+            if options.headline:
+                headline_label = tk.Label(
+                    text_frame,
+                    text=options.headline,
+                    font=fonts.make_font(size=12, weight="bold"),
+                    bg="black",
+                    fg="white",
+                    anchor="w",
+                    justify="center"
+                )
+                headline_label.pack(side="top", anchor="center")
+
+            text_label = tk.Label(
+                text_frame,
+                text=main_message,
+                bg="black",
+                fg="white",
+                anchor="w",
+                justify="left"
+            )
+            text_label.pack(side="top", anchor="w")
+
+        except Exception as e:
+            log_message(f"[WARN] Failed to apply custom content: {e}")
+
+        reposition(root)
+    return toast
 
 
 def toggle_toasts(enabled: bool):

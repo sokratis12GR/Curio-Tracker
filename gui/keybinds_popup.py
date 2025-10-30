@@ -14,7 +14,7 @@ class KeybindsPopup:
 
         self.popup = CTkToplevel(parent)
         self.popup.title("Keybind Settings")
-        self.popup.geometry("300x380")
+        self.popup.geometry("300x400")
         self.popup.resizable(False, False)
         self.popup.grab_set()  # make modal
 

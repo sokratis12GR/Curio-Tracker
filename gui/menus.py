@@ -45,7 +45,7 @@ def create_settings_menu(root, tracker, theme_manager, tree_manager, update_info
         master=menu_frame,
         values=file_menu_items,
         command=handle_selection,
-        width=50,
+        width=100,
         anchor="w",
     )
 

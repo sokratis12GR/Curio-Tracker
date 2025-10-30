@@ -36,6 +36,7 @@ keybinds = [
     ("Exit", hotkey_default('exit'), 'exit'),
     ("Duplicate Latest", hotkey_default('duplicate_latest'), 'duplicate_latest'),
     ("Delete Latest", hotkey_default('delete_latest'), 'delete_latest'),
+    ("Show Highest Value", hotkey_default('show_highest_value'), 'show_highest_value'),
     ("Debugging", hotkey_default('debug'), 'debug'),
 ]
 
@@ -46,6 +47,7 @@ DEFAULT_KEYBINDS = [
     ("Exit", 'f3', 'exit'),
     ("Duplicate Latest", 'alt+1', 'duplicate_latest'),
     ("Delete Latest", 'alt+2', 'delete_latest'),
+    ("Show Highest Value", 'alt+3', 'show_highest_value'),
     ("Debugging", 'alt+d', 'debug'),
 ]
 
@@ -170,7 +172,6 @@ def format_key(k):
 
     else:
         return str(k).lower()
-
 
 
 # ---------------- Initialize runtime hotkeys ----------------

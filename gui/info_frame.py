@@ -11,7 +11,7 @@ class InfoPanelPopup:
     def show(self):
         popup = ctk.CTkToplevel(self.parent)
         popup.title(self.title)
-        popup.minsize(260, 320)
+        popup.minsize(300, 360)
         popup.resizable(False, False)
         popup.grab_set()
         popup.focus_force()
@@ -25,7 +25,8 @@ class InfoPanelPopup:
             "layout": lambda: f"Press {curio_keybinds.get_display_hotkey('layout_capture')} to set current layout.",
             "exit": lambda: f"Press {curio_keybinds.get_display_hotkey('exit')} to exit the script.",
             "duplicate_latest": lambda: f"Press {curio_keybinds.get_display_hotkey('duplicate_latest')} to duplicate the latest saved entry.",
-            "delete_latest": lambda: f"Press {curio_keybinds.get_display_hotkey('delete_latest')} to delete the latest saved entry (must be loaded in the tool)"
+            "delete_latest": lambda: f"Press {curio_keybinds.get_display_hotkey('delete_latest')} to delete the latest saved entry (must be loaded in the tool)",
+            "show_highest_value": lambda: f"Press {curio_keybinds.get_display_hotkey('show_highest_value')} to show the highest value entry from current wing"
         }
 
         # Wrap text labels properly

@@ -6,6 +6,7 @@ import config as c
 import curio_tracker as tracker
 import toasts
 from csv_manager import CSVManager
+from logger import log_message
 from ocr_utils import parse_item_name
 from settings import get_setting
 from tree_manager import TreeManager
@@ -138,6 +139,75 @@ def handle_delete_latest(root, tree_manager: TreeManager, controls):
             toasts.show_message(root, "Failed to delete latest entry.", duration=3000)
 
 
+def handle_show_highest_value(root, tree_manager, controls):
+    csv_manager = CSVManager()
+    rows = csv_manager.load_csv_dict()
+
+    if not rows:
+        toasts.show_message(root, "No data found in CSV.", duration=3000)
+        log_message("[DEBUG] CSV is empty or failed to load.")
+        return
+
+    from datetime import datetime
+    dupe_duration = int(c.time_last_dupe_check_seconds or 60)
+
+    parsed_rows = []
+    for row in rows:
+        ts_str = row.get(c.csv_time_header)
+        if not ts_str:
+            continue
+        try:
+            entry_time = datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S")
+            parsed_rows.append((row, entry_time))
+        except ValueError:
+            continue
+
+    if not parsed_rows:
+        toasts.show_message(root, "No valid timestamps found in CSV.", duration=3000)
+        log_message("[DEBUG] No rows with valid timestamps.")
+        return
+
+    # Find the latest timestamp in the CSV
+    latest_time = max(ts for _, ts in parsed_rows)
+    log_message(f"[DEBUG] Latest CSV timestamp: {latest_time}")
+    log_message(f"[DEBUG] Using a dupe_duration of {dupe_duration} seconds to filter recent entries.")
+
+    # Filter rows relative to the latest timestamp
+    recent_entries = [row for row, ts in parsed_rows if (latest_time - ts).total_seconds() <= dupe_duration]
+
+    if not recent_entries:
+        toasts.show_message(root, "No recent entries found.", duration=3000)
+        log_message("[DEBUG] No entries within dupe_duration of the latest timestamp.")
+        return
+
+    def parse_value(row):
+        val = row.get("estimated_value_chaos") or row.get("chaos_value") or "0"
+        try:
+            return float(val)
+        except ValueError:
+            return 0.0
+
+    highest_entry = max(recent_entries, key=parse_value, default=None)
+
+    if not highest_entry:
+        toasts.show_message(root, "No valid chaos values found in recent entries.", duration=3000)
+        log_message("[DEBUG] No valid chaos values found after parsing recent entries.")
+        return
+
+    item = tracker.parse_items_from_rows([highest_entry])[0]
+
+    if are_toasts_enabled:
+        try:
+            toasts.show_custom(root, item, toasts.CustomToastOptions(
+                is_highlight=True,
+                headline="HIGHEST VALUE"
+            ))
+        except Exception as e:
+            log_message(f"[WARN] Failed to show custom toast: {e}")
+
+    log_message(f"[DEBUG] Highest value recent item: {item.item_name} ({parse_value(highest_entry)} chaos)")
+
+
 def register_handlers(root, tree_manager, controls):
     return {
         'capture': lambda: handle_capture(root, tree_manager, controls),
@@ -146,5 +216,6 @@ def register_handlers(root, tree_manager, controls):
         'exit': lambda: handle_exit(root),
         'duplicate_latest': lambda: handle_duplicate_latest(root, tree_manager, controls),
         'delete_latest': lambda: handle_delete_latest(root, tree_manager, controls),
+        'show_highest_value': lambda: handle_show_highest_value(root, tree_manager, controls),
         'debug': lambda: handle_debugging_toggle()
     }

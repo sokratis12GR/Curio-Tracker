@@ -20,6 +20,7 @@ SETTINGS_PATH = os.path.join(base_path, "user_settings.ini")
 import urllib.request
 import json
 
+
 def fetch_external_config(url="https://sokratis.space/curio_tracker/config.json"):
     try:
         print(f"Fetching remote config from {url} ...")
@@ -30,8 +31,9 @@ def fetch_external_config(url="https://sokratis.space/curio_tracker/config.json"
     except Exception as e:
         print(f"Failed to fetch remote config: {e}")
         return {}
-remote_config = fetch_external_config()
 
+
+remote_config = fetch_external_config()
 
 # -------------------- Default Settings --------------------
 LEAGUE = remote_config.get("data_league")
@@ -47,7 +49,8 @@ DEFAULT_SETTINGS = {
         'snippet_key': 'f4',
         'debug_key': 'alt+d',
         'duplicate_latest_key': 'alt+1',
-        'delete_latest_key': 'alt+2'
+        'delete_latest_key': 'alt+2',
+        'show_highest_value_key': 'alt+s'
     },
     'DEFAULT': {
         'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe',
@@ -64,6 +67,7 @@ layout_capture_key = None
 snippet_key = None
 duplicate_latest_key = None
 delete_latest_key = None
+show_highest_value_key = None
 enable_debugging_key = None
 pytesseract_path = None
 time_last_dupe_check_seconds = None
@@ -73,9 +77,8 @@ info_show_keys_layout = None
 info_show_keys_exit = None
 
 
-
 def initialize_settings():
-    global capture_key, exit_key, layout_capture_key, snippet_key, duplicate_latest_key, delete_latest_key, enable_debugging_key
+    global capture_key, exit_key, layout_capture_key, snippet_key, duplicate_latest_key, delete_latest_key, show_highest_value_key, enable_debugging_key
     global pytesseract_path, time_last_dupe_check_seconds, LEAGUE
     from settings import get_setting, set_setting, write_settings
 
@@ -93,6 +96,7 @@ def initialize_settings():
     snippet_key = get_setting('Hotkeys', 'snippet_key')
     duplicate_latest_key = get_setting('Hotkeys', 'duplicate_latest_key')
     delete_latest_key = get_setting('Hotkeys', 'delete_latest_key')
+    show_highest_value_key = get_setting('Hotkeys', 'show_highest_value_key')
     enable_debugging_key = get_setting('Hotkeys', 'debug_key')
     pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
     time_last_dupe_check_seconds = int(get_setting('Application', 'time_last_dupe_check_seconds', 60))
@@ -251,7 +255,7 @@ time_column_index = 16  # 17th column of the .csv file contains the time var
 
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
 CHAOS_COLOR = "#d6b85a"
-available_fonts = ["Segoe UI", "Roboto",  "Arial", "Calibri", "Comic Sans MS"]
+available_fonts = ["Segoe UI", "Roboto", "Arial", "Calibri", "Comic Sans MS"]
 
 ## Replica / Unique: #AF6025
 replica_l_hsv = [5, 100, 80]
