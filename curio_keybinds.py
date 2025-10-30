@@ -97,11 +97,25 @@ def normalize_key(evt_key):
                 return keyboard.Key.cmd
             else:
                 return evt_key
-        elif hasattr(evt_key, 'char') and evt_key.char is not None:
-            return evt_key.char.lower()
-    except Exception:
+
+        elif hasattr(evt_key, 'char') and evt_key.char:
+            ch = evt_key.char
+            if len(ch) == 1 and not ch.isprintable():
+                code = ord(ch)
+                if 1 <= code <= 26:
+                    return chr(code + 96)
+            return ch.lower()
+
+        elif isinstance(evt_key, str):
+            if len(evt_key) == 1 and not evt_key.isprintable():
+                code = ord(evt_key)
+                if 1 <= code <= 26:
+                    return chr(code + 96)
+            return evt_key.lower()
+
+    except Exception as e:
         if DEBUGGING:
-            print(f"[WARN] Failed to normalize key: {evt_key}")
+            print(f"[WARN] normalize_key failed for {evt_key}: {e}")
     return None
 
 
@@ -146,7 +160,17 @@ def format_key(k):
             'shift_l': 'shift', 'shift_r': 'shift',
             'cmd_l': 'cmd', 'cmd_r': 'cmd'
         }.get(name, name)
-    return str(k).lower()
+
+    elif isinstance(k, str):
+        if len(k) == 1 and not k.isprintable():
+            code = ord(k)
+            if 1 <= code <= 26:
+                return chr(code + 96)
+        return k.lower()
+
+    else:
+        return str(k).lower()
+
 
 
 # ---------------- Initialize runtime hotkeys ----------------
