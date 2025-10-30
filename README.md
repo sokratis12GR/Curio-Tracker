@@ -23,6 +23,8 @@ Alt+1 - Duplicates the latest saved entry
 
 Alt+2 - Deletes the latest saved entry (must be loaded in the tool)
 
+Alt+3 - Highlights the highest value curio in the wing
+
 ### Example Usages of the tool:
 
 <img width="1917" height="1030" alt="image" src="https://github.com/user-attachments/assets/e6bfbebd-131d-4883-9175-028e3aca3895" />
