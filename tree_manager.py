@@ -406,6 +406,38 @@ class TreeManager:
         if DEBUGGING:
             print(f"row_id: {row_id}, col_id: {col_id}, col_name: {col_name}")
 
+        if col_name.lower() == "item":
+            picked_col = None
+            for c in displayed_columns:
+                if c.lower() == "picked":
+                    picked_col = c
+                    break
+            if not picked_col:
+                return  # No "Picked" column found
+
+            current_value = str(self.tree.set(row_id, picked_col)).strip().lower()
+            if current_value in ("true", "yes", "☑"):
+                new_state = False
+                new_text = "☐"
+            else:
+                new_state = True
+                new_text = "☑"
+
+            # Update tree visually
+            self.tree.set(row_id, picked_col, new_text)
+
+            item = self.csv_row_map.get(row_id)
+            if not item:
+                return
+
+            item_text = utils.parse_item_name(item)
+            setattr(item, picked_col, new_state)
+
+            # Update CSV record and totals
+            self.modify_csv_record(row_id, item_text, updates={"Picked": new_state})
+            self.update_total_labels()
+            return
+
         bbox = self.tree.bbox(row_id, col_name)
         if not bbox:
             return
@@ -419,6 +451,7 @@ class TreeManager:
         item_text = utils.parse_item_name(item)
 
         old_value = self.tree.set(row_id, col_name)
+
 
         # ---- STACK SIZE (only Currency/Scarab) ----
         if col_name == "stack_size" and item_type in {"Currency", "Scarab"}:
