@@ -8,6 +8,8 @@ that you can quickly analyze the kind of loot you found during your runs.
 
 Each capture has a toast in the top right as a notification which shows you the captured items, their value (poe.ninja), rarity and ownership status (poeladder).
 
+<a href='https://ko-fi.com/C0C4DR49' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi5.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+
 ## Keybinds (Adjustable):
 F5 - Captures the current layout (i.e layout: Prohibited Library, ilvl: 83), should always start with this when entering
 the Grand Heist as it will make every reward saved bound to that layout and ilvl.
@@ -24,6 +26,8 @@ Alt+1 - Duplicates the latest saved entry
 Alt+2 - Deletes the latest saved entry (must be loaded in the tool)
 
 Alt+3 - Highlights the highest value curio in the wing
+
+
 
 ### Example Usages of the tool:
 
@@ -85,6 +89,7 @@ at [Create Issue](https://github.com/sokratis12GR/Curio-Tracker/issues/new).
 
 
 ***Appreciate any feedback ^^***
+
 
 
 
