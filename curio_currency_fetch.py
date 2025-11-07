@@ -116,21 +116,34 @@ def fetch_all_items(league: str):
 
         lookup_name = normalize_name_for_lookup(csv_name)
         line = None
+        five_link_value = six_link_value = "N/A"
+
+        candidates = lookup_dict.get(lookup_name, [])
+        if candidates:
+            five_link_candidates = [c for c in candidates if c.get("links") == 5]
+            six_link_candidates = [c for c in candidates if c.get("links") == 6]
+
+            if five_link_candidates:
+                five_link_value = round(five_link_candidates[0].get("chaosValue", "N/A"), 2) \
+                    if isinstance(five_link_candidates[0].get("chaosValue"), (int, float)) else "N/A"
+
+            if six_link_candidates:
+                six_link_value = round(six_link_candidates[0].get("chaosValue", "N/A"), 2) \
+                    if isinstance(six_link_candidates[0].get("chaosValue"), (int, float)) else "N/A"
 
         if csv_type in ("Replica", "Replacement"):
             search_name = f"Replica {lookup_name}" if csv_type == "Replica" else lookup_name
             candidates = lookup_dict.get(search_name, [])
-
             if candidates:
-                candidates = [l for l in candidates if l.get("links") != 6]
-                chaos_values = [l.get("chaosValue") or l.get("chaosEquivalent") for l in candidates if
+                candidates = [l for l in candidates if l.get("links") not in (5, 6)]
+                chaos_values = [l.get("chaosValue") or l.get("chaosEquivalent")
+                                for l in candidates if
                                 isinstance(l.get("chaosValue") or l.get("chaosEquivalent"), (int, float))]
-
                 if chaos_values:
                     med = median(chaos_values)
                     line = min(candidates, key=lambda l: abs((l.get("chaosValue") or l.get("chaosEquivalent")) - med))
                 else:
-                    line = candidates[0]
+                    line = candidates[0] if candidates else None
         elif csv_type == "Currency":
             if lookup_name == "Chaos Orb":
                 line = {"chaosValue": 1}
@@ -193,6 +206,8 @@ def fetch_all_items(league: str):
             "Chaos Value": chaos_value,
             "Exalted Value": exalted_value,
             "Divine Value": divine_value,
+            "five_link_value": five_link_value,
+            "six_link_value": six_link_value,
             "League": league
         })
 
