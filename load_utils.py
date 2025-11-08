@@ -81,16 +81,18 @@ def load_currency_dataset(file_path: str) -> dict:
         smart_title_case(row["Name"].strip()),
         format_currency_value(row.get("Chaos Value", "")),
         format_currency_value(row.get("Divine Value", "")),
+        format_currency_value(row.get("five_link_value", "")),
+        format_currency_value(row.get("six_link_value", "")),
         row.get("League")
     ) if "Name" in row else None, as_dict=True)
 
     dataset = {}
-    for term, chaos, divine, league in rows:
+    for term, chaos, divine, five_l, six_l, league in rows:
         if not league:
             continue
         if league not in dataset:
             dataset[league] = {}
-        dataset[league][term] = {"chaos": chaos, "divine": divine}
+        dataset[league][term] = {"chaos": chaos, "divine": divine, "five_link": five_l, "six_link": six_l}
     return dataset
 
 

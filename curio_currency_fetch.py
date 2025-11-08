@@ -118,23 +118,24 @@ def fetch_all_items(league: str):
         line = None
         five_link_value = six_link_value = "N/A"
 
-        candidates = lookup_dict.get(lookup_name, [])
-        if candidates:
-            five_link_candidates = [c for c in candidates if c.get("links") == 5]
-            six_link_candidates = [c for c in candidates if c.get("links") == 6]
-
-            if five_link_candidates:
-                five_link_value = round(five_link_candidates[0].get("chaosValue", "N/A"), 2) \
-                    if isinstance(five_link_candidates[0].get("chaosValue"), (int, float)) else "N/A"
-
-            if six_link_candidates:
-                six_link_value = round(six_link_candidates[0].get("chaosValue", "N/A"), 2) \
-                    if isinstance(six_link_candidates[0].get("chaosValue"), (int, float)) else "N/A"
+        # candidates = lookup_dict.get(lookup_name, [])
+        # if candidates:
 
         if csv_type in ("Replica", "Replacement"):
             search_name = f"Replica {lookup_name}" if csv_type == "Replica" else lookup_name
             candidates = lookup_dict.get(search_name, [])
             if candidates:
+                five_link_candidates = [c for c in candidates if c.get("links") == 5]
+                six_link_candidates = [c for c in candidates if c.get("links") == 6]
+
+                if five_link_candidates:
+                    five_link_value = round(five_link_candidates[0].get("chaosValue", "N/A"), 2) \
+                        if isinstance(five_link_candidates[0].get("chaosValue"), (int, float)) else "N/A"
+
+                if six_link_candidates:
+                    six_link_value = round(six_link_candidates[0].get("chaosValue", "N/A"), 2) \
+                        if isinstance(six_link_candidates[0].get("chaosValue"), (int, float)) else "N/A"
+
                 candidates = [l for l in candidates if l.get("links") not in (5, 6)]
                 chaos_values = [l.get("chaosValue") or l.get("chaosEquivalent")
                                 for l in candidates if
@@ -165,6 +166,18 @@ def fetch_all_items(league: str):
 
                 candidates = [l for l in base_lines if
                               l.get("name") == lookup_name and l.get("levelRequired") == 84 and not is_influenced(l)]
+
+                five_link_candidates = [c for c in candidates if c.get("links") == 5]
+                six_link_candidates = [c for c in candidates if c.get("links") == 6]
+
+                if five_link_candidates:
+                    five_link_value = round(five_link_candidates[0].get("chaosValue", "N/A"), 2) \
+                        if isinstance(five_link_candidates[0].get("chaosValue"), (int, float)) else "N/A"
+
+                if six_link_candidates:
+                    six_link_value = round(six_link_candidates[0].get("chaosValue", "N/A"), 2) \
+                        if isinstance(six_link_candidates[0].get("chaosValue"), (int, float)) else "N/A"
+
                 if not candidates:
                     for lvl in [83, 85, 86]:
                         candidates = [l for l in base_lines if l.get("name") == lookup_name and l.get(

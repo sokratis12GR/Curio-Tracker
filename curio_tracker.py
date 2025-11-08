@@ -567,6 +567,8 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                 estimated_value = CURRENCY_DATASET.get(term_title, {})
                 chaos_est = estimated_value.get("chaos")
                 divine_est = estimated_value.get("divine")
+                five_l_est = estimated_value.get("five_link")
+                six_l_est = estimated_value.get("six_link")
                 item_data_set = TIERS_DATASET.get(term_title, {})
                 tier = item_data_set.get("tier", "")
                 wiki = item_data_set.get("wiki", "")
@@ -595,7 +597,9 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                         picked=False,
                         owned=owned,
                         wiki=wiki,
-                        img=img
+                        img=img,
+                        five_l_val=five_l_est,
+                        six_l_val=six_l_est,
                     )
                     parsed_items.append(item)
 
@@ -661,6 +665,8 @@ def parse_items_from_rows(rows):
             estimated_value = CURRENCY_DATASET.get(term_title, {})
             chaos_est = estimated_value.get("chaos")
             divine_est = estimated_value.get("divine")
+            five_l_est = estimated_value.get("five_link")
+            six_l_est = estimated_value.get("six_link")
             owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
 
             item_data_set = TIERS_DATASET.get(term_title, {})
@@ -688,7 +694,9 @@ def parse_items_from_rows(rows):
                 owned=owned,
                 picked=picked,
                 wiki=wiki,
-                img=img
+                img=img,
+                five_l_val=five_l_est,
+                six_l_val=six_l_est,
             )
             parsed_items.append(item)
 

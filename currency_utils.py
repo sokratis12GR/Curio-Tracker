@@ -58,3 +58,38 @@ def calculate_estimate_value(item):
         display_value = ""
 
     return display_value
+
+def calculate_five_link_estimate_value(item):
+    chaos_value = getattr(item, "five_l_val")
+
+    chaos_float = convert_to_float(chaos_value)
+
+    league_divine_equiv = convert_to_float(get_setting("Application", "divine_equivalent", 183.5))
+
+    # Compare chaos value against divine equivalent
+    if league_divine_equiv > 0 and chaos_float >= league_divine_equiv * 0.99:
+        display_value = f"{format_currency_value(chaos_float / league_divine_equiv)} Divines"
+    elif chaos_float > 0:
+        display_value = f"{format_currency_value(chaos_float)} Chaos"
+    else:
+        display_value = ""
+
+    return display_value
+
+
+def calculate_six_link_estimate_value(item):
+    chaos_value = getattr(item, "six_l_val")
+
+    chaos_float = convert_to_float(chaos_value)
+
+    league_divine_equiv = convert_to_float(get_setting("Application", "divine_equivalent", 183.5))
+
+    # Compare chaos value against divine equivalent
+    if league_divine_equiv > 0 and chaos_float >= league_divine_equiv * 0.99:
+        display_value = f"{format_currency_value(chaos_float / league_divine_equiv)} Divines"
+    elif chaos_float > 0:
+        display_value = f"{format_currency_value(chaos_float)} Chaos"
+    else:
+        display_value = ""
+
+    return display_value

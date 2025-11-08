@@ -116,14 +116,18 @@ def show(root, item, message=None, duration=None):
         item_text = utils.parse_item_name(item)
         _, stack_size_txt = currency_utils.get_stack_size(item)
         display_value = currency_utils.calculate_estimate_value(item)
+        five_link_value = currency_utils.calculate_five_link_estimate_value(item)
+        six_link_value = currency_utils.calculate_six_link_estimate_value(item)
         tier = getattr(item, "tier", "")
 
         added_owned_txt = "Missing\n" if is_missing else ""
         added_stack_size_txt = f" | Stack Size: {stack_size_txt}" if stack_size_txt else ""
         added_tier_txt = f" | Tier: {tier}" if tier else ""
         added_estimated_value_txt = f"\n Estimated Value: {display_value}" if display_value else ""
+        added_5_link_value_txt = f"\n5-L: {five_link_value}" if five_link_value else ""
+        added_6_link_value_txt = f" | 6-L: {six_link_value}" if six_link_value else ""
 
-        message = added_owned_txt + item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt
+        message = added_owned_txt + item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt
 
     img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
     tk_img = ImageTk.PhotoImage(img)
@@ -155,6 +159,8 @@ def show_custom(root, item, options: CustomToastOptions):
     tier = getattr(item, "tier", "")
     owned = getattr(item, "owned", False)
     type_ = getattr(item, "type", "")
+    five_link_value = currency_utils.calculate_five_link_estimate_value(item)
+    six_link_value = currency_utils.calculate_six_link_estimate_value(item)
 
     is_missing = not owned and utils.is_unique(type_)
 
@@ -164,9 +170,13 @@ def show_custom(root, item, options: CustomToastOptions):
     added_tier_txt = f" | Tier: {tier}" if (options.show_tier if options.show_tier is not None else bool(tier)) else ""
     added_estimated_value_txt = f"\nEstimated Value: {display_value}" if (
         options.show_estimated_value if options.show_estimated_value is not None else bool(display_value)) else ""
+    added_5_link_value_txt = f"\n5-L: {five_link_value}" if five_link_value and (
+        options.show_estimated_value if options.show_estimated_value is not None else bool(display_value)) else ""
+    added_6_link_value_txt = f" | 6-L: {six_link_value}" if six_link_value and (
+        options.show_estimated_value if options.show_estimated_value is not None else bool(display_value)) else ""
 
     main_message = options.custom_message or (
-            added_owned_txt + item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt
+            added_owned_txt + item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt
     )
 
     img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
