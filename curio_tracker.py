@@ -576,6 +576,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                 owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
 
                 if allow_dupes or not duplicate:
+                    csv_mgr.recalculate_record_number()
                     record_number = csv_mgr.get_next_record_number()
                     mark_term_as_captured(term_title)
 

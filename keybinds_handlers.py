@@ -102,8 +102,10 @@ def handle_duplicate_latest(root, tree_manager: TreeManager, controls):
 
     if are_toasts_enabled:
         toasts.show(root, duplicated_item)
+
     tree_manager.add_item_to_tree(duplicated_item)
     root.after(0, controls.update_total_items_count)
+    csv_manager.get_next_record_number()
 
 
 def handle_delete_latest(root, tree_manager: TreeManager, controls):
