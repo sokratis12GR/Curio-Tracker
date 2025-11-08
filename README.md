@@ -1,6 +1,6 @@
 # Curio Tracker
 
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/sokratis12gr/curio-tracker/total)
+[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/sokratis12gr/curio-tracker/total)](https://github.com/sokratis12GR/Curio-Tracker/releases)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/sokratis12gr/curio-tracker)
 
 This tool allows you to quickly take a screenshot of the **grand heist curio displays** and save them as reward data so
