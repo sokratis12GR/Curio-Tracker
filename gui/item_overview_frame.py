@@ -7,6 +7,7 @@ from PIL import Image
 from customtkinter import *
 from customtkinter import CTkImage
 
+import currency_utils
 from config import IMAGE_COL_WIDTH, ROW_HEIGHT
 from fonts import make_font
 from ocr_utils import parse_item_name
@@ -89,7 +90,7 @@ class ItemOverviewFrame:
         self.icon_label.grid(sticky="n", pady=(0, 10))
         self.image_label.grid(sticky="n", pady=(0, 10))
         # ---- Data Fields ----
-        self.fields = ["Wiki", "Type", "Chaos Value", "Tier", "Stack Size", "Owned", "Picked"]
+        self.fields = ["Wiki", "Type", "Est. Value", "5-L Value", "6-L Value", "Tier", "Stack Size", "Owned", "Picked"]
 
         for field in self.fields:
             lbl_field = CTkLabel(self.frame, text=f"{field}:", anchor="w", width=120)
@@ -139,9 +140,15 @@ class ItemOverviewFrame:
         icon_url = getattr(item, "img", None)
         item_type = getattr(item, "type", None)
 
+        display_value = currency_utils.calculate_estimate_value(item)
+        five_link_value = currency_utils.calculate_five_link_estimate_value(item)
+        six_link_value = currency_utils.calculate_six_link_estimate_value(item)
+
         data = {
             "Type": item_type,
-            "Chaos Value": getattr(item, "chaos_value", None),
+            "Est. Value": display_value,
+            "5-L Value": five_link_value,
+            "6-L Value": six_link_value,
             "Tier": getattr(item, "tier", None),
             "Stack Size": getattr(item, "stack_size", None),
             "Owned": owned,

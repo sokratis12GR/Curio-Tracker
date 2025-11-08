@@ -77,9 +77,7 @@ class TreeManager:
         self.display_columns = [
             col["id"]
             for col in self.tree_columns
-            if col.get("visible", True)
-               and col["id"] != "numeric_value"
-               and not (col["id"] == "owned" and not enabled_poeladder)
+            if get_setting("Columns", col["id"], True)
         ]
         self.tree["displaycolumns"] = tuple(self.display_columns)
 
