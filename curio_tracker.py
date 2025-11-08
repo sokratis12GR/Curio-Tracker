@@ -555,6 +555,7 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                     c.csv_flag_header, c.csv_time_header,
                     c.csv_picked_header
                 ])
+            record_number = csv_mgr.get_next_record_number()
 
             for match in matched_terms:
 
@@ -576,12 +577,11 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                 owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
 
                 if allow_dupes or not duplicate:
-                    csv_mgr.recalculate_record_number()
-                    record_number = csv_mgr.get_next_record_number()
+                    current_number = record_number
                     mark_term_as_captured(term_title)
 
                     item = build_parsed_item(
-                        record=record_number,
+                        record=current_number,
                         term_title=term_title,
                         item_type=item_type,
                         duplicate=duplicate,
@@ -605,8 +605,8 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
                     parsed_items.append(item)
 
                     log_message(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
-
                     writer.writerow(format_row(record_number, term_title, item_type, stack_size))
+                    record_number += 1
 
                     if c.DEBUGGING and c.CSV_DEBUGGING:
                         writer.writerow(
@@ -616,6 +616,8 @@ def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
         log_message(f"[ERROR] PermissionError: {e}")
     except OSError as e:
         log_message(f"[ERROR] CSV write failed: {e}")
+
+    csv_mgr.last_record_number = record_number - 1
 
 
 def init_csv():

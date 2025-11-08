@@ -31,34 +31,26 @@ class CSVManager:
             log_message(f"[ERROR] CSV write failed: {e}")
 
     def get_next_record_number(self):
-        from settings import get_setting, set_setting
+        from settings import set_setting
 
-        cached_last = int(get_setting("Application", "current_row", default=0) or 0)
-        highest_in_csv = 0
+        last_num = 0
 
         if self.csv_path.exists():
             try:
                 with self.csv_path.open("r", encoding="utf-8") as f:
-                    reader = csv.reader(f)
-                    rows = list(reader)
-                    if len(rows) > 1:
-                        last_row = rows[-1]
-                        highest_in_csv = int(last_row[0]) if last_row[0].isdigit() else 0
+                    for row in reversed(list(csv.reader(f))):
+                        if row and row[0].isdigit():
+                            last_num = int(row[0])
+                            break
             except Exception as e:
                 log_message(f"[ERROR] Could not read CSV for record number: {e}")
+                last_num = 0
 
-        # Only trust the cached value if it matches the CSV’s highest value
-        if self.last_record_number == 0:
-            if cached_last == highest_in_csv:
-                self.last_record_number = cached_last
-            else:
-                self.last_record_number = highest_in_csv
+        next_num = last_num + 1
+        self.last_record_number = next_num
+        set_setting("Application", "current_row", next_num)
 
-        # Increment and save
-        self.last_record_number += 1
-        set_setting("Application", "current_row", self.last_record_number)
-
-        return self.last_record_number
+        return next_num
 
     def recalculate_record_number(self):
         from settings import set_setting
