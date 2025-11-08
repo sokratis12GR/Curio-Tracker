@@ -31,22 +31,54 @@ class CSVManager:
             log_message(f"[ERROR] CSV write failed: {e}")
 
     def get_next_record_number(self):
+        from settings import get_setting, set_setting
+
+        cached_last = int(get_setting("Application", "current_row", default=0) or 0)
+        highest_in_csv = 0
+
+        if self.csv_path.exists():
+            try:
+                with self.csv_path.open("r", encoding="utf-8") as f:
+                    reader = csv.reader(f)
+                    rows = list(reader)
+                    if len(rows) > 1:
+                        last_row = rows[-1]
+                        highest_in_csv = int(last_row[0]) if last_row[0].isdigit() else 0
+            except Exception as e:
+                log_message(f"[ERROR] Could not read CSV for record number: {e}")
+
+        # Only trust the cached value if it matches the CSV’s highest value
         if self.last_record_number == 0:
-            if not self.csv_path.exists():
-                self.last_record_number = 0
+            if cached_last == highest_in_csv:
+                self.last_record_number = cached_last
             else:
-                try:
-                    with self.csv_path.open("r", encoding="utf-8") as f:
-                        reader = csv.reader(f)
-                        rows = list(reader)
-                        if len(rows) <= 1:
-                            self.last_record_number = 0
-                        else:
-                            last_row = rows[-1]
-                            self.last_record_number = int(last_row[0]) if last_row[0].isdigit() else 0
-                except Exception:
-                    self.last_record_number = 0
+                self.last_record_number = highest_in_csv
+
+        # Increment and save
         self.last_record_number += 1
+        set_setting("Application", "current_row", self.last_record_number)
+
+        return self.last_record_number
+
+    def recalculate_record_number(self):
+        from settings import set_setting
+
+        self.last_record_number = 0
+
+        if self.last_record_number == 0 and self.csv_path.exists():
+            try:
+                with self.csv_path.open("r", encoding="utf-8") as f:
+                    reader = csv.reader(f)
+                    rows = list(reader)
+                    if len(rows) > 1:
+                        last_row = rows[-1]
+                        self.last_record_number = int(last_row[0]) if last_row[0].isdigit() else 0
+            except Exception as e:
+                log_message(f"[ERROR] Could not read CSV for record number: {e}")
+                self.last_record_number = 0
+
+        set_setting("Application", "current_row", self.last_record_number)
+
         return self.last_record_number
 
     def modify_record(self, root, record_number, item_name, updates=None, delete=False):

@@ -133,10 +133,13 @@ def handle_delete_latest(root, tree_manager: TreeManager, controls):
     if deleted:
         if are_toasts_enabled:
             toasts.show_message(root, f"Deleted latest entry: {item_name}", duration=3000)
+        csv_manager = CSVManager()
+        csv_manager.recalculate_record_number()
         root.after(0, controls.update_total_items_count)
     else:
         if are_toasts_enabled:
             toasts.show_message(root, "Failed to delete latest entry.", duration=3000)
+
 
 
 def handle_show_highest_value(root, tree_manager, controls):
