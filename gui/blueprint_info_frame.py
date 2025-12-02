@@ -1,7 +1,4 @@
 import customtkinter as ctk
-
-# --- Blueprint Info Popup
-import customtkinter as ctk
 from config import layout_keywords
 from settings import set_setting
 
@@ -13,7 +10,6 @@ class BlueprintInfoPopup:
         self.title = title
         self.updating_from_popup = False
 
-        # Use local StringVars to bind to tracker values
         self.blueprint_var = ctk.StringVar()
         self.area_level_var = ctk.StringVar()
 

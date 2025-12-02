@@ -22,8 +22,6 @@ class LeftFrameControls:
         # --- StringVars
         self.vars = {
             "poe_player": StringVar(value=getattr(tracker, "poe_user", "")),
-            "blueprint_type": StringVar(value=tracker.blueprint_layout),
-            "area_level": StringVar(value=str(tracker.blueprint_area_level)),
             "search": StringVar(value=""),
             "search_count": StringVar(value="Found: 0")
         }
@@ -37,9 +35,6 @@ class LeftFrameControls:
         self._add_separator()
         self._setup_buttons()
         self._add_separator()
-        # self._setup_blueprint_type()
-        # self._setup_area_level()
-        # self._add_separator()
         self._setup_search_and_info()
         self._add_separator()
         self._setup_info()
@@ -105,57 +100,6 @@ class LeftFrameControls:
         separator = CTkFrame(self.parent, height=2, fg_color="#a0a0a0")  # Thin line
         separator.grid(row=self.row_index, column=0, columnspan=2, sticky="ew", pady=(10, 10))
         self.row_index += 1
-
-    # --- Blueprint Type
-    # def _setup_blueprint_type(self):
-    #     lbl = CTkLabel(self.parent, text="Blueprint Type:")
-    #     lbl.grid(row=self.row_index, column=0, sticky="w", padx=5, pady=(5, 2))
-    #     self.header_widgets.append(lbl)
-    #
-    #     cb = CTkComboBox(self.parent, variable=self.vars['blueprint_type'], values=layout_keywords, width=150)
-    #     cb.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-    #     self.vars['blueprint_type'].trace_add("write", self.update_tracker_blueprint)
-    #     self.widgets['blueprint_cb'] = cb
-    #     self.row_index += 1
-
-    # --- Area Level
-    # def _setup_area_level(self):
-    #     lbl = CTkLabel(self.parent, text="Area Level:")
-    #     lbl.grid(row=self.row_index, column=0, sticky="w", padx=5, pady=(5, 2))
-    #     self.header_widgets.append(lbl)
-    #
-    #     allowed_ilvl = [str(i) for i in range(48, 84)]
-    #     allowed_ilvl.reverse()
-    #     area_level_dropdown = CTkComboBox(
-    #         master=self.parent,
-    #         variable=self.vars['area_level'],
-    #         values=allowed_ilvl,
-    #         width=150
-    #     )
-    #     area_level_dropdown.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-    #     self.vars['area_level'].trace_add("write", self.update_tracker_blueprint)
-    #     self.widgets['area_level_entry'] = area_level_dropdown
-    #     self.row_index += 1
-    #
-    # def update_tracker_blueprint(self, *args):
-    #     if self.updating_from_tracker:
-    #         return
-    #     layout = self.vars['blueprint_type'].get()
-    #     level = int(self.vars['area_level'].get() or 0)
-    #     self.tracker.blueprint_layout = layout
-    #     self.tracker.blueprint_area_level = level
-    #     set_setting("Blueprint", "layout", layout)
-    #     set_setting("Blueprint", "area_level", level)
-
-    # def refresh_blueprint_info(self):
-    #     self.updating_from_tracker = True
-    #     try:
-    #         self.vars['blueprint_type'].set(self.tracker.blueprint_layout)
-    #         self.vars['area_level'].set(str(self.tracker.blueprint_area_level))
-    #     finally:
-    #         self.updating_from_tracker = False
-
-
 
     # --- Search & Info
     def _setup_search_and_info(self):
