@@ -47,6 +47,58 @@ attempt = 1
 listener_ref = None
 parsed_items = []
 
+MAX_RECENT_TERMS = 5  # keep last 5 entries in memory
+recent_terms = []  # list of tuples: (term, datetime)
+
+def populate_recent_terms_from_csv(within_seconds: int = None, max_items: int = None):
+
+    global recent_terms
+    max_items = max_items or MAX_RECENT_TERMS
+    within_seconds = within_seconds or int(duplicate_duration_time or 60)
+
+    try:
+        rows = csv_mgr.load_csv_dict()
+    except Exception:
+        rows = []
+
+    if not rows:
+        recent_terms = []
+        return
+
+    # Take last max_items rows
+    last_rows = rows[-max_items:]
+    parsed = []
+    now = datetime.now()
+
+    for row in last_rows:
+        ts_str = row.get(c.csv_time_header)
+        term = None
+        for col in (c.csv_trinket_header, c.csv_replacement_header, c.csv_replica_header,
+                    c.csv_experimented_header, c.csv_weapon_enchant_header, c.csv_armor_enchant_header,
+                    c.csv_scarab_header, c.csv_currency_header):
+            val = row.get(col)
+            if val and val.strip():
+                term = utils.smart_title_case(val.strip())
+                break
+
+        if not term:
+            continue
+
+        try:
+            ts = datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S") if ts_str else None
+        except Exception:
+            ts = None
+
+        if ts:
+            if (now - ts).total_seconds() <= within_seconds:
+                parsed.append((term, ts))
+        else:
+            parsed.append((term, now))
+
+    parsed = parsed[-max_items:]
+    recent_terms = parsed.copy()
+
+
 full_currency = datasets.get("currency") or {}
 collection_dataset = datasets.get("collection") or {}
 
@@ -301,40 +353,36 @@ def is_term_match(term, text) -> bool:
 
     return bool(find_piece_positions(term))
 
-
-recent_terms = []
-
-
 def is_duplicate_recent_entry(value, path=csv_file_path):
     current_time = datetime.now()
     dupe_duration = int(duplicate_duration_time or 60)
-    # Check in-memory recent terms first
-    for term, ts in recent_terms:
-        if term == value and (current_time - ts).total_seconds() < dupe_duration:
-            return True
 
-    # Check CSV for older duplicates
-    if os.path.exists(path):
-        with open(path, newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                ts_str = row.get(c.csv_time_header)
-                if not ts_str:
-                    continue
-                try:
-                    entry_time = datetime.strptime(ts_str, "%Y-%m-%d_%H-%M-%S")
-                    if (current_time - entry_time).total_seconds() < dupe_duration:
-                        if value in row.values():  # Check if value exists anywhere in the row
-                            return True
-                except ValueError:
-                    continue
+    incoming = utils.smart_title_case(value)
+
+    for term, ts in recent_terms:
+        if term == incoming and (current_time - ts).total_seconds() < dupe_duration:
+            log_message(f"[DupCheck] In-memory dupe found for '{incoming}' (ts={ts})")
+            return True
 
     return False
 
 
-def mark_term_as_captured(value):
-    recent_terms.append((value, datetime.now()))
+def mark_term_as_captured(value, timestamp: datetime = None):
+    global recent_terms
+    ts = timestamp or datetime.now()
+    term = utils.smart_title_case(value)
 
+    for idx, (t, old_ts) in enumerate(recent_terms):
+        if t == term:
+            recent_terms.pop(idx)
+            break
+
+    recent_terms.append((term, ts))
+
+    if len(recent_terms) > MAX_RECENT_TERMS:
+        recent_terms = recent_terms[-MAX_RECENT_TERMS:]
+
+    log_message(f"[RecentTerms] Buffer now: {recent_terms}")
 
 #################################################
 # Gets all matched terms from the list          #
@@ -624,6 +672,7 @@ def init_csv():
     log_message("Starting Heist Curio Tracker...")
     csv_mgr.upgrade_with_record_numbers()
     csv_mgr.upgrade_with_picked_column()
+    populate_recent_terms_from_csv()
 
 
 def parse_items_from_rows(rows):
