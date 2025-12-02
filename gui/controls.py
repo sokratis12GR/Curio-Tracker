@@ -3,6 +3,7 @@
 from customtkinter import *
 
 from config import layout_keywords, time_options
+from gui.blueprint_info_frame import BlueprintInfoPopup
 from gui.custom_load_popup import CustomLoader
 from gui.info_frame import InfoPanelPopup
 from settings import set_setting
@@ -106,53 +107,55 @@ class LeftFrameControls:
         self.row_index += 1
 
     # --- Blueprint Type
-    def _setup_blueprint_type(self):
-        lbl = CTkLabel(self.parent, text="Blueprint Type:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", padx=5, pady=(5, 2))
-        self.header_widgets.append(lbl)
-
-        cb = CTkComboBox(self.parent, variable=self.vars['blueprint_type'], values=layout_keywords, width=150)
-        cb.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-        self.vars['blueprint_type'].trace_add("write", self.update_tracker_blueprint)
-        self.widgets['blueprint_cb'] = cb
-        self.row_index += 1
+    # def _setup_blueprint_type(self):
+    #     lbl = CTkLabel(self.parent, text="Blueprint Type:")
+    #     lbl.grid(row=self.row_index, column=0, sticky="w", padx=5, pady=(5, 2))
+    #     self.header_widgets.append(lbl)
+    #
+    #     cb = CTkComboBox(self.parent, variable=self.vars['blueprint_type'], values=layout_keywords, width=150)
+    #     cb.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
+    #     self.vars['blueprint_type'].trace_add("write", self.update_tracker_blueprint)
+    #     self.widgets['blueprint_cb'] = cb
+    #     self.row_index += 1
 
     # --- Area Level
-    def _setup_area_level(self):
-        lbl = CTkLabel(self.parent, text="Area Level:")
-        lbl.grid(row=self.row_index, column=0, sticky="w", padx=5, pady=(5, 2))
-        self.header_widgets.append(lbl)
+    # def _setup_area_level(self):
+    #     lbl = CTkLabel(self.parent, text="Area Level:")
+    #     lbl.grid(row=self.row_index, column=0, sticky="w", padx=5, pady=(5, 2))
+    #     self.header_widgets.append(lbl)
+    #
+    #     allowed_ilvl = [str(i) for i in range(48, 84)]
+    #     allowed_ilvl.reverse()
+    #     area_level_dropdown = CTkComboBox(
+    #         master=self.parent,
+    #         variable=self.vars['area_level'],
+    #         values=allowed_ilvl,
+    #         width=150
+    #     )
+    #     area_level_dropdown.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
+    #     self.vars['area_level'].trace_add("write", self.update_tracker_blueprint)
+    #     self.widgets['area_level_entry'] = area_level_dropdown
+    #     self.row_index += 1
+    #
+    # def update_tracker_blueprint(self, *args):
+    #     if self.updating_from_tracker:
+    #         return
+    #     layout = self.vars['blueprint_type'].get()
+    #     level = int(self.vars['area_level'].get() or 0)
+    #     self.tracker.blueprint_layout = layout
+    #     self.tracker.blueprint_area_level = level
+    #     set_setting("Blueprint", "layout", layout)
+    #     set_setting("Blueprint", "area_level", level)
 
-        allowed_ilvl = [str(i) for i in range(48, 84)]
-        allowed_ilvl.reverse()
-        area_level_dropdown = CTkComboBox(
-            master=self.parent,
-            variable=self.vars['area_level'],
-            values=allowed_ilvl,
-            width=150
-        )
-        area_level_dropdown.grid(row=self.row_index, column=1, sticky="w", pady=(5, 2))
-        self.vars['area_level'].trace_add("write", self.update_tracker_blueprint)
-        self.widgets['area_level_entry'] = area_level_dropdown
-        self.row_index += 1
+    # def refresh_blueprint_info(self):
+    #     self.updating_from_tracker = True
+    #     try:
+    #         self.vars['blueprint_type'].set(self.tracker.blueprint_layout)
+    #         self.vars['area_level'].set(str(self.tracker.blueprint_area_level))
+    #     finally:
+    #         self.updating_from_tracker = False
 
-    def update_tracker_blueprint(self, *args):
-        if self.updating_from_tracker:
-            return
-        layout = self.vars['blueprint_type'].get()
-        level = int(self.vars['area_level'].get() or 0)
-        self.tracker.blueprint_layout = layout
-        self.tracker.blueprint_area_level = level
-        set_setting("Blueprint", "layout", layout)
-        set_setting("Blueprint", "area_level", level)
 
-    def refresh_blueprint_info(self):
-        self.updating_from_tracker = True
-        try:
-            self.vars['blueprint_type'].set(self.tracker.blueprint_layout)
-            self.vars['area_level'].set(str(self.tracker.blueprint_area_level))
-        finally:
-            self.updating_from_tracker = False
 
     # --- Search & Info
     def _setup_search_and_info(self):
@@ -178,6 +181,10 @@ class LeftFrameControls:
 
         self.row_index += 1
 
+    def _open_blueprint_info(self):
+        popup = BlueprintInfoPopup(parent=self.parent, tracker=self.tracker)
+        popup.show()
+
     def _open_info(self):
         popup = InfoPanelPopup(self.parent, title="Curio Hotkey Info")
         popup.show()
@@ -187,6 +194,12 @@ class LeftFrameControls:
         how_to_use_btn = CTkButton(self.parent, text="Info (Usage)", command=self._open_info)
         how_to_use_btn.grid(row=self.row_index, column=0, columnspan=4, sticky="w", padx=5)
         self.widgets['how_to_use_btn'] = how_to_use_btn
+
+        blueprint_info_btn = CTkButton(
+            self.parent, text="Blueprint Info", command=self._open_blueprint_info
+        )
+        blueprint_info_btn.grid(row=self.row_index, column=1, columnspan=2, sticky="w", padx=5)
+        self.widgets['blueprint_info_btn'] = blueprint_info_btn
         self.row_index += 1
 
     def search_items(self, *args):

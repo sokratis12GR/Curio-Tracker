@@ -59,7 +59,7 @@ def handle_snippet(root, tree_manager: TreeManager, controls):
 
 def handle_layout_capture(root, tree_manager, controls):
     tracker.capture_layout(root)
-    root.after(0, controls.refresh_blueprint_info)
+    # root.after(0, controls.refresh_blueprint_info)
 
 
 def handle_exit(root):
