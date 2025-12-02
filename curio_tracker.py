@@ -154,7 +154,14 @@ term_types = datasets["terms"]
 all_terms = set(term_types.keys())
 body_armors = datasets["body_armors"]
 owned_items = {}
-
+PRECOMP_TERMS = []
+for t in all_terms:
+    cleaned = utils.remove_possessive_s(t)
+    PRECOMP_TERMS.append((
+        t,                                      # original term
+        utils.normalize_for_search(cleaned),    # normalized for search
+        utils.smart_title_case(cleaned)         # smart title version
+    ))
 
 def build_enchant_type_lookup(term_types):
     lookup = defaultdict(set)
@@ -313,45 +320,32 @@ def extract_currency_value(text, matched_term, term_types):
 # Check if a term or combo term is in the text. #
 #################################################
 def is_term_match(term, text) -> bool:
-    def normalize_lines(text):
-        return [utils.normalize_for_search(line) for line in text.splitlines()]
+    # Pre-normalize text once
+    norm_lines = [utils.normalize_for_search(line) for line in text.splitlines()]
 
-    raw_term = next((k for k in term_types if utils.smart_title_case(k) == term), None)
-    term_type = term_types.get(raw_term, "")
+    # Determine type of term
+    term_type = term_types.get(term, "")
     term_type_cmp = utils.smart_title_case(term_type) if isinstance(term_type, str) else ""
 
-    # Handle enchant combo terms
+    # --- Handle Enchant Combos ---
     if ";" in term and term_type_cmp in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE):
-        part1_raw, part2_raw = [p.strip() for p in term.split(";", 1)]
-        part1 = utils.normalize_for_search(utils.smart_title_case(part1_raw))
-        part2 = utils.normalize_for_search(utils.smart_title_case(part2_raw))
-        norm_lines = normalize_lines(text)
+        part1, part2 = [utils.normalize_for_search(utils.smart_title_case(p.strip())) for p in term.split(";")]
 
-        def find_combo(p1, p2):
-            for i in range(len(norm_lines)):
-                if p1 in norm_lines[i]:
-                    for j in range(1, 3):  # allow match across next 2 lines
-                        if i + j < len(norm_lines) and p2 in norm_lines[i + j]:
+        for i, line in enumerate(norm_lines):
+            if part1 in line or part2 in line:
+                # Look ahead 2 lines for the other part
+                for j in range(1, 3):
+                    if i + j < len(norm_lines):
+                        if (part1 in line and part2 in norm_lines[i + j]) or (part2 in line and part1 in norm_lines[i + j]):
                             if c.DEBUGGING:
-                                print(f"[EnchantCombo] Found '{p1}' then '{p2}' on lines {i} and {i + j}")
+                                print(f"[EnchantCombo] Found combo '{part1}' & '{part2}' at lines {i} and {i + j}")
                             return True
-            return False
+        return False
 
-        # Try original and flipped order
-        return find_combo(part1, part2) or find_combo(part2, part1)
+    # --- Standard Term Matching ---
+    norm_term = utils.normalize_for_search(term)
+    return any(norm_term in line for line in norm_lines)
 
-    # Standard term matching
-    def find_piece_positions(piece):
-        piece_title = utils.smart_title_case(piece)
-        positions = []
-
-        pattern = rf"\b{re.escape(piece_title)}\b"
-        for m in re.finditer(pattern, text, re.IGNORECASE):
-            positions.append(m.start())
-
-        return positions
-
-    return bool(find_piece_positions(term))
 
 def is_duplicate_recent_entry(value, path=csv_file_path):
     current_time = datetime.now()
@@ -382,7 +376,11 @@ def mark_term_as_captured(value, timestamp: datetime = None):
     if len(recent_terms) > MAX_RECENT_TERMS:
         recent_terms = recent_terms[-MAX_RECENT_TERMS:]
 
-    log_message(f"[RecentTerms] Buffer now: {recent_terms}")
+    # format timestamps for logging
+    formatted = [(t, ts.strftime("%Y-%m-%d %H:%M:%S")) for t, ts in recent_terms]
+
+    log_message(f"[RecentTerms] Buffer now: {formatted}")
+
 
 #################################################
 # Gets all matched terms from the list          #
@@ -394,12 +392,10 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
     original_terms_source = all_terms
     original_text = text
 
-    terms_source = [utils.remove_possessive_s(t) for t in original_terms_source]
     text_clean = utils.remove_possessive_s(text)
 
-    for original_term, cleaned_term in zip(original_terms_source, terms_source):
-        term_title = utils.smart_title_case(cleaned_term)
-        if is_term_match(term_title, text_clean):
+    for original_term, norm_cleaned, title_cleaned in PRECOMP_TERMS:
+        if is_term_match(title_cleaned, text_clean):
             duplicate = is_duplicate_recent_entry(original_term)
             all_candidates.append((original_term, duplicate))
 
@@ -418,8 +414,8 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
             suppress_parts.add(part2)
             full_enchant_terms.add(term_title)
 
-    if term_title in suppress_parts and term_title not in full_enchant_terms:
-        log_message(f"[Suppress] Skipping sub-part match: {term_title}")
+    if suppress_parts and not full_enchant_terms and c.DEBUGGING:
+        log_message("[Suppress] Found sub-parts to suppress but no full enchant terms present")
 
     ############################################################
     # Group candidates by term type and filter by match length #
