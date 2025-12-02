@@ -1,7 +1,7 @@
 import math
 import re
 from datetime import datetime
-from difflib import get_close_matches
+from difflib import get_close_matches, SequenceMatcher
 from types import SimpleNamespace
 
 import win32clipboard
@@ -79,70 +79,85 @@ def remove_possessive_s(text: str) -> str:
 #####################################
 # helpers for body armour ordering  # 
 #####################################
+_cached_body_armor_data = {}
 def build_body_armor_regex(body_armors):
+    global _cached_body_armor_data
+    key = tuple(body_armors)
+    if key in _cached_body_armor_data:
+        return _cached_body_armor_data[key]["regex"]
+
     normalized = []
+    norm_parts = []
     for a in body_armors:
         norm = normalize_for_search(smart_title_case(a))
         if norm:
             normalized.append(re.escape(norm))
-    if not normalized:
-        return None
-    normalized.sort(key=len, reverse=True)
-    return re.compile(r"\b(" + "|".join(normalized) + r")\b", re.IGNORECASE)
+            norm_parts.append(norm.split())
 
+    regex = None
+    if normalized:
+        normalized.sort(key=len, reverse=True)
+        regex = re.compile(r"\b(" + "|".join(normalized) + r")\b", re.IGNORECASE)
+
+    _cached_body_armor_data[key] = {"regex": regex, "norm_parts": norm_parts, "original": body_armors}
+    return regex
 
 def find_first_body_armor_pos(text, body_armors):
     norm_text = normalize_for_search(text)
-    body_armor_regex = build_body_armor_regex(body_armors)
-    # 1. exact via regex
+    # Load from cache
+    key = tuple(body_armors)
+    if key not in _cached_body_armor_data:
+        build_body_armor_regex(body_armors)
+    cache = _cached_body_armor_data[key]
+    body_armor_regex = cache["regex"]
+    norm_parts_list = cache["norm_parts"]
+    original_list = cache["original"]
+
     if body_armor_regex:
         match = body_armor_regex.search(norm_text)
         if match:
             if c.DEBUGGING:
-                print(
-                    f"[BodyArmor] Exact match '{match.group(1)}' at {match.start()} in normalized text: {norm_text!r}")
+                print(f"[BodyArmor] Exact match '{match.group(1)}' at {match.start()}")
             return match.start()
 
-    # 2. fuzzy fallback: try multi-word body armours first, then single-word
     tokens = [(tok.group(0), tok.start()) for tok in re.finditer(r"\b[\w%']+\b", norm_text)]
     token_words = [tok.lower() for tok, _ in tokens]
+
     earliest = None
-    for raw in body_armors:
-        armour_title = smart_title_case(raw).strip()
-        norm_name = normalize_for_search(armour_title)
-        parts = norm_name.split()
+
+    for parts, original in zip(norm_parts_list, original_list):
         if not parts:
             continue
-
+        # single-word
         if len(parts) == 1:
-            # single-word fuzzy: match against tokens
-            close = get_close_matches(parts[0], token_words, n=1, cutoff=0.8)
-            if close:
-                best = close[0]
-                for tok, pos in tokens:
-                    if tok.lower() == best:
-                        if earliest is None or pos < earliest:
-                            earliest = pos
-                            if c.DEBUGGING:
-                                print(f"[BodyArmor] Fuzzy single-word match '{armour_title}' ≈ '{tok}' at {pos}")
-                        break
+            part = parts[0]
+            for tok, pos in tokens:
+                ratio = SequenceMatcher(None, part, tok.lower()).ratio()
+                if ratio >= 0.8:
+                    if earliest is None or pos < earliest:
+                        earliest = pos
+                        if c.DEBUGGING:
+                            print(f"[BodyArmor] Fuzzy single-word '{original}' ≈ '{tok}' at {pos}")
+                    break
         else:
-            # multi-word: find a sequence where each part fuzzily matches successive tokens
-            for i in range(len(tokens) - len(parts) + 1):
-                match = True
+            # multi-word sliding window
+            num_parts = len(parts)
+            for i in range(len(tokens) - num_parts + 1):
+                match_seq = True
                 for offset, part in enumerate(parts):
                     tok = tokens[i + offset][0].lower()
-                    if not get_close_matches(part, [tok], n=1, cutoff=0.7):
-                        match = False
+                    ratio = SequenceMatcher(None, part, tok).ratio()
+                    if ratio < 0.7:
+                        match_seq = False
                         break
-                if match:
+                if match_seq:
                     pos = tokens[i][1]
                     if earliest is None or pos < earliest:
                         earliest = pos
                         if c.DEBUGGING:
-                            seq = " ".join(tokens[i + j][0] for j in range(len(parts)))
-                            print(f"[BodyArmor] Fuzzy multi-word match '{armour_title}' ≈ '{seq}' at {pos}")
-                    break  # stop after first sequence for this armour
+                            seq = " ".join(tokens[i + j][0] for j in range(num_parts))
+                            print(f"[BodyArmor] Fuzzy multi-word '{original}' ≈ '{seq}' at {pos}")
+                    break  # first match only
     return earliest
 
 
