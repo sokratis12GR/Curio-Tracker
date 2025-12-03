@@ -194,7 +194,5 @@ class LeftFrameControls:
         self.updating_from_tracker = True
 
         self.vars['poe_player'].set(getattr(self.tracker, "poe_user", ""))
-        self.vars['blueprint_type'].set(getattr(self.tracker, "blueprint_layout", layout_keywords[0]))
-        self.vars['area_level'].set(str(getattr(self.tracker, "blueprint_area_level", 0)))
 
         self.updating_from_tracker = False
