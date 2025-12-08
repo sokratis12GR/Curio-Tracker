@@ -2,7 +2,6 @@ import csv
 from datetime import datetime
 from pathlib import Path
 
-import toasts
 from config import *
 from load_utils import load_csv
 from logger import log_message
@@ -25,6 +24,7 @@ class CSVManager:
                 writer.writeheader()
                 writer.writerows(rows)
         except PermissionError as e:
+            import toasts
             toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
             log_message(f"[ERROR] PermissionError: {e}")
         except OSError as e:

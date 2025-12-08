@@ -1,4 +1,5 @@
 import tkinter as tk
+import customtkinter as ctk
 from dataclasses import dataclass
 from typing import Optional
 
@@ -7,6 +8,7 @@ from PIL import ImageTk
 import currency_utils
 import fonts
 import ocr_utils as utils
+from csv_manager import CSVManager
 from logger import log_message
 from renderer import render_item
 from settings import get_setting, set_setting
@@ -17,6 +19,7 @@ TOASTS = []
 TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
 TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
 ARE_TOASTS_ENABLED = get_setting('Application', 'are_toasts_enabled', True)
+csv_manager = CSVManager()
 
 
 def reposition(root):
@@ -48,7 +51,7 @@ def get_toast_duration_ms():
     return TOASTS_DURATION * 1000
 
 
-def create_toast(root, message, image=None, duration=None, is_missing=False):
+def create_toast(root, message, image=None, duration=None, is_missing=False, item=None):
     if not ARE_TOASTS_ENABLED:
         return None
     duration = duration or get_toast_duration_ms()
@@ -73,6 +76,10 @@ def create_toast(root, message, image=None, duration=None, is_missing=False):
     )
     frame.pack()
 
+    record_number = getattr(item, "record_number", None)
+
+
+
     # Add image if provided
     if image:
         img_label = tk.Label(frame, image=image, bg="black")
@@ -83,6 +90,17 @@ def create_toast(root, message, image=None, duration=None, is_missing=False):
     # Add text
     text_label = tk.Label(frame, text=message, bg="black", fg="white", anchor="w")
     text_label.pack(side="left")
+
+    def mark_picked(val=True):
+        picked = getattr(item, "picked", False)
+        item_text = utils.parse_item_name(item)
+        csv_manager.modify_record(root, record_number, item_text, updates={"Picked": not picked})
+        root.focus_force()
+        return
+
+    if item is not None:
+        pickup_checkbox = ctk.CTkCheckBox(frame, text="", width=5, command=mark_picked)
+        pickup_checkbox.pack(side="right")
 
     toast.lift()
     root.focus_force()
@@ -108,6 +126,7 @@ def create_toast(root, message, image=None, duration=None, is_missing=False):
 def show(root, item, message=None, duration=None):
     owned = getattr(item, "owned", False)
     type = getattr(item, "type", "")
+    record_number = getattr(item, "record_number", None)
     is_missing = False
     if not owned and utils.is_unique(type):
         is_missing = True
@@ -121,18 +140,20 @@ def show(root, item, message=None, duration=None):
         tier = getattr(item, "tier", "")
 
         added_owned_txt = "Missing\n" if is_missing else ""
+        added_record_number_txt = f"Record: {record_number}\n"
         added_stack_size_txt = f" | Stack Size: {stack_size_txt}" if stack_size_txt else ""
         added_tier_txt = f" | Tier: {tier}" if tier else ""
         added_estimated_value_txt = f"\n Estimated Value: {display_value}" if display_value else ""
         added_5_link_value_txt = f"\n5-L: {five_link_value}" if five_link_value else ""
         added_6_link_value_txt = f" | 6-L: {six_link_value}" if six_link_value else ""
 
-        message = added_owned_txt + item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt
+        message = (added_owned_txt + added_record_number_txt + item_text + added_stack_size_txt + added_tier_txt +
+                   added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt)
 
     img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
     tk_img = ImageTk.PhotoImage(img)
 
-    return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing)
+    return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing, item=item)
 
 
 def show_message(root, message, duration=None):
@@ -159,6 +180,7 @@ def show_custom(root, item, options: CustomToastOptions):
     tier = getattr(item, "tier", "")
     owned = getattr(item, "owned", False)
     type_ = getattr(item, "type", "")
+    record_number = getattr(item, "record_number", None)
     five_link_value = currency_utils.calculate_five_link_estimate_value(item)
     six_link_value = currency_utils.calculate_six_link_estimate_value(item)
 
@@ -176,7 +198,8 @@ def show_custom(root, item, options: CustomToastOptions):
         options.show_estimated_value if options.show_estimated_value is not None else bool(display_value)) else ""
 
     main_message = options.custom_message or (
-            added_owned_txt + item_text + added_stack_size_txt + added_tier_txt + added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt
+            added_owned_txt + item_text + added_stack_size_txt + added_tier_txt +
+            added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt
     )
 
     img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
