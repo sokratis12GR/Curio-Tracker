@@ -24,7 +24,7 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager, update_i
 
         menu_dropdown.set("File")
 
-    file_menu_items = ["Keybinds", "About", "Settings", "Check for Updates", "Exit"]
+    file_menu_items = ["Keybinds", "About", "Settings", "Exit"]
 
     menu_dropdown = ctk.CTkOptionMenu(
         master=menu_frame,
@@ -35,5 +35,11 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager, update_i
     )
     menu_dropdown.set("File")
     menu_dropdown.pack(side="left")
+
+    def check_updates():
+        check_for_updates(tabview)
+
+    button = ctk.CTkButton(menu_frame, text="Check for Updates", command=check_updates)
+    button.pack(side="left", padx=(5,0))
 
     return menu_frame
