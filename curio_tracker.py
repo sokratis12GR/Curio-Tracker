@@ -381,6 +381,27 @@ def mark_term_as_captured(value, timestamp: datetime = None):
 
     log_message(f"[RecentTerms] Buffer now: {formatted}")
 
+def remove_recent_term(term: str) -> bool:
+    global recent_terms
+
+    term = utils.smart_title_case(term)
+    term = term.replace("Replica ", "")
+    before = len(recent_terms)
+
+    recent_terms = [
+        (t, ts) for (t, ts) in recent_terms
+        if t != term
+    ]
+
+    removed = len(recent_terms) != before
+    if removed:
+        log_message(f"[RecentTerms] Removed term: {term}")
+    return removed
+
+def clear_recent_terms():
+    global recent_terms
+    recent_terms.clear()
+    log_message("[RecentTerms] Cleared all recent terms")
 
 #################################################
 # Gets all matched terms from the list          #
