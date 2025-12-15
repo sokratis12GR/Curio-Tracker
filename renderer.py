@@ -47,6 +47,23 @@ COLOR = {
     "boon": "#b5a890",
     "affliction": "#a06dca",
 }
+BORDER_COLOR = {
+    "grey": "#7f7f7f",
+    "white": "#ffffff",
+    "enchant": "#b4b4ff",
+    "affix": "#8888ff",
+    "corrupted": "#d20000",
+    "currency": "#615841",
+    "normal": "#c8c8c8",
+    "magic": "#8888ff",
+    "rare": "#998044",
+    "unique": "#6E443B",
+    "uniqueName": "#6E443B",
+    "gem": "#1ba29b",
+    "quest": "#4ae63a",
+    "boon": "#b5a890",
+    "affliction": "#a06dca",
+}
 
 
 def limit_text_lines(text, width_chars: int):
@@ -249,7 +266,7 @@ def render_item(item):
     img.paste(header_right, (canvas_w - headerW, 0))
 
     # Draw item name on top
-    color_name = COLOR["uniqueName"] if item.itemRarity == "Unique" else COLOR.get(rarity, COLOR["white"])
+    color_name = get_color(item)
     # Draw item name
     num_lines = len(item.itemName.lines)
     if num_lines == 1:
@@ -263,3 +280,12 @@ def render_item(item):
             draw.text((canvas_w // 2, y_name), line, font=name_font, fill=color_name, anchor="mm")
 
     return img
+
+def get_color(item):
+    rarity = item.itemRarity.lower()
+    return COLOR["uniqueName"] if item.itemRarity == "Unique" else COLOR.get(rarity, COLOR["white"])
+
+
+def get_border_color(item):
+    rarity = item.itemRarity.lower()
+    return BORDER_COLOR["uniqueName"] if item.itemRarity == "Unique" else BORDER_COLOR.get(rarity, COLOR["white"])

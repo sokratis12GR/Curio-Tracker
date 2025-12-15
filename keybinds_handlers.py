@@ -24,7 +24,7 @@ def handle_capture(root, tree_manager: TreeManager, controls):
     for item in tracker.parsed_items:
         if not item.duplicate:
             if are_toasts_enabled:
-                toasts.show(root, item)
+                toasts.show(root, item, tree_manager=tree_manager, tracker=tracker)
             tree_manager.add_item_to_tree(item)
 
     # Controls now manage the total count label
@@ -43,7 +43,7 @@ def handle_snippet(root, tree_manager: TreeManager, controls):
             for item in items:
                 if not item.duplicate:
                     if are_toasts_enabled:
-                        root.after(0, lambda i=item: toasts.show(root, i))
+                        root.after(0, lambda i=item: toasts.show(root, i, tree_manager=tree_manager, tracker=tracker))
                     tree_manager.add_item_to_tree(item)
 
             # Updated: use controls for total count
@@ -137,6 +137,7 @@ def handle_delete_latest(root, tree_manager: TreeManager, controls):
             toasts.show_message(root, f"Deleted latest entry: {item_name}", duration=3000)
         csv_manager = CSVManager()
         csv_manager.recalculate_record_number()
+        tracker.remove_recent_term(item_name)
         root.after(0, controls.update_total_items_count)
     else:
         if are_toasts_enabled:

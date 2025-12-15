@@ -10,8 +10,9 @@ import fonts
 import ocr_utils as utils
 from csv_manager import CSVManager
 from logger import log_message
-from renderer import render_item
+from renderer import render_item, get_color, get_border_color
 from settings import get_setting, set_setting
+from tree_manager import TreeManager
 
 IMAGE_COL_WIDTH = 200
 ROW_HEIGHT = 40
@@ -51,7 +52,7 @@ def get_toast_duration_ms():
     return TOASTS_DURATION * 1000
 
 
-def create_toast(root, message, image=None, duration=None, is_missing=False, item=None):
+def create_toast(root, message, image=None, duration=None, is_missing=False, item=None, tree_manager: TreeManager=None, tracker=None):
     if not ARE_TOASTS_ENABLED:
         return None
     duration = duration or get_toast_duration_ms()
@@ -64,7 +65,7 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
 
     missing_color = get_setting("Application", "collection_missing_color", "#00FF00")
     border_color = missing_color if is_missing else "black"
-    border_thickness = 3 if is_missing else 0
+    border_thickness = 4 if is_missing else 0
 
     frame = tk.Frame(
         toast,
@@ -84,23 +85,28 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
     if image:
         img_label = tk.Label(frame, image=image, bg="black")
         img_label.image = image
-        img_label.pack(side="left", padx=(0, 8))
+        img_label.pack(side="left", padx=(0, 5))
         toast.img_ref = image
 
     # Add text
-    text_label = tk.Label(frame, text=message, bg="black", fg="white", anchor="w")
+    text_label = tk.Label(frame, text=message, bg="black", font=fonts.make_font(11), fg="white", anchor="w")
     text_label.pack(side="left")
 
-    def mark_picked(val=True):
+    check_var = ctk.StringVar(value="False")
+
+    def mark_picked():
         picked = getattr(item, "picked", False)
         item_text = utils.parse_item_name(item)
-        csv_manager.modify_record(root, record_number, item_text, updates={"Picked": not picked})
+        # print(f"{item_text} - {picked} updated to {check_var.get()}")
+        csv_manager.modify_record(root, record_number, item_text, updates={"Picked": check_var.get()})
+        if tree_manager is not None:
+            tree_manager.refresh_treeview(tracker=tracker)
         root.focus_force()
         return
 
     if item is not None:
-        pickup_checkbox = ctk.CTkCheckBox(frame, text="", width=5, command=mark_picked)
-        pickup_checkbox.pack(side="right")
+        pickup_checkbox = ctk.CTkCheckBox(frame, text="", width=4, border_color=get_border_color(item), variable=check_var, command=mark_picked, onvalue="True", offvalue="False")
+        pickup_checkbox.pack(side="right", padx=(10, 0))
 
     toast.lift()
     root.focus_force()
@@ -123,7 +129,7 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
     return toast
 
 
-def show(root, item, message=None, duration=None):
+def show(root, item, message=None, duration=None, tree_manager: TreeManager=None, tracker=None):
     owned = getattr(item, "owned", False)
     type = getattr(item, "type", "")
     record_number = getattr(item, "record_number", None)
@@ -153,7 +159,7 @@ def show(root, item, message=None, duration=None):
     img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
     tk_img = ImageTk.PhotoImage(img)
 
-    return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing, item=item)
+    return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing, item=item, tree_manager=tree_manager, tracker=tracker)
 
 
 def show_message(root, message, duration=None):
@@ -210,7 +216,7 @@ def show_custom(root, item, options: CustomToastOptions):
     border_thickness = options.border_thickness or (3 if is_missing else 0)
     if options.is_highlight:
         border_color = options.border_color or "#FFD700"  # gold
-        border_thickness = options.border_thickness or 4
+        border_thickness = options.border_thickness or 3
 
     toast = create_toast(root, "", image=tk_img, is_missing=False)
     if toast:
@@ -233,7 +239,7 @@ def show_custom(root, item, options: CustomToastOptions):
                 headline_label = tk.Label(
                     text_frame,
                     text=options.headline,
-                    font=fonts.make_font(size=12, weight="bold"),
+                    font=fonts.make_font(size=10, weight="bold"),
                     bg="black",
                     fg="white",
                     anchor="w",
