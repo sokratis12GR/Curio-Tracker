@@ -20,31 +20,53 @@ TOASTS = []
 TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
 TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
 ARE_TOASTS_ENABLED = get_setting('Application', 'are_toasts_enabled', True)
+TOAST_POSITION = get_setting("Application", "toast_position", "top_right")
+
 csv_manager = CSVManager()
 
 
 def reposition(root):
     screen_w = root.winfo_screenwidth()
-    x_right = screen_w - TOAST_MARGIN
-    y = TOAST_MARGIN
+    screen_h = root.winfo_screenheight()
 
-    # filter out any destroyed toasts
-    alive = []
-    for t in TOASTS:
-        if t.winfo_exists():
-            alive.append(t)
+    position = get_setting("Application", "toast_position", "top_right")
+    y_offset = int(get_setting("Application", "toast_y_offset", 0))
 
-    TOASTS[:] = alive  # replace with only valid windows
+    alive = [t for t in TOASTS if t.winfo_exists()]
+    TOASTS[:] = alive
+    if not TOASTS:
+        return
+
+    stack_down = position.startswith("top")
+    stack_up = position.startswith("bottom")
+
+    if stack_down:
+        y = TOAST_MARGIN + y_offset
+    else:
+        y = screen_h - TOAST_MARGIN - y_offset
 
     for t in TOASTS:
         try:
             t.update_idletasks()
             w = t.winfo_reqwidth()
             h = t.winfo_reqheight()
-            t.geometry(f"+{x_right - w}+{y}")
-            y += h + TOAST_SPACING
+
+            # X positioning
+            if position.endswith("right"):
+                x = screen_w - w - TOAST_MARGIN
+            else:  # left
+                x = TOAST_MARGIN
+
+            # Y positioning
+            if stack_down:
+                t.geometry(f"+{x}+{y}")
+                y += h + TOAST_SPACING
+            else:
+                y -= h
+                t.geometry(f"+{x}+{y}")
+                y -= TOAST_SPACING
+
         except tk.TclError:
-            # window disappeared between check and move
             continue
 
 

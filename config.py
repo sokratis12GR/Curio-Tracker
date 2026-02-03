@@ -257,6 +257,17 @@ time_column_index = 16  # 17th column of the .csv file contains the time var
 CHAOS_COLOR = "#d6b85a"
 available_fonts = ["Segoe UI", "Roboto", "Arial", "Calibri", "Comic Sans MS"]
 
+VALID_TOAST_POSITIONS = {
+    "top_left",
+    "top_right",
+    "bottom_left",
+    "bottom_right",
+}
+DEFAULT_TOAST_POSITION = "top_right"
+
+TOAST_Y_OFFSET_MIN = 0
+TOAST_Y_OFFSET_MAX = 500
+
 ## Replica / Unique: #AF6025
 replica_l_hsv = [5, 100, 80]
 replica_u_hsv = [25, 255, 255]

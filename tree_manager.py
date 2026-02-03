@@ -674,21 +674,21 @@ class TreeManager:
                 elif selected_time == "Today":
                     matches_time = dt.date() == now.date()
                 elif selected_time == "Last hour":
-                    matches_time = delta <= timedelta(hours=1)
+                    matches_time = dt >= now - timedelta(hours=1)
                 elif selected_time == "Last 2 hours":
-                    matches_time = delta <= timedelta(hours=2)
+                    matches_time = dt >= now - timedelta(hours=2)
                 elif selected_time == "Last 12 hours":
-                    matches_time = delta <= timedelta(hours=12)
+                    matches_time = dt >= now - timedelta(hours=12)
                 elif selected_time == "Last 24 hours":
-                    matches_time = delta <= timedelta(days=1)
+                    matches_time = dt >= now - timedelta(hours=24)
                 elif selected_time == "Last week":
-                    matches_time = delta <= timedelta(weeks=1)
+                    matches_time = dt >= now - timedelta(weeks=1)
                 elif selected_time == "Last 2 weeks":
-                    matches_time = delta <= timedelta(weeks=2)
+                    matches_time = dt >= now - timedelta(weeks=2)
                 elif selected_time == "Last month":
-                    matches_time = delta <= timedelta(days=30)
+                    matches_time = dt >= now - timedelta(days=30)
                 elif selected_time == "Last year":
-                    matches_time = delta <= timedelta(days=365)
+                    matches_time = dt >= now - timedelta(days=365)
                 elif selected_time == "Custom...":
                     if not getattr(self, "_custom_popup_open", False):
                         self.open_custom_hours_popup()

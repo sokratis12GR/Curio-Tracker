@@ -4,6 +4,7 @@ from gui import keybinds_popup
 from gui.about_popup import CustomAboutPopup
 from gui.settings_popup import show_settings_popup
 from update_checker import check_for_updates
+# from csv_to_json import csv_to_json
 
 
 def create_settings_menu(tabview, tracker, theme_manager, tree_manager, update_info_callback):
@@ -17,14 +18,18 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager, update_i
             CustomAboutPopup(tabview)
         elif choice == "Settings":
             show_settings_popup(tabview, tracker, theme_manager, tree_manager)
-        elif choice == "Check for Updates":
-            check_for_updates(tabview)
+        # elif choice == "Check for Updates":
+        #     check_for_updates(tabview)
+        # elif choice == "Convert to JSON":
+        #     csv_to_json("all_valid_heist_terms.csv")
         elif choice == "Exit":
             tabview.master.destroy()  # close main window
 
         menu_dropdown.set("File")
 
-    file_menu_items = ["Keybinds", "About", "Settings", "Exit"]
+    file_menu_items = ["Keybinds", "About", "Settings",
+                       # "Convert to JSON",
+                       "Exit"]
 
     menu_dropdown = ctk.CTkOptionMenu(
         master=menu_frame,

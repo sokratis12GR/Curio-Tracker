@@ -82,6 +82,8 @@ class UnifiedSettingsSection:
         self.poeladder_leagues = list(self.leagues_dict.keys())
         # Variables
         self.theme_selector_var = ctk.StringVar(value=get_setting("Application", "theme_mode", c.DEFAULT_THEME_MODE))
+        self.toasts_position_var = ctk.StringVar(value=get_setting("Application", "toast_position", c.DEFAULT_TOAST_POSITION))
+        self.toasts_y_offset_var = ctk.StringVar(value=str(get_setting("Application", "toast_y_offset", 0)))
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
         self.enable_poeladder_var = ctk.BooleanVar(
@@ -200,6 +202,16 @@ class UnifiedSettingsSection:
         )
         row += 1
 
+        ctk.CTkLabel(frame, text="Position:").grid(row=row, column=0, sticky="w")
+        toast_position_cb = ctk.CTkComboBox(frame, variable=self.toasts_position_var, values=c.VALID_TOAST_POSITIONS, width=self.width)
+        toast_position_cb.grid(row=row, column=1, sticky="w")
+        self.toasts_position_var.trace_add("write", self._update_toasts_position)
+        row += 1
+        ctk.CTkLabel(frame, text="Y Offset (px):").grid(row=row, column=0, sticky="w")
+        offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_y_offset_var, width=self.width)
+        offset_entry.grid(row=row, column=1, sticky="w")
+        self.toasts_y_offset_var.trace_add("write", self._update_toasts_y_offset)
+        row += 1
         ctk.CTkLabel(frame, text="Duration (sec):").grid(row=row, column=0, sticky="w")
         duration_entry = ctk.CTkEntry(frame, textvariable=self.toasts_duration_var, width=self.width)
         duration_entry.grid(row=row, column=1, sticky="w")
@@ -252,6 +264,35 @@ class UnifiedSettingsSection:
         log_message("Theme Selector", val)
         set_setting("Application", "theme_mode", val)
         switch_mode(val)
+
+    def _update_toasts_position(self, *_):
+        val = self.toasts_position_var.get()
+        if not val:
+            return
+        log_message("Toasts Position", val)
+        set_setting("Application", "toast_position", val)
+
+    def _update_toasts_y_offset(self, *_):
+
+        val = self.toasts_y_offset_var.get()
+        if val in ("", "-", "+"):
+            return
+
+        if not val:
+            return
+        try:
+            offset = int(val)
+        except ValueError:
+            return
+        offset = max(c.TOAST_Y_OFFSET_MIN, min(c.TOAST_Y_OFFSET_MAX, offset))
+
+        # write back if clamped
+        if str(offset) != val:
+            self.toasts_y_offset_var.set(str(offset))
+            return
+
+        log_message("Toasts Y Offset", offset)
+        set_setting("Application", "toast_y_offset", offset)
 
     def _update_application_font(self, *_):
         new_family = self.font_selector_var.get()
