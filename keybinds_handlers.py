@@ -92,7 +92,8 @@ def handle_exit(root):
 def handle_debugging_toggle():
     c.DEBUGGING = not c.DEBUGGING
     if c.ENABLE_LOGGING:
-        tracker.log_message(f"Debugging Mode: {"Enabled" if c.DEBUGGING else "Disabled"}")
+        state = "Enabled" if c.DEBUGGING else "Disabled"
+        tracker.log_message(f"Debugging Mode: {state}")
 
 
 def handle_duplicate_latest(root, tree_manager: TreeManager, controls):

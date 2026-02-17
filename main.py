@@ -1,4 +1,6 @@
+import shutil
 import threading
+from pathlib import Path
 from sys import platform
 
 import customtkinter
@@ -8,6 +10,7 @@ from fonts import init_font_var, make_font
 from gui.item_overview_frame import ItemOverviewFrame
 from gui.total_frame import TotalFrame
 from logger import log_message
+from update_checker import check_for_updates
 
 _original_destroy = customtkinter.CTkButton.destroy
 
@@ -218,8 +221,9 @@ def start_main_app(root, theme_mode, theme_manager):
         if DEBUGGING:
             print(f"[WARN] Could not initialize controller thread: {e}")
 
-    root.mainloop()
+    root.after(5000, lambda: check_for_updates(root))
 
+    root.mainloop()
 
 UPDATE_INTERVAL_MS = 30 * 60 * 1000  # 30 minutes in milliseconds
 

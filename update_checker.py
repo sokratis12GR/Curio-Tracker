@@ -1,11 +1,14 @@
+import shutil
+import subprocess
+import sys
+import threading
 import webbrowser
+from pathlib import Path
 
 import customtkinter as ctk
 import requests
-from PIL import Image
 
 from fonts import make_font
-from gui.ctksimplebox import CTkMessageBox
 from version_utils import VERSION
 
 
@@ -14,26 +17,41 @@ def version_tuple(v: str):
 
 
 def check_for_updates(root):
-    msgbox = CTkMessageBox(root, min_size=(300, 20), max_size=(300, 100))
-    try:
-        url = "https://api.github.com/repos/sokratis12GR/Curio-Tracker/releases/latest"
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        data = response.json()
+    def worker():
+        try:
+            url = "https://api.github.com/repos/sokratis12GR/Curio-Tracker/releases/latest"
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            data = response.json()
 
-        latest = data.get("tag_name", "").strip()
-        release_url = data.get("html_url", "")
+            latest = data.get("tag_name", "").strip()
 
-        if "-dev" in VERSION.lower():
-            show_update_popup(root, latest, release_url)
-            return
+            if not latest:
+                return
 
-        if latest and version_tuple(latest) > version_tuple(VERSION):
-            show_update_popup(root, latest, release_url)
-        else:
-            msgbox.showinfo("Up to Date", f"You are using the latest version ({VERSION}).")
-    except Exception as e:
-        msgbox.showerror("Update Check Failed", f"Could not check for updates:\n{e}")
+            if version_tuple(latest) > version_tuple(VERSION):
+                root.after(0, lambda: show_update_popup(
+                    root,
+                    latest,
+                    data.get("html_url", "")
+                ))
+
+        except Exception:
+            pass
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def deploy_updater():
+    from load_utils import get_resource_path
+
+    source = get_resource_path("updater.exe")
+    app_dir = Path(sys.executable).parent
+    target = app_dir / "updater.exe"
+
+    shutil.copy2(source, target)
+
+    return target
 
 
 def show_update_popup(root, latest_version, release_url):
@@ -41,7 +59,7 @@ def show_update_popup(root, latest_version, release_url):
     popup.title("Update Available")
     popup.resizable(False, False)
     popup.transient(root)
-    popup.minsize(250, 220)
+    popup.minsize(280, 240)
     popup.grab_set()
     popup.focus_force()
 
@@ -52,27 +70,56 @@ def show_update_popup(root, latest_version, release_url):
     ctk.CTkLabel(frm, text=f"Your version: {VERSION}", font=make_font(11)).pack()
     ctk.CTkLabel(frm, text=f"Latest version: {latest_version}", font=make_font(11, "bold")).pack(pady=(0, 10))
 
+    def update_now():
+        try:
+            updater_path = deploy_updater()
+            subprocess.Popen([str(updater_path)])
+            root.destroy()
+            sys.exit(0)
+        except Exception as e:
+            print(f"Failed to launch updater: {e}")
+
+    ctk.CTkButton(
+        frm,
+        text="Update Now",
+        command=update_now,
+        width=180,
+    ).pack(pady=(5, 5))
+
     def open_github():
         webbrowser.open_new(release_url)
 
     try:
         import load_utils
+        from PIL import Image
+
         icon_path = load_utils.get_resource_path("assets/github-icon.png")
-        img = Image.open(icon_path).resize((18, 18), Image.LANCZOS)
+        img = Image.open(icon_path).resize((18, 18))
         github_img = ctk.CTkImage(light_image=img, dark_image=img)
+
         ctk.CTkButton(
             frm,
             image=github_img,
-            text="Download Latest Release",
+            text="Download from GitHub",
             compound="left",
             command=open_github,
             width=180,
-        ).pack(pady=(5, 0))
-    except Exception as e:
-        print(f"Could not load GitHub icon: {e}")
-        ctk.CTkButton(frm, text="Download Latest Release", command=open_github, width=180).pack(pady=(5, 0))
+        ).pack(pady=(0, 5))
 
-    ctk.CTkButton(frm, text="Close", command=popup.destroy, width=100).pack(pady=(15, 0))
+    except Exception:
+        ctk.CTkButton(
+            frm,
+            text="Download from GitHub",
+            command=open_github,
+            width=180,
+        ).pack(pady=(0, 5))
+
+    ctk.CTkButton(
+        frm,
+        text="Later",
+        command=popup.destroy,
+        width=120,
+    ).pack(pady=(10, 0))
 
     popup.update_idletasks()
     w, h = popup.winfo_width(), popup.winfo_height()

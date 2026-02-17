@@ -75,6 +75,7 @@ for root, _, files in os.walk(themes_dir):
 
 ctk_path = os.path.dirname(customtkinter.__file__)
 datas.append((ctk_path, "customtkinter"))
+datas.append((r".\dist\updater.exe", '.'))
 
 # ---- Find Python DLL dynamically ----
 dll_dir = sysconfig.get_config_var('BINDIR')
@@ -121,16 +122,20 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=[
-        'encodings',  
+        'requests',
+        'encodings',
         'keyboard',
         'pyautogui',
         'cv2',
         'numpy',
         'pytesseract',
         'PIL',
+        'pandas',
         'pygetwindow',
-        'termcolor'
-        'customtkinter'
+        'termcolor',
+        'customtkinter',
+        'win32clipboard',
+        'win32con',
     ],
     hookspath=['.'],
     runtime_hooks=[],
