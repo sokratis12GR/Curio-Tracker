@@ -1,5 +1,6 @@
 import customtkinter as ctk
 
+from csv_to_json import csv_to_nested_json
 from gui import keybinds_popup
 from gui.about_popup import CustomAboutPopup
 from gui.settings_popup import show_settings_popup
@@ -20,15 +21,15 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager, update_i
             show_settings_popup(tabview, tracker, theme_manager, tree_manager)
         # elif choice == "Check for Updates":
         #     check_for_updates(tabview)
-        # elif choice == "Convert to JSON":
-        #     csv_to_json("all_valid_heist_terms.csv")
+        elif choice == "Export to JSON":
+            csv_to_nested_json("matches.csv")
         elif choice == "Exit":
-            tabview.master.destroy()  # close main window
+            tabview.winfo_toplevel().destroy() # close main window
 
         menu_dropdown.set("File")
 
     file_menu_items = ["Keybinds", "About", "Settings",
-                       # "Convert to JSON",
+                       "Export to JSON",
                        "Exit"]
 
     menu_dropdown = ctk.CTkOptionMenu(
