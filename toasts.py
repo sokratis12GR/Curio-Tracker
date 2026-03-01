@@ -27,7 +27,7 @@ def reposition(root):
     screen_h = root.winfo_screenheight()
 
     position = get_setting("Application", "toast_position", "top_right")
-    y_offset = int(get_setting("Application", "toast_y_offset", 0))
+    y_offset = int(get_setting("Application", "toast_y_offset", 80))
 
     alive = [t for t in TOASTS if t.winfo_exists()]
     TOASTS[:] = alive
