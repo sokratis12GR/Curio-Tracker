@@ -1,9 +1,39 @@
+import webbrowser
 from tkinter import StringVar
-from customtkinter import CTkFrame, CTkLabel, CTkSwitch
+
+from PIL import Image
+from customtkinter import CTkFrame, CTkLabel, CTkSwitch, CTkButton, CTkImage
+
+import load_utils
 from config import CHAOS_COLOR, poe_user
 from fonts import make_font
 from settings import get_setting, set_setting
 from tree_manager import TreeManager
+
+
+def _add_kofi_button(frame):
+    def open_kofi():
+        webbrowser.open_new("https://ko-fi.com/sofodev")
+
+    try:
+        icon_path = load_utils.get_resource_path("assets/kofi1.png")
+        img = Image.open(icon_path)
+        kofi_img = CTkImage(light_image=img, dark_image=img, size=(90, 36))
+
+        CTkButton(
+            frame,
+            image=kofi_img,
+            text="",
+            command=open_kofi,
+            fg_color="transparent",
+            hover_color=("gray75", "gray30"),
+            cursor="hand2",
+            width=90,
+            height=30,
+        ).grid(row=0, column=5, padx=(0, 0), sticky="e")
+    except Exception as e:
+        print(f"Could not load Ko-fi image: {e}")
+        CTkButton(frame, text="Support me on Ko-fi", command=open_kofi, width=100).grid(row=0, column=5, padx=(0, 0), sticky="e")
 
 
 class TotalFrame:
@@ -16,7 +46,7 @@ class TotalFrame:
             fg_color="transparent",
             bg_color="transparent"
         )
-        self.frame.grid(row=0, column=0, sticky="w", padx=10, pady=10)
+        self.frame.grid(row=0, column=0, sticky="we", padx=10, pady=10)
 
         self.value_mode = StringVar(value=get_setting("Display", "value_mode", "Chaos"))
         self.value_mode.trace_add("write", lambda *_: self.on_value_mode_changed())
@@ -72,6 +102,9 @@ class TotalFrame:
             text_color=CHAOS_COLOR
         )
         self.total_picked_label.grid(row=0, column=4, padx=(5, 10))
+
+        _add_kofi_button(self.frame)
+
 
     def on_value_mode_changed(self):
         mode = self.value_mode.get()

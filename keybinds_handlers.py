@@ -5,7 +5,6 @@ from tkinter import TclError
 import config as c
 import curio_tracker as tracker
 import toasts
-from csv_manager import CSVManager
 from logger import log_message
 from ocr_utils import parse_item_name
 from settings import get_setting
@@ -97,26 +96,30 @@ def handle_debugging_toggle():
 
 
 def handle_duplicate_latest(root, tree_manager: TreeManager, controls):
-    csv_manager = CSVManager()
-    latest_dupe = csv_manager.duplicate_latest(root)
+    # Duplicate in backend first
+    latest_dupe = tree_manager.data_mgr.duplicate_latest(root)
+    if not latest_dupe:
+        return
+
+    # Parse to tracker items
     duplicated_item = tracker.parse_items_from_rows([latest_dupe])[0]
 
     if are_toasts_enabled:
         toasts.show(root, duplicated_item)
 
+    # Add to tree and update count
     tree_manager.add_item_to_tree(duplicated_item)
     root.after(0, controls.update_total_items_count)
-    csv_manager.get_next_record_number()
-
 
 def handle_delete_latest(root, tree_manager: TreeManager, controls):
     if not tree_manager.all_item_iids:
         toasts.show_message(root, "No entries available to delete.", duration=3000)
         return
 
+    # Find the latest item by timestamp
     latest_iid = max(
         tree_manager.all_item_iids,
-        key=lambda iid: tree_manager.item_time_map.get(iid, None) or 0
+        key=lambda iid: tree_manager.item_time_map.get(iid, 0)
     )
 
     item = tree_manager.csv_row_map.get(latest_iid)
@@ -127,6 +130,7 @@ def handle_delete_latest(root, tree_manager: TreeManager, controls):
     record_number = getattr(item, "record_number", None)
     item_name = parse_item_name(item)
 
+    # Delete from tree & backend
     deleted = tree_manager.delete_item_from_tree(
         record_number=record_number,
         item_name=item_name,
@@ -134,21 +138,21 @@ def handle_delete_latest(root, tree_manager: TreeManager, controls):
     )
 
     if deleted:
-        if are_toasts_enabled:
-            toasts.show_message(root, f"Deleted latest entry: {item_name}", duration=3000)
-        csv_manager = CSVManager()
-        csv_manager.recalculate_record_number()
+        # Recalculate last_record_number in backend
+        if hasattr(tree_manager.data_mgr, "recalculate_record_number"):
+            tree_manager.data_mgr.recalculate_record_number()
+
         tracker.remove_recent_term(item_name)
         root.after(0, controls.update_total_items_count)
+
+        if are_toasts_enabled:
+            toasts.show_message(root, f"Deleted Record #{record_number} entry: {item_name}", duration=3000)
     else:
         if are_toasts_enabled:
             toasts.show_message(root, "Failed to delete latest entry.", duration=3000)
 
-
-
-def handle_show_highest_value(root, tree_manager, controls):
-    csv_manager = CSVManager()
-    rows = csv_manager.load_csv_dict()
+def handle_show_highest_value(root, tree_manager: TreeManager, controls):
+    rows = tree_manager.data_mgr.load_dict()
 
     if not rows:
         toasts.show_message(root, "No data found in CSV.", duration=3000)

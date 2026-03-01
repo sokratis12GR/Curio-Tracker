@@ -111,6 +111,8 @@ OCR_DEBUGGING = False
 CSV_DEBUGGING = False
 ENABLE_LOGGING = True
 
+USE_JSON_INSTEAD = False
+
 # Update these every league.
 FIXED_LADDER_IDENTIFIER = "Keepers"
 LEAGUES_TO_FETCH = [
@@ -191,7 +193,7 @@ CURRENCY_TYPE = "Currency"
 ## Logging
 logs_dir = "logs"
 saves_dir = "saved"
-csv_file_path = "saved/matches.csv"
+data_file_base = "saved/matches"
 
 ## File paths
 logs_file_name = "logs/tracker.log"

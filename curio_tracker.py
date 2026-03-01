@@ -1,4 +1,3 @@
-import csv
 import json
 import os
 import platform
@@ -8,6 +7,7 @@ import time
 import tkinter as tk
 from collections import defaultdict
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import List, Dict
 
 import cv2
@@ -23,15 +23,23 @@ import config as c
 import currency_utils
 import ocr_utils as utils
 import toasts
-from config import csv_file_path
+from config import data_file_base
 from csv_manager import CSVManager
+from data_manager import BaseDataManager
+from json_manager import JSONManager
 from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
 from settings import get_setting, set_setting
 
 datasets = get_datasets(force_reload=True)
-csv_mgr = CSVManager()
+saved_mode = get_setting("Application", "export_mode", default="CSV").upper()
+base = Path(data_file_base)
+
+if saved_mode == "JSON":
+    data_mgr = JSONManager(base)
+else:
+    data_mgr = CSVManager(base)
 
 # default values in case they only run area lvl 83 blueprints
 blueprint_area_level = c.default_bp_lvl
@@ -50,14 +58,15 @@ parsed_items = []
 MAX_RECENT_TERMS = 5  # keep last 5 entries in memory
 recent_terms = []  # list of tuples: (term, datetime)
 
-def populate_recent_terms_from_csv(within_seconds: int = None, max_items: int = None):
 
+def populate_recent_terms(within_seconds: int = None, max_items: int = None):
     global recent_terms
+
     max_items = max_items or MAX_RECENT_TERMS
     within_seconds = within_seconds or int(duplicate_duration_time or 60)
 
     try:
-        rows = csv_mgr.load_csv_dict()
+        rows = data_mgr.load_dict()
     except Exception:
         rows = []
 
@@ -72,10 +81,18 @@ def populate_recent_terms_from_csv(within_seconds: int = None, max_items: int = 
 
     for row in last_rows:
         ts_str = row.get(c.csv_time_header)
+
         term = None
-        for col in (c.csv_trinket_header, c.csv_replacement_header, c.csv_replica_header,
-                    c.csv_experimented_header, c.csv_weapon_enchant_header, c.csv_armor_enchant_header,
-                    c.csv_scarab_header, c.csv_currency_header):
+        for col in (
+                c.csv_trinket_header,
+                c.csv_replacement_header,
+                c.csv_replica_header,
+                c.csv_experimented_header,
+                c.csv_weapon_enchant_header,
+                c.csv_armor_enchant_header,
+                c.csv_scarab_header,
+                c.csv_currency_header,
+        ):
             val = row.get(col)
             if val and val.strip():
                 term = utils.smart_title_case(val.strip())
@@ -102,6 +119,7 @@ def populate_recent_terms_from_csv(within_seconds: int = None, max_items: int = 
 full_currency = datasets.get("currency") or {}
 collection_dataset = datasets.get("collection") or {}
 
+
 def on_league_change():
     global CURRENCY_DATASET, COLLECTION_DATASET_ACTIVE
 
@@ -122,7 +140,8 @@ def on_league_change():
     league_collection = collection_dataset.get(poeladder_identifier, {})
     COLLECTION_DATASET_ACTIVE = {term: data.get("owned", False) for term, data in league_collection.items()}
 
-    log_message(f"League changed to poe.ninja: {new_league} | poeladder: {poeladder_display_name} ({poeladder_identifier})")
+    log_message(
+        f"League changed to poe.ninja: {new_league} | poeladder: {poeladder_display_name} ({poeladder_identifier})")
 
     if c.DEBUGGING:
         log_message(f"DataSet Keys: {collection_dataset.keys()}")
@@ -130,7 +149,6 @@ def on_league_change():
         log_message(f"Collection Active {COLLECTION_DATASET_ACTIVE.items()}")
         log_currency_dataset(CURRENCY_DATASET)
         log_message(f"[DEBUG] Loaded {len(COLLECTION_DATASET_ACTIVE)} curios for {new_league}")
-
 
 
 def log_currency_dataset(dataset):
@@ -158,10 +176,11 @@ PRECOMP_TERMS = []
 for t in all_terms:
     cleaned = utils.remove_possessive_s(t)
     PRECOMP_TERMS.append((
-        t,                                      # original term
-        utils.normalize_for_search(cleaned),    # normalized for search
-        utils.smart_title_case(cleaned)         # smart title version
+        t,  # original term
+        utils.normalize_for_search(cleaned),  # normalized for search
+        utils.smart_title_case(cleaned)  # smart title version
     ))
+
 
 def build_enchant_type_lookup(term_types):
     lookup = defaultdict(set)
@@ -336,7 +355,8 @@ def is_term_match(term, text) -> bool:
                 # Look ahead 2 lines for the other part
                 for j in range(1, 3):
                     if i + j < len(norm_lines):
-                        if (part1 in line and part2 in norm_lines[i + j]) or (part2 in line and part1 in norm_lines[i + j]):
+                        if (part1 in line and part2 in norm_lines[i + j]) or (
+                                part2 in line and part1 in norm_lines[i + j]):
                             if c.DEBUGGING:
                                 print(f"[EnchantCombo] Found combo '{part1}' & '{part2}' at lines {i} and {i + j}")
                             return True
@@ -347,7 +367,7 @@ def is_term_match(term, text) -> bool:
     return any(norm_term in line for line in norm_lines)
 
 
-def is_duplicate_recent_entry(value, path=csv_file_path):
+def is_duplicate_recent_entry(value):
     current_time = datetime.now()
     dupe_duration = int(duplicate_duration_time or 60)
 
@@ -381,6 +401,7 @@ def mark_term_as_captured(value, timestamp: datetime = None):
 
     log_message(f"[RecentTerms] Buffer now: {formatted}")
 
+
 def remove_recent_term(term: str) -> bool:
     global recent_terms
 
@@ -398,10 +419,12 @@ def remove_recent_term(term: str) -> bool:
         log_message(f"[RecentTerms] Removed term: {term}")
     return removed
 
+
 def clear_recent_terms():
     global recent_terms
     recent_terms.clear()
     log_message("[RecentTerms] Cleared all recent terms")
+
 
 #################################################
 # Gets all matched terms from the list          #
@@ -571,125 +594,126 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
         attempt += 1
 
 
-def write_csv_entry(root, text, timestamp, allow_dupes=False) -> None:
-    global stack_sizes, body_armors, experimental_items, parsed_items
-    write_header = not os.path.isfile(csv_file_path)
-
+def write_entry(root, text, timestamp, allow_dupes=False) -> None:
+    global stack_sizes, body_armors, experimental_items, parsed_items, data_mgr
     parsed_items = []
+
     matched_terms = get_matched_terms(text, allow_dupes)
     process_text(root, text, allow_dupes, matched_terms)
 
-    def format_row(record_number, term_title, item_type, stack_size, prefix=""):
-        def maybe_add(fn):
-            val = fn(term_title, item_type)
-            return f"{prefix}{val}" if val else ""
+    rows_to_write = []
 
-        return [
-            record_number,
-            league_version, poe_user,
-            blueprint_layout, blueprint_area_level,
-            maybe_add(utils.add_if_trinket),
-            maybe_add(utils.add_if_replacement),
-            maybe_add(utils.add_if_replica),
-            maybe_add(utils.add_if_experimental),
-            maybe_add(utils.add_if_weapon_enchant),
-            maybe_add(utils.add_if_armor_enchant),
-            maybe_add(utils.add_if_scarab),
-            maybe_add(utils.add_if_currency),
-            stack_size if (int(stack_size) > 0 and utils.is_currency_or_scarab(item_type)) else "",
-            "",
-            False,
-            timestamp,
-            False,
-        ]
+    for match in matched_terms:
+        term_title = match["term"]
+        duplicate = match["duplicate"]
+        term_smart_title = utils.smart_title_case(term_title)
+        item_type = term_types.get(term_smart_title)
+        stack_size = stack_sizes.get(term_title, 1)
 
-    try:
-        with open(csv_file_path, "a", newline='', encoding="utf-8") as csvfile:
-            writer = csv.writer(csvfile)
+        if not allow_dupes and duplicate:
+            continue
 
-            if write_header:
-                writer.writerow([
-                    c.csv_record_header,
-                    c.csv_league_header, c.csv_loggedby_header,
-                    c.csv_blueprint_header, c.csv_area_level_header,
-                    c.csv_trinket_header, c.csv_replacement_header,
-                    c.csv_replica_header, c.csv_experimented_header,
-                    c.csv_weapon_enchant_header, c.csv_armor_enchant_header,
-                    c.csv_scarab_header, c.csv_currency_header,
-                    c.csv_stack_size_header, c.csv_variant_header,
-                    c.csv_flag_header, c.csv_time_header,
-                    c.csv_picked_header
-                ])
-            record_number = csv_mgr.get_next_record_number()
+        current_number = data_mgr.get_next_record_number()
+        mark_term_as_captured(term_title)
 
-            for match in matched_terms:
+        item = build_parsed_item(
+            record=current_number,
+            term_title=term_title,
+            item_type=item_type,
+            duplicate=duplicate,
+            timestamp=timestamp,
+            experimental_items=experimental_items,
+            stack_size=stack_size,
+            area_level=blueprint_area_level,
+            blueprint_type=blueprint_layout,
+            logged_by=poe_user,
+            league=league_version,
+            chaos_value=CURRENCY_DATASET.get(term_title, {}).get("chaos"),
+            divine_value=CURRENCY_DATASET.get(term_title, {}).get("divine"),
+            tier=TIERS_DATASET.get(term_title, {}).get("tier", ""),
+            wiki=TIERS_DATASET.get(term_title, {}).get("wiki", ""),
+            img=TIERS_DATASET.get(term_title, {}).get("img", ""),
+            five_l_val=CURRENCY_DATASET.get(term_title, {}).get("five_link"),
+            six_l_val=CURRENCY_DATASET.get(term_title, {}).get("six_link"),
+            picked=False,
+            owned=COLLECTION_DATASET_ACTIVE.get(term_title, False),
+        )
 
-                term_title = match["term"]
-                duplicate = match["duplicate"]
-                term_smart_title = utils.smart_title_case(term_title)
+        parsed_items.append(item)
 
-                item_type = term_types.get(term_smart_title)
-                stack_size = stack_sizes.get(term_title, 1)
-                estimated_value = CURRENCY_DATASET.get(term_title, {})
-                chaos_est = estimated_value.get("chaos")
-                divine_est = estimated_value.get("divine")
-                five_l_est = estimated_value.get("five_link")
-                six_l_est = estimated_value.get("six_link")
-                item_data_set = TIERS_DATASET.get(term_title, {})
-                tier = item_data_set.get("tier", "")
-                wiki = item_data_set.get("wiki", "")
-                img = item_data_set.get("img", "")
-                owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
+        row_dict = {
+            c.csv_record_header: current_number,
+            c.csv_league_header: league_version,
+            c.csv_loggedby_header: poe_user,
+            c.csv_blueprint_header: blueprint_layout,
+            c.csv_area_level_header: blueprint_area_level,
+            c.csv_trinket_header: utils.add_if_trinket(term_title, item_type),
+            c.csv_replacement_header: utils.add_if_replacement(term_title, item_type),
+            c.csv_replica_header: utils.add_if_replica(term_title, item_type),
+            c.csv_experimented_header: utils.add_if_experimental(term_title, item_type),
+            c.csv_weapon_enchant_header: utils.add_if_weapon_enchant(term_title, item_type),
+            c.csv_armor_enchant_header: utils.add_if_armor_enchant(term_title, item_type),
+            c.csv_scarab_header: utils.add_if_scarab(term_title, item_type),
+            c.csv_currency_header: utils.add_if_currency(term_title, item_type),
+            c.csv_stack_size_header: stack_size if utils.is_currency_or_scarab(item_type) else "",
+            c.csv_variant_header: "",
+            c.csv_flag_header: False,
+            c.csv_time_header: timestamp,
+            c.csv_picked_header: False,
+        }
 
-                if allow_dupes or not duplicate:
-                    current_number = record_number
-                    mark_term_as_captured(term_title)
+        rows_to_write.append(row_dict)
 
-                    item = build_parsed_item(
-                        record=current_number,
-                        term_title=term_title,
-                        item_type=item_type,
-                        duplicate=duplicate,
-                        timestamp=timestamp,
-                        experimental_items=experimental_items,
-                        stack_size=stack_size,
-                        area_level=blueprint_area_level,
-                        blueprint_type=blueprint_layout,
-                        logged_by=poe_user,
-                        league=league_version,
-                        chaos_value=chaos_est,
-                        divine_value=divine_est,
-                        tier=tier,
-                        picked=False,
-                        owned=owned,
-                        wiki=wiki,
-                        img=img,
-                        five_l_val=five_l_est,
-                        six_l_val=six_l_est,
-                    )
-                    parsed_items.append(item)
-
-                    log_message(f"[WriteCSV] Writing row for term: {term_title} (Record {record_number})")
-                    writer.writerow(format_row(record_number, term_title, item_type, stack_size))
-                    record_number += 1
-
-                    if c.DEBUGGING and c.CSV_DEBUGGING:
-                        writer.writerow(
-                            format_row(record_number, term_title, item_type, stack_size, prefix=lambda v: f"{v}: "))
-    except PermissionError as e:
-        toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
-        log_message(f"[ERROR] PermissionError: {e}")
-    except OSError as e:
-        log_message(f"[ERROR] CSV write failed: {e}")
-
-    csv_mgr.last_record_number = record_number - 1
+    if rows_to_write:
+        data_mgr.ensure_data_file()
+        data_mgr.append_rows(rows_to_write, root)
 
 
-def init_csv():
+def reload_data_manager():
+    from settings import get_setting
+    from csv_manager import CSVManager
+    from json_manager import JSONManager
+    from config import data_file_base
+    from pathlib import Path
+
+    _base = Path(data_file_base)
+    _saved_mode = get_setting("Application", "export_mode", default="CSV").upper()
+
+    if _saved_mode == "JSON":
+        _data_mgr = JSONManager(_base)
+    else:
+        _data_mgr = CSVManager(_base)
+
+    return _data_mgr
+
+def build_row_dict(record_number, term_title, item_type, stack_size, timestamp):
+    return {
+        c.csv_record_header: record_number,
+        c.csv_league_header: league_version,
+        c.csv_loggedby_header: poe_user,
+        c.csv_blueprint_header: blueprint_layout,
+        c.csv_area_level_header: blueprint_area_level,
+        c.csv_trinket_header: utils.add_if_trinket(term_title, item_type),
+        c.csv_replacement_header: utils.add_if_replacement(term_title, item_type),
+        c.csv_replica_header: utils.add_if_replica(term_title, item_type),
+        c.csv_experimented_header: utils.add_if_experimental(term_title, item_type),
+        c.csv_weapon_enchant_header: utils.add_if_weapon_enchant(term_title, item_type),
+        c.csv_armor_enchant_header: utils.add_if_armor_enchant(term_title, item_type),
+        c.csv_scarab_header: utils.add_if_scarab(term_title, item_type),
+        c.csv_currency_header: utils.add_if_currency(term_title, item_type),
+        c.csv_stack_size_header: stack_size if utils.is_currency_or_scarab(item_type) else "",
+        c.csv_variant_header: "",
+        c.csv_flag_header: False,
+        c.csv_time_header: timestamp,
+        c.csv_picked_header: False,
+    }
+
+
+def init_data():
     log_message("Starting Heist Curio Tracker...")
-    csv_mgr.upgrade_with_record_numbers()
-    csv_mgr.upgrade_with_picked_column()
-    populate_recent_terms_from_csv()
+    reload_data_manager()
+    data_mgr.upgrade_structure()
+    populate_recent_terms()
 
 
 def parse_items_from_rows(rows):
@@ -775,9 +799,12 @@ def parse_items_from_rows(rows):
 
     return parsed_items
 
+def load_all_parsed_items(_data_mgr: BaseDataManager):
+    rows = _data_mgr.load_dict()
+    return parse_items_from_rows(rows)
 
-def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
-    rows = csv_mgr.load_csv_dict()
+def load_recent_parsed_items(_data_mgr: BaseDataManager, within_seconds=120, max_items=5):
+    rows = _data_mgr.load_dict()
     if not rows:
         return []
 
@@ -801,15 +828,7 @@ def load_recent_parsed_items_from_csv(within_seconds=120, max_items=5):
     ]
 
     recent_rows = recent_rows[-max_items:]
-
     return parse_items_from_rows(recent_rows)
-
-
-# ---------- Load All Items ----------
-def load_all_parsed_items_from_csv():
-    rows = csv_mgr.load_csv_dict()
-    return parse_items_from_rows(rows)
-
 
 #####################################################
 # Captures the entire screen, afterwards using      #
@@ -826,8 +845,7 @@ def capture_once(root):
     full_text, filtered = ocr_from_image(screenshot_np)
 
     os.makedirs(c.saves_dir, exist_ok=True)
-    write_csv_entry(root, full_text, utils.now_timestamp(), allow_dupes=False)
-
+    write_entry(root, full_text, utils.now_timestamp(), allow_dupes=False)
 
 def capture_snippet(root, on_done):
     validate_attempt(c.capturing_prompt)
@@ -843,12 +861,17 @@ def capture_snippet(root, on_done):
         img = None
         for _ in range(60):  # up to 30 seconds
             time.sleep(0.5)
-            img = ImageGrab.grabclipboard()
+            try:
+                img = ImageGrab.grabclipboard()
+            except Exception:
+                # If grabclipboard fails or returns invalid content, treat as cancel
+                img = None
             if img:
                 break
 
-        if img is None:
-            log_message(c.snippet_txt_failed)
+        # User canceled or Snipping Tool closed
+        if img is None or not hasattr(img, "size") or img.size == 0:
+            log_message("Snippet cancelled or failed.")
             return
 
         screenshot_np = np.array(img)
@@ -856,11 +879,10 @@ def capture_snippet(root, on_done):
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         os.makedirs(c.saves_dir, exist_ok=True)
-        write_csv_entry(root, full_text, timestamp, allow_dupes=True)
+        write_entry(root, full_text, timestamp, allow_dupes=True)
 
         if on_done:
             on_done(parsed_items)
-
 
     else:
         bbox = get_poe_bbox()
@@ -910,7 +932,7 @@ def capture_snippet(root, on_done):
             full_text, filtered = ocr_from_image(screenshot_np, scale=2)
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             os.makedirs(c.saves_dir, exist_ok=True)
-            write_csv_entry(root, full_text, timestamp, allow_dupes=True)
+            write_entry(root, full_text, timestamp, allow_dupes=True)
 
             if on_done:
                 on_done(filtered)

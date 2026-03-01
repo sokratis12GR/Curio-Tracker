@@ -1,6 +1,8 @@
 import csv
 import os
 import sys
+import json
+from pathlib import Path
 
 import config as c
 from ocr_utils import smart_title_case, format_currency_value
@@ -50,6 +52,18 @@ def load_csv(file_path, row_parser=None, skip_header=True, ensure_dir=False, as_
 
     return results
 
+def load_json(file_path, default=None, ensure_dir=False):
+    if ensure_dir:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    if not os.path.exists(file_path):
+        return default if default is not None else {}
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default if default is not None else {}
 
 def load_csv_with_types(file_path) -> dict:
     def parser(row):

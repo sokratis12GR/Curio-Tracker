@@ -1,16 +1,15 @@
 import tkinter as tk
-import customtkinter as ctk
 from dataclasses import dataclass
 from typing import Optional
 
+import customtkinter as ctk
 from PIL import ImageTk
 
 import currency_utils
 import fonts
 import ocr_utils as utils
-from csv_manager import CSVManager
 from logger import log_message
-from renderer import render_item, get_color, get_border_color
+from renderer import render_item, get_border_color
 from settings import get_setting, set_setting
 from tree_manager import TreeManager
 
@@ -21,8 +20,6 @@ TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
 TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
 ARE_TOASTS_ENABLED = get_setting('Application', 'are_toasts_enabled', True)
 TOAST_POSITION = get_setting("Application", "toast_position", "top_right")
-
-csv_manager = CSVManager()
 
 
 def reposition(root):
@@ -74,7 +71,8 @@ def get_toast_duration_ms():
     return TOASTS_DURATION * 1000
 
 
-def create_toast(root, message, image=None, duration=None, is_missing=False, item=None, tree_manager: TreeManager=None, tracker=None):
+def create_toast(root, message, image=None, duration=None, is_missing=False, item=None,
+                 tree_manager: TreeManager = None, tracker=None):
     if not ARE_TOASTS_ENABLED:
         return None
     duration = duration or get_toast_duration_ms()
@@ -101,8 +99,6 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
 
     record_number = getattr(item, "record_number", None)
 
-
-
     # Add image if provided
     if image:
         img_label = tk.Label(frame, image=image, bg="black")
@@ -120,14 +116,15 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
         picked = getattr(item, "picked", False)
         item_text = utils.parse_item_name(item)
         # print(f"{item_text} - {picked} updated to {check_var.get()}")
-        csv_manager.modify_record(root, record_number, item_text, updates={"Picked": check_var.get()})
+        tree_manager.data_mgr.modify_record(root, record_number, item_text, updates={"Picked": check_var.get()})
         if tree_manager is not None:
             tree_manager.refresh_treeview(tracker=tracker)
         root.focus_force()
         return
 
     if item is not None:
-        pickup_checkbox = ctk.CTkCheckBox(frame, text="", width=4, border_color=get_border_color(item), variable=check_var, command=mark_picked, onvalue="True", offvalue="False")
+        pickup_checkbox = ctk.CTkCheckBox(frame, text="", width=4, border_color=get_border_color(item),
+                                          variable=check_var, command=mark_picked, onvalue="True", offvalue="False")
         pickup_checkbox.pack(side="right", padx=(10, 0))
 
     toast.lift()
@@ -151,7 +148,7 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
     return toast
 
 
-def show(root, item, message=None, duration=None, tree_manager: TreeManager=None, tracker=None):
+def show(root, item, message=None, duration=None, tree_manager: TreeManager = None, tracker=None):
     owned = getattr(item, "owned", False)
     type = getattr(item, "type", "")
     record_number = getattr(item, "record_number", None)
@@ -181,7 +178,8 @@ def show(root, item, message=None, duration=None, tree_manager: TreeManager=None
     img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
     tk_img = ImageTk.PhotoImage(img)
 
-    return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing, item=item, tree_manager=tree_manager, tracker=tracker)
+    return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing, item=item,
+                        tree_manager=tree_manager, tracker=tracker)
 
 
 def show_message(root, message, duration=None):

@@ -1,5 +1,6 @@
 import threading
 from datetime import datetime, timedelta
+from pathlib import Path
 from tkinter import messagebox
 
 from customtkinter import *
@@ -7,12 +8,14 @@ from pytz import InvalidTimeError
 
 import currency_utils
 import ocr_utils as utils
-from config import ROW_HEIGHT, layout_keywords, TREE_COLUMNS, DEBUGGING
+from config import ROW_HEIGHT, layout_keywords, TREE_COLUMNS, DEBUGGING, data_file_base
 from csv_manager import CSVManager
 from gui.custom_hours_popup import CustomHoursPopup
 from gui.item_overview_frame import ItemOverviewFrame
+from json_manager import JSONManager
 from settings import get_setting
 from tree_utils import get_item_name_str, generate_item_id
+import pyinstrument
 
 
 def _get_row_tag(index):
@@ -20,12 +23,19 @@ def _get_row_tag(index):
 
 
 class TreeManager:
-    def __init__(self, root, tree, mode):
+    def __init__(self, root, tree, mode, tracker=None):
         self.root = root
         self.display_columns = None
         self.overview_frame = None
         self.tree = tree
-        self.csv_manager = CSVManager()
+        self.tracker = tracker
+        saved_mode = get_setting("Application", "export_mode", default="CSV").upper()
+        base = Path(data_file_base)
+
+        if saved_mode == "JSON":
+            self.data_mgr = JSONManager(base)
+        else:
+            self.data_mgr = CSVManager(base)
         self.tree_columns = TREE_COLUMNS
         self.columns = [col["id"] for col in TREE_COLUMNS]
         self.update_visible_columns()
@@ -71,6 +81,11 @@ class TreeManager:
         self.total_frame = None
         self.col_vars = {}
         self.tree_lock = threading.Lock()
+
+    def switch_data_manager(self, new_mgr, tracker=None):
+        self.data_mgr = new_mgr
+        tracker.data_mgr = new_mgr
+        self.refresh_treeview(tracker=tracker)
 
     def update_visible_columns(self):
         enabled_poeladder = get_setting("Application", "enable_poeladder", False)
@@ -208,13 +223,14 @@ class TreeManager:
 
             item_index = self.columns.index("item")
             item_value = row_values[item_index]
-            self.modify_csv_record(iid, item_value, delete=True)
+            self.modify_record(iid, item_value, delete=True)
             self.tree.delete(iid)
             self.all_item_iids.discard(iid)
             self.item_time_map.pop(iid, None)
             self.csv_row_map.pop(iid, None)
             self.update_total_labels()
 
+    # @pyinstrument.profile()
     def delete_item_from_tree(self, record_number=None, item_name=None, confirm=True):
         if record_number is not None:
             iid = f"rec_{record_number}"
@@ -242,7 +258,7 @@ class TreeManager:
         row_values = self.tree.item(iid)['values']
         item_index = self.columns.index("item")
         item_value = row_values[item_index]
-        self.modify_csv_record(iid, item_value, delete=True)
+        self.modify_record(iid, item_value, delete=True)
 
         self.tree.delete(iid)
         self.all_item_iids.discard(iid)
@@ -273,6 +289,7 @@ class TreeManager:
 
         self.delete_item_from_tree(record_number=max_record_number)
 
+    # @pyinstrument.profile()
     def _add_items_in_batches(self, items, batch_size=200, start_index=0, post_callback=None):
         if self.should_cancel_process:
             return
@@ -297,12 +314,13 @@ class TreeManager:
             if post_callback:
                 post_callback()
 
+    # @pyinstrument.profile()
     def load_all_items_threaded(self, tracker, post_callback=None, limit=None):
         self.clear_tree()
         self.should_cancel_process = False
 
         def worker():
-            all_items = tracker.load_all_parsed_items_from_csv()
+            all_items = tracker.load_all_parsed_items(self.data_mgr)
             all_items.sort(key=lambda item: getattr(item, "time", datetime.min), reverse=True)
 
             if limit is not None:
@@ -319,11 +337,12 @@ class TreeManager:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    # @pyinstrument.profile()
     def load_latest_items(self, tracker):
         self.clear_tree()
         self.should_cancel_process = True
-        parsed = tracker.load_recent_parsed_items_from_csv()
-        print(f"[DEBUG] Loaded {len(parsed)} items")  # <--- check this
+        parsed = tracker.load_recent_parsed_items(self.data_mgr)
+        print(f"[DEBUG] Loaded {len(parsed)} items")
         if not parsed:
             return
 
@@ -333,10 +352,11 @@ class TreeManager:
         self.sort_tree("record")
         self.reapply_row_formatting()
 
+    # @pyinstrument.profile()
     def load_latest_item(self, tracker):
         self.clear_tree()
         self.should_cancel_process = True
-        parsed = tracker.load_recent_parsed_items_from_csv(max_items=1)
+        parsed = tracker.load_recent_parsed_items(self.data_mgr, max_items=1)  # <-- updated call
         if not parsed:
             return
 
@@ -346,6 +366,7 @@ class TreeManager:
         self.sort_tree("record")
         self.reapply_row_formatting()
 
+    # @pyinstrument.profile()
     def on_tree_click(self, event):
         region = self.tree.identify("region", event.x, event.y)
         if region != "cell":
@@ -386,9 +407,10 @@ class TreeManager:
         item_text = utils.parse_item_name(item)
 
         setattr(item, col_name, new_state)
-        self.modify_csv_record(row_id, item_text, updates={"Picked": new_state})
+        self.modify_record(row_id, item_text, updates={"Picked": new_state})
         self.update_total_labels()
 
+    # @pyinstrument.profile()
     def on_tree_double_click(self, event):
         # Identify row and column
         row_id = self.tree.identify_row(event.y)
@@ -434,7 +456,7 @@ class TreeManager:
             setattr(item, picked_col, new_state)
 
             # Update CSV record and totals
-            self.modify_csv_record(row_id, item_text, updates={"Picked": new_state})
+            self.modify_record(row_id, item_text, updates={"Picked": new_state})
             self.update_total_labels()
             return
 
@@ -482,7 +504,7 @@ class TreeManager:
                     self.tree.set(row_id, "value", display_value)
                     self.tree.set(row_id, "numeric_value", numeric_value)
 
-                self.modify_csv_record(row_id, item_text, updates={"Stack Size": new_value})
+                self.modify_record(row_id, item_text, updates={"Stack Size": new_value})
 
             edit_entry.bind("<Return>", save_stack)
             edit_entry.bind("<FocusOut>", save_stack)
@@ -502,12 +524,12 @@ class TreeManager:
                 if item:
                     setattr(item, "blueprint_type", new_value)
 
-                self.modify_csv_record(row_id, item_text, updates={"Blueprint Type": new_value})
+                self.modify_record(row_id, item_text, updates={"Blueprint Type": new_value}, tracker=self.tra)
 
             combo.bind("<<ComboboxSelected>>", save_blueprint)
             combo.bind("<FocusOut>", save_blueprint)
 
-    def modify_csv_record(self, row_id, item_name, updates=None, delete=False):
+    def modify_record(self, row_id, item_name, updates=None, delete=False):
         item = self.csv_row_map.get(row_id)
         if not item:
             return
@@ -517,12 +539,30 @@ class TreeManager:
             print("[WARN] Item has no Record #, cannot modify CSV")
             return
 
-        self.csv_manager.modify_record(self.root, record_number, item_name, updates=updates, delete=delete)
+        self.data_mgr.modify_record(self.root, record_number, item_name, updates=updates, delete=delete)
+
+        for i, entry in enumerate(self.global_item_tracker):
+            if getattr(entry["item_obj"], "record_number", None) == record_number:
+                if delete:
+                    self.global_item_tracker.pop(i)
+                else:
+                    for attr, value in (updates or {}).items():
+                        setattr(entry["item_obj"], attr.lower().replace(" ", "_"), value)
+                break
+        else:
+            if not delete:
+                self.global_item_tracker.append({
+                    "iid": row_id,
+                    "csv_index": len(self.global_item_tracker),
+                    "name": item_name,
+                    "item_obj": item
+                })
 
     def bind_overview(self, overview_frame: ItemOverviewFrame):
         self.overview_frame = overview_frame
         self.tree.bind("<<TreeviewSelect>>", self.on_tree_selection)
 
+    # @pyinstrument.profile()
     def on_tree_selection(self, event):
         selected = self.tree.selection()
         if not selected:
@@ -569,6 +609,7 @@ class TreeManager:
 
         return total_chaos, total_divine, picked_chaos, picked_divine
 
+    # @pyinstrument.profile()
     def update_total_labels(self):
         if not hasattr(self, "total_frame") or not self.total_frame:
             return
@@ -592,6 +633,7 @@ class TreeManager:
         self.total_frame.total_picked_label.configure(text=picked_text)
 
     # ---------- Sorting ----------
+    # @pyinstrument.profile()
     def sort_tree(self, column):
         children = self.tree.get_children()
         reverse = self.sort_reverse.get(column, False)
@@ -642,6 +684,7 @@ class TreeManager:
         self.sort_reverse[column] = not reverse
 
     # ---------- Filtering ----------
+    # @pyinstrument.profile()
     def apply_filters(self, search_query=None, *args):
         if search_query is None:
             search_query = self.search_var.get()
@@ -710,6 +753,7 @@ class TreeManager:
             if self.tree.exists(iid):
                 self.tree.detach(iid)
 
+    # @pyinstrument.profile()
     def open_custom_hours_popup(self):
         if getattr(self, "_custom_popup_open", False):
             return  # already open
@@ -731,11 +775,13 @@ class TreeManager:
         self._custom_popup_open = False
         popup.destroy()
 
+    # @pyinstrument.profile()
     def reapply_row_formatting(self):
         for index, iid in enumerate(self.tree.get_children()):
             tag = _get_row_tag(index)
             self.tree.item(iid, tags=(tag,))
 
+    # @pyinstrument.profile()
     def refresh_treeview(self, tracker=None):
         print("[DEBUG] Refreshing treeview...")
 
@@ -758,6 +804,7 @@ class TreeManager:
 
         print("[DEBUG] Treeview refresh complete.")
 
+    # @pyinstrument.profile()
     def filter_tree_by_time(self, *args):
         current_search = self.search_var.get()
         self.apply_filters(search_query=current_search)

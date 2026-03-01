@@ -134,7 +134,7 @@ def main():
             load_data()
             schedule_auto_update(root, player)
             set_tesseract_path()
-            tracker.init_csv()
+            tracker.init_data()
             initialize_settings()
         finally:
             root.after(0, finish_loading)
@@ -154,7 +154,7 @@ def main():
 
 def start_main_app(root, theme_mode, theme_manager):
     root.title("Heist Curio Tracker")
-    root.geometry("1100x720")
+    root.geometry("1200x720")
     root.resizable(True, True)
 
     if platform.startswith("win"):
@@ -170,7 +170,7 @@ def start_main_app(root, theme_mode, theme_manager):
     tree = treeview.tree
     left_frame = layout['left_frame']
     right_frame = layout['right_frame']
-    tree_manager = TreeManager(root, tree, theme_mode)
+    tree_manager = TreeManager(root, tree, theme_mode, tracker)
 
     for col in tree_manager.tree_columns:
         tree.heading(col["id"], command=lambda c=col["id"]: tree_manager.sort_tree(c))

@@ -3,23 +3,25 @@ from datetime import datetime
 from pathlib import Path
 
 from config import *
+from data_manager import BaseDataManager
 from load_utils import load_csv
 from logger import log_message
 
 
-class CSVManager:
-    def __init__(self, csv_path=None):
-        self.csv_path = Path(csv_path or csv_file_path)
+class CSVManager(BaseDataManager):
+    def __init__(self, file_path=None):
+        base = Path(file_path or data_file_base)
+        self.file_path = base.with_suffix(".csv")
         self.last_record_number = 0
 
-    def load_csv_dict(self):
-        if not self.csv_path.exists():
+    def load_dict(self):
+        if not self.file_path.exists():
             return []
-        return load_csv(self.csv_path, as_dict=True, skip_header=False)
+        return load_csv(self.file_path, as_dict=True, skip_header=False)
 
-    def save_csv_dict(self, root, rows, fieldnames):
+    def save_dict(self, root, rows, fieldnames):
         try:
-            with self.csv_path.open("w", newline="", encoding="utf-8") as f:
+            with self.file_path.open("w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(rows)
@@ -31,53 +33,56 @@ class CSVManager:
             log_message(f"[ERROR] CSV write failed: {e}")
 
     def get_next_record_number(self):
-        from settings import set_setting
+        from settings import set_setting, get_setting
 
-        last_num = 0
+        if self.last_record_number == 0:
+            self.last_record_number = get_setting("Application", "csv_current_row", 0)
+            if self.last_record_number == 0 and self.file_path.exists():
+                try:
+                    with self.file_path.open("r", encoding="utf-8") as f:
+                        for row in reversed(list(csv.reader(f))):
+                            if row and row[0].isdigit():
+                                self.last_record_number = int(row[0])
+                                break
+                except Exception as e:
+                    log_message(f"[ERROR] Could not read CSV for record number: {e}")
+                    self.last_record_number = 0
 
-        if self.csv_path.exists():
-            try:
-                with self.csv_path.open("r", encoding="utf-8") as f:
-                    for row in reversed(list(csv.reader(f))):
-                        if row and row[0].isdigit():
-                            last_num = int(row[0])
-                            break
-            except Exception as e:
-                log_message(f"[ERROR] Could not read CSV for record number: {e}")
-                last_num = 0
+        self.last_record_number += 1
 
-        next_num = last_num + 1
-        self.last_record_number = next_num
-        set_setting("Application", "current_row", next_num)
+        set_setting("Application", "csv_current_row", self.last_record_number)
 
-        return next_num
+        return self.last_record_number
 
     def recalculate_record_number(self):
+        """Set last_record_number to the highest Record # in the CSV."""
         from settings import set_setting
 
-        self.last_record_number = 0
-
-        if self.last_record_number == 0 and self.csv_path.exists():
-            try:
-                with self.csv_path.open("r", encoding="utf-8") as f:
-                    reader = csv.reader(f)
-                    rows = list(reader)
-                    if len(rows) > 1:
-                        last_row = rows[-1]
-                        self.last_record_number = int(last_row[0]) if last_row[0].isdigit() else 0
-            except Exception as e:
-                log_message(f"[ERROR] Could not read CSV for record number: {e}")
+        try:
+            if not self.file_path.exists():
                 self.last_record_number = 0
+            else:
+                with self.file_path.open("r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    max_record = 0
+                    for row in reader:
+                        val = row.get(csv_record_header, "0")
+                        if str(val).isdigit():
+                            max_record = max(max_record, int(val))
+                    self.last_record_number = max_record
 
-        set_setting("Application", "current_row", self.last_record_number)
+        except Exception as e:
+            log_message(f"[ERROR] Could not read CSV for record number: {e}")
+            self.last_record_number = 0
 
+        set_setting("Application", "csv_current_row", self.last_record_number)
         return self.last_record_number
 
     def modify_record(self, root, record_number, item_name, updates=None, delete=False):
         updates = updates or {}
-        rows = self.load_csv_dict()
+        rows = self.load_dict()
         if not rows:
-            log_message(f"[WARN] CSV is empty or missing: {self.csv_path}")
+            log_message(f"[WARN] CSV is empty or missing: {self.file_path}")
             return
 
         header = list(rows[0].keys())
@@ -98,61 +103,111 @@ class CSVManager:
                         log_message(f"[ERROR] CSV missing column '{field_name}'")
 
         if updated:
-            self.save_csv_dict(root, rows, fieldnames=header)
+            self.save_dict(root, rows, fieldnames=header)
             action = "Deleted" if delete else "Updated"
             log_message(f"[INFO] {action} Record #{record_number}: '{item_name}' in CSV")
         else:
             action = "delete" if delete else "update"
             log_message(f"[INFO] No matching record found to {action} for Record #{record_number}: '{item_name}'")
 
-    def upgrade_with_record_numbers(self):
-        rows = self.load_csv_dict()
-        if not rows:
-            log_message(f"[INFO] File not found or empty: {self.csv_path}")
-            return
-
-        if csv_record_header not in rows[0]:
-            for i, row in enumerate(rows, start=1):
-                row[csv_record_header] = str(i)
-        else:
-            for i, row in enumerate(rows, start=1):
-                row[csv_record_header] = str(i)
-
-        self.save_csv_dict(None, rows, fieldnames=list(rows[0].keys()))
-        log_message(f"[INFO] Upgraded CSV with Record # column → {self.csv_path}")
-
-    def upgrade_with_picked_column(self):
-        rows = self.load_csv_dict()
+    def append_rows(self, rows: list[dict], root=None):
         if not rows:
             return
 
-        if csv_picked_header not in rows[0]:
-            for row in rows:
+        write_header = not self.file_path.exists()
+        fieldnames = list(rows[0].keys())
+
+        # Assign record numbers if missing
+        for row in rows:
+            if not row.get(csv_record_header):
+                row[csv_record_header] = str(self.get_next_record_number())
+
+        try:
+            with self.file_path.open("a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                if write_header:
+                    writer.writeheader()
+                writer.writerows(rows)
+        except PermissionError as e:
+            if root:
+                import toasts
+                toasts.show_message(root, "!!! Unable to write to CSV (file may be open) !!!", duration=5000)
+            log_message(f"[ERROR] PermissionError: {e}")
+        except OSError as e:
+            log_message(f"[ERROR] CSV write failed: {e}")
+
+        # Update last_record_number to the max of appended rows
+        try:
+            appended_numbers = [int(row[csv_record_header]) for row in rows if
+                                str(row.get(csv_record_header, "")).isdigit()]
+            if appended_numbers:
+                self.last_record_number = max(appended_numbers)
+        except Exception as e:
+            log_message(f"[ERROR] Failed to update last_record_number: {e}")
+
+        from settings import set_setting
+        set_setting("Application", "csv_current_row", self.last_record_number)
+
+    def upgrade_structure(self):
+        rows = self.load_dict()
+        if not rows:
+            log_message(f"[INFO] File not found or empty: {self.file_path}")
+            return
+
+        changed = False
+
+        for i, row in enumerate(rows, start=1):
+
+            if not str(row.get(csv_record_header, "")).isdigit():
+                row[csv_record_header] = str(i)
+                changed = True
+
+            if not row.get(csv_picked_header):
                 row[csv_picked_header] = "False"
-        else:
-            for row in rows:
-                if not row.get(csv_picked_header):
-                    row[csv_picked_header] = "False"
+                changed = True
 
-        self.save_csv_dict(None, rows, fieldnames=list(rows[0].keys()))
-        log_message(f"[INFO] Added/Filled '{csv_picked_header}' column")
+        if changed:
+            self.save_dict(None, rows, fieldnames=list(rows[0].keys()))
+            log_message(f"[INFO] CSV structure upgraded → {self.file_path}")
 
     def duplicate_latest(self, root):
-        rows = self.load_csv_dict()
+        rows = self.load_dict()
         if not rows:
             log_message("[ERROR] CSV file has no entries to duplicate.")
             return None
 
         last_row = rows[-1].copy()
+
+        # Recalculate max record # from all rows
+        self.recalculate_record_number()
+
+        # Assign next unique record number
         record_number = self.get_next_record_number()
         last_row[csv_record_header] = str(record_number)
+        self.last_record_number = record_number
 
         if csv_time_header in last_row:
             last_row[csv_time_header] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
+        # Append and save
         rows.append(last_row)
-        self.save_csv_dict(root, rows, fieldnames=list(last_row.keys()))
+        self.save_dict(root, rows, fieldnames=list(last_row.keys()))
 
-        log_message(f"[INFO] Duplicated latest entry → Record {record_number}")
+        log_message(f"[INFO] Duplicated latest CSV entry → Record {record_number}")
+
+        from settings import set_setting
+        set_setting("Application", "csv_current_row", self.last_record_number)
 
         return last_row
+
+    def ensure_data_file(self):
+        if not self.file_path.exists():
+            headers = [
+                "Record #", "League", "Logged By", "Blueprint Type", "Area Level",
+                "Trinket", "Replacement", "Replica", "Experimented Base Type",
+                "Weapon Enchantment", "Armor Enchantment", "Scarab", "Currency",
+                "Stack Size", "Variant", "Flag?", "Time", "Picked", "Owned"
+            ]
+            with open(self.file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
