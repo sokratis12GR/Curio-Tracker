@@ -39,8 +39,7 @@ class CustomLoader:
         # Clear existing tree
         self.tree_manager.clear_tree()
 
-        # Load items from CSV
-        all_items = self.tracker.load_all_parsed_items_from_csv()
+        all_items = self.tracker.load_all_parsed_items(self.tree_manager.data_mgr)
         if not all_items:
             self.msgbox.showinfo("Load Entries", "No items available to load.")
             return
