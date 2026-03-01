@@ -45,40 +45,45 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager: TreeMana
     menu_dropdown.set("File")
     menu_dropdown.pack(side="left")
 
-    def check_updates():
-        original_text = update_button.cget("text")
-        update_button.configure(text="Checking...", state="disabled")
-
-        def worker():
-            try:
-                url = "https://api.github.com/repos/sokratis12GR/Curio-Tracker/releases/latest"
-                response = requests.get(url, timeout=5)
-                response.raise_for_status()
-                data = response.json()
-
-                latest = data.get("tag_name", "").strip()
-                if not latest:
-                    tabview.after(0, lambda: update_button.configure(text="No version info", state="normal"))
-                    return
-
-                if version_tuple(latest) > version_tuple(VERSION):
-                    # update found
-                    tabview.after(0, lambda: update_button.configure(text=f"Update {latest}!", state="normal"))
-                    # also show popup
-                    tabview.after(0, lambda: show_update_popup(tabview, latest, data.get("html_url", "")))
-                else:
-                    # already latest
-                    tabview.after(0, lambda: update_button.configure(text="Up to date ✔", state="normal"))
-
-            except Exception:
-                tabview.after(0, lambda: update_button.configure(text="Check Failed", state="normal"))
-
-        threading.Thread(target=worker, daemon=True).start()
+    # def check_updates():
+    #     original_text = update_button.cget("text")
+    #     update_button.configure(text="Checking...", state="disabled")
+    #
+    #     def worker():
+    #         try:
+    #             url = "https://api.github.com/repos/sokratis12GR/Curio-Tracker/releases/latest"
+    #             response = requests.get(url, timeout=5)
+    #             response.raise_for_status()
+    #             data = response.json()
+    #
+    #             latest = data.get("tag_name", "").strip()
+    #             if not latest:
+    #                 tabview.after(0, lambda: update_button.configure(text="No version info", state="normal"))
+    #                 return
+    #
+    #             if version_tuple(latest) > version_tuple(VERSION):
+    #                 # update found
+    #                 tabview.after(0, lambda: update_button.configure(text=f"Update {latest}!", state="normal"))
+    #                 # also show popup
+    #                 tabview.after(0, lambda: show_update_popup(tabview, latest, data.get("html_url", "")))
+    #             else:
+    #                 # already latest
+    #                 tabview.after(0, lambda: update_button.configure(text="Up to date ✔", state="normal"))
+    #
+    #         except Exception:
+    #             tabview.after(0, lambda: update_button.configure(text="Check Failed", state="normal"))
+    #
+    #     threading.Thread(target=worker, daemon=True).start()
 
     buttons_frame = ctk.CTkFrame(menu_frame, fg_color="transparent")
     buttons_frame.pack(side="left", padx=(5, 0))
 
-    update_button = ctk.CTkButton(buttons_frame, text="Check for Updates", width=100, command=check_updates)
+    update_button = ctk.CTkButton(
+        buttons_frame,
+        text="Check for Updates",
+        width=100,
+        command=lambda: check_for_updates(tabview, show_uptodate_popup=True)
+    )
     update_button.pack(side="left", padx=(0, 5))
 
     saved_mode = get_setting("Application", "export_mode", default="CSV")
@@ -95,7 +100,7 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager: TreeMana
 
         from curio_tracker import reload_data_manager
         _data_mgr = reload_data_manager()
-        tree_manager.switch_data_manager(_data_mgr, tracker)
+        tree_manager.switch_data_manager(_data_mgr)
 
     csv_json_button = ctk.CTkButton(
         buttons_frame,

@@ -75,7 +75,7 @@ for root, _, files in os.walk(themes_dir):
 
 ctk_path = os.path.dirname(customtkinter.__file__)
 datas.append((ctk_path, "customtkinter"))
-datas.append((r".\dist\updater.exe", '.'))
+datas.append((r".\updater\updater.exe", '.'))
 
 # ---- Find Python DLL dynamically ----
 dll_dir = sysconfig.get_config_var('BINDIR')

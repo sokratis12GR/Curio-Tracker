@@ -82,10 +82,10 @@ class TreeManager:
         self.col_vars = {}
         self.tree_lock = threading.Lock()
 
-    def switch_data_manager(self, new_mgr, tracker=None):
+    def switch_data_manager(self, new_mgr):
         self.data_mgr = new_mgr
-        tracker.data_mgr = new_mgr
-        self.refresh_treeview(tracker=tracker)
+        self.tracker.data_mgr = new_mgr
+        self.refresh_treeview(self.tracker)
 
     def update_visible_columns(self):
         enabled_poeladder = get_setting("Application", "enable_poeladder", False)

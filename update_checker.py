@@ -16,7 +16,7 @@ def version_tuple(v: str):
     return tuple(int(x) for x in v.strip("v").split("."))
 
 
-def check_for_updates(root):
+def check_for_updates(root, show_uptodate_popup=False):
     def worker():
         try:
             url = "https://api.github.com/repos/sokratis12GR/Curio-Tracker/releases/latest"
@@ -35,12 +35,51 @@ def check_for_updates(root):
                     latest,
                     data.get("html_url", "")
                 ))
+            else:
+                if show_uptodate_popup:
+                    root.after(0, lambda: show_up_to_date_popup(root, latest))
 
         except Exception:
-            pass
+            if show_uptodate_popup:
+                root.after(0, lambda: show_up_to_date_popup(root, None, error=True))
 
     threading.Thread(target=worker, daemon=True).start()
 
+def show_up_to_date_popup(root, latest_version=None, error=False):
+    popup = ctk.CTkToplevel(root)
+    popup.title("Update Check")
+    popup.resizable(False, False)
+    popup.transient(root)
+    popup.grab_set()
+    popup.focus_force()
+
+    frame = ctk.CTkFrame(popup)
+    frame.pack(padx=20, pady=20)
+
+    if error:
+        text = "Failed to check for updates."
+    else:
+        text = f"You are up to date!\n\nCurrent version: {VERSION}"
+
+    ctk.CTkLabel(
+        frame,
+        text=text,
+        font=make_font(12),
+        justify="center"
+    ).pack(pady=(0, 15))
+
+    ctk.CTkButton(
+        frame,
+        text="OK",
+        command=popup.destroy,
+        width=120
+    ).pack()
+
+    popup.update_idletasks()
+    w, h = popup.winfo_width(), popup.winfo_height()
+    x = (popup.winfo_screenwidth() // 2) - (w // 2)
+    y = (popup.winfo_screenheight() // 2) - (h // 2)
+    popup.geometry(f"{w}x{h}+{x}+{y}")
 
 def deploy_updater():
     from load_utils import get_resource_path
@@ -62,6 +101,7 @@ def show_update_popup(root, latest_version, release_url):
     popup.minsize(280, 240)
     popup.grab_set()
     popup.focus_force()
+    print("Showing update popup for version:", latest_version)
 
     frm = ctk.CTkFrame(popup)
     frm.pack(padx=20, pady=20, fill="both", expand=True)
