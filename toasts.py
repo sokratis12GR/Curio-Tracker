@@ -28,6 +28,7 @@ def reposition(root):
 
     position = get_setting("Application", "toast_position", "top_right")
     y_offset = int(get_setting("Application", "toast_y_offset", 80))
+    x_offset = int(get_setting("Application", "toast_x_offset", 0))
 
     alive = [t for t in TOASTS if t.winfo_exists()]
     TOASTS[:] = alive
@@ -50,9 +51,9 @@ def reposition(root):
 
             # X positioning
             if position.endswith("right"):
-                x = screen_w - w - TOAST_MARGIN
-            else:  # left
-                x = TOAST_MARGIN
+                x = screen_w - w - TOAST_MARGIN - x_offset
+            else:
+                x = TOAST_MARGIN + x_offset
 
             # Y positioning
             if stack_down:

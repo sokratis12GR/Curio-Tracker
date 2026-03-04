@@ -83,7 +83,11 @@ class UnifiedSettingsSection:
         # Variables
         self.theme_selector_var = ctk.StringVar(value=get_setting("Application", "theme_mode", c.DEFAULT_THEME_MODE))
         self.toasts_position_var = ctk.StringVar(value=get_setting("Application", "toast_position", c.DEFAULT_TOAST_POSITION))
-        self.toasts_y_offset_var = ctk.StringVar(value=str(get_setting("Application", "toast_y_offset", 0)))
+        self.toasts_y_offset_var = ctk.StringVar(value=str(get_setting("Application", "toast_y_offset", c.DEFAULT_TOAST_Y_OFFSET)))
+        self.toasts_x_offset_var = ctk.StringVar(value=str(get_setting("Application", "toast_x_offset", c.DEFAULT_TOAST_X_OFFSET)))
+        self.top_right_target_area_percent_var = ctk.StringVar(
+            value=str(get_setting("Application", "top_right_target_area_percent", c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT))
+        )
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
         self.enable_poeladder_var = ctk.BooleanVar(
@@ -212,6 +216,16 @@ class UnifiedSettingsSection:
         offset_entry.grid(row=row, column=1, sticky="w")
         self.toasts_y_offset_var.trace_add("write", self._update_toasts_y_offset)
         row += 1
+        ctk.CTkLabel(frame, text="X Offset (px):").grid(row=row, column=0, sticky="w")
+        offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_x_offset_var, width=self.width)
+        offset_entry.grid(row=row, column=1, sticky="w")
+        self.toasts_x_offset_var.trace_add("write", self._update_toasts_x_offset)
+        row += 1
+        ctk.CTkLabel(frame, text="Layout Capture Area (% of screen):").grid(row=row, column=0, sticky="w")
+        area_entry = ctk.CTkEntry(frame, textvariable=self.top_right_target_area_percent_var, width=self.width)
+        area_entry.grid(row=row, column=1, sticky="w")
+        self.top_right_target_area_percent_var.trace_add("write", self._update_top_right_target_area_percent)
+        row += 1
         ctk.CTkLabel(frame, text="Duration (sec):").grid(row=row, column=0, sticky="w")
         duration_entry = ctk.CTkEntry(frame, textvariable=self.toasts_duration_var, width=self.width)
         duration_entry.grid(row=row, column=1, sticky="w")
@@ -242,6 +256,16 @@ class UnifiedSettingsSection:
 
         self.dupe_label = ctk.CTkLabel(frame, text=f"{self.dupe_duration.get()}s")
         self.dupe_label.grid(row=row, column=1, sticky="w", padx=10, pady=(10, 0))
+        row += 1
+        reset_toasts_btn = ctk.CTkButton(
+            frame,
+            text="Reset Toast Settings",
+            fg_color="#8B0000",
+            hover_color="#A00000",
+            command=self._reset_toast_settings,
+            width=self.long_width
+        )
+        reset_toasts_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 5))
         row += 1
 
         return row
@@ -293,6 +317,87 @@ class UnifiedSettingsSection:
 
         log_message("Toasts Y Offset", offset)
         set_setting("Application", "toast_y_offset", offset)
+
+    def _update_toasts_x_offset(self, *_):
+
+        val = self.toasts_x_offset_var.get()
+        if val in ("", "-", "+"):
+            return
+
+        if not val:
+            return
+        try:
+            offset = int(val)
+        except ValueError:
+            return
+        offset = max(c.TOAST_X_OFFSET_MIN, min(c.TOAST_X_OFFSET_MAX, offset))
+
+        # write back if clamped
+        if str(offset) != val:
+            self.toasts_x_offset_var.set(str(offset))
+            return
+
+        log_message("Toasts X Offset", offset)
+        set_setting("Application", "toast_x_offset", offset)
+
+    def _update_top_right_target_area_percent(self, *_):
+        val = self.top_right_target_area_percent_var.get()
+
+        if val in ("", ".", "-", "+"):
+            return
+
+        try:
+            percent = float(val)
+        except ValueError:
+            return
+
+        percent = max(0.01, min(1.00, percent))
+
+        if str(percent) != val:
+            self.top_right_target_area_percent_var.set(str(percent))
+            return
+
+        log_message("Top Right Target Area Percent", percent)
+        set_setting("Application", "top_right_target_area_percent", percent)
+
+    def _reset_toast_settings(self):
+        log_message("Resetting toast settings to defaults")
+
+        # ---- Defaults ----
+        default_position = c.DEFAULT_TOAST_POSITION
+        default_y = c.DEFAULT_TOAST_Y_OFFSET
+        default_x = c.DEFAULT_TOAST_X_OFFSET
+        default_duration = c.DEFAULT_TOAST_DURATION
+        default_area = c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT
+        default_enabled = c.DEFAULT_TOAST_ENABLE
+
+        # ---- Persist ----
+        set_setting("Application", "toast_position", default_position)
+        set_setting("Application", "toast_y_offset", default_y)
+        set_setting("Application", "toast_x_offset", default_x)
+        set_setting("Application", "top_right_target_area_percent", default_area)
+        set_setting("Application", "toasts_duration_seconds", default_duration)
+        set_setting("Application", "are_toasts_enabled", default_enabled)
+
+        # ---- Update UI ----
+        self.toasts_position_var.set(default_position)
+        self.toasts_y_offset_var.set(str(default_y))
+        self.toasts_x_offset_var.set(str(default_x))
+        self.top_right_target_area_percent_var.set(str(default_area))
+        self.toasts_duration_var.set(str(default_duration))
+        self.toasts_var.set(default_enabled)
+
+        # ---- Apply Live ----
+        toasts.toggle_toasts(default_enabled)
+        toasts.set_toast_duration(default_duration)
+
+        # Reposition existing toasts immediately
+        try:
+            toasts.reposition(self.parent)
+        except Exception:
+            pass
+
+        log_message("Toast settings reset complete")
 
     def _update_application_font(self, *_):
         new_family = self.font_selector_var.get()

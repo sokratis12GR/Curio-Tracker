@@ -273,7 +273,10 @@ def is_enchant(type_):
 def get_top_right_layout(screen_width, screen_height):
     aspect_ratio = c.TOP_RIGHT_CUT_WIDTH / c.TOP_RIGHT_CUT_HEIGHT
     total_area = screen_width * screen_height
-    target_area = total_area * 0.01  # 1% of screen
+    from settings import get_setting
+    area_percent = float(get_setting("Application", "top_right_target_area_percent", c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT))
+
+    target_area = total_area * area_percent  # 1% of screen
 
     region_height = math.sqrt(target_area / aspect_ratio)
     region_width = region_height * aspect_ratio
