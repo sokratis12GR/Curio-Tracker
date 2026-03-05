@@ -244,6 +244,16 @@ class UnifiedSettingsSection:
         pick_btn.grid(row=row, column=1, sticky="e")
 
         row += 1
+        reset_toasts_btn = ctk.CTkButton(
+            frame,
+            text="Reset Toast Settings",
+            fg_color="#8B0000",
+            hover_color="#A00000",
+            command=self._reset_toast_settings,
+            width=self.long_width
+        )
+        reset_toasts_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 5))
+        row += 1
 
         # ---- Duplicate Check ----
         ctk.CTkLabel(frame, text="Seconds Between Dupe Checks:").grid(row=row, column=0, sticky="w")
@@ -257,16 +267,7 @@ class UnifiedSettingsSection:
         self.dupe_label = ctk.CTkLabel(frame, text=f"{self.dupe_duration.get()}s")
         self.dupe_label.grid(row=row, column=1, sticky="w", padx=10, pady=(10, 0))
         row += 1
-        reset_toasts_btn = ctk.CTkButton(
-            frame,
-            text="Reset Toast Settings",
-            fg_color="#8B0000",
-            hover_color="#A00000",
-            command=self._reset_toast_settings,
-            width=self.long_width
-        )
-        reset_toasts_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 5))
-        row += 1
+
 
         return row
 
