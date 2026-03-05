@@ -9,7 +9,10 @@ import requests
 # ======================
 GITHUB_OWNER = "sokratis12GR"
 GITHUB_REPO = "Curio-Tracker"
-APP_NAME = "Heist Curio Tracker.exe"
+APP_NAMES = [
+    "Heist Curio Tracker.exe",
+    "Heist.Curio.Tracker.exe",
+]
 EXPECTED_SIGNER = "Sokratis Fotkatzikis"
 # ======================
 
@@ -48,10 +51,21 @@ def verify_signature(file_path):
         return False
     return EXPECTED_SIGNER in result.stdout.strip()
 
+def find_existing_app(base_dir):
+    for name in APP_NAMES:
+        path = base_dir / name
+        if path.exists():
+            return path
+    return None
 
 def main():
     base_dir = Path(sys.executable).parent
-    app_path = base_dir / APP_NAME
+    app_path = find_existing_app(base_dir)
+
+    if not app_path:
+        print("[ERROR] Could not find existing application executable.")
+        print("Expected one of:", APP_NAMES)
+        return
 
     temp_file = base_dir / "update_tmp.exe"
 
@@ -64,7 +78,7 @@ def main():
     exe_url = None
     for asset in release.get("assets", []):
         name = asset["name"].lower()
-        if name == "heist.curio.tracker.exe":
+        if name in ["heist.curio.tracker.exe", "heist curio tracker.exe"]:
             exe_url = asset["browser_download_url"]
             break
 
