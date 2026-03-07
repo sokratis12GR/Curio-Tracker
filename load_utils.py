@@ -1,7 +1,9 @@
 import csv
+import io
 import os
 import sys
 import json
+import urllib
 from pathlib import Path
 
 import config as c
@@ -162,6 +164,54 @@ def load_collection_dataset(file_path: str, debugging: bool = False) -> dict:
     except Exception as e:
         return {}
 
+def load_csv_from_url(url, row_parser=None, skip_header=True):
+    results = []
+
+    try:
+        print(f"Fetching remote CSV from {url} ...")
+        with urllib.request.urlopen(url) as response:
+            text = response.read().decode("utf-8")
+
+        reader = csv.reader(io.StringIO(text))
+
+        if skip_header:
+            next(reader, None)
+
+        for row in reader:
+            if not row:
+                continue
+
+            parsed = row_parser(row) if row_parser else row
+            if parsed:
+                results.append(parsed)
+
+        print("Successfully loaded remote CSV.")
+        return results
+
+    except Exception as e:
+        print(f"Failed to fetch remote CSV: {e}")
+        return []
+
+_REMOTE_TERMS_CACHE = None
+
+def load_csv_with_types_url(url) -> dict:
+    global _REMOTE_TERMS_CACHE
+
+    if _REMOTE_TERMS_CACHE is not None:
+        return _REMOTE_TERMS_CACHE
+
+    def parser(row):
+        if len(row) >= 2:
+            raw_term, type_name = row[0].strip(), row[1].strip()
+            return smart_title_case(raw_term), type_name
+        return None
+
+    rows = load_csv_from_url(url, row_parser=parser)
+    _REMOTE_TERMS_CACHE = {term: type_name for term, type_name in rows if term}
+
+    return _REMOTE_TERMS_CACHE
+
+REMOTE_TERMS_URL = "https://sokratis.space/curio_tracker/terms.csv"
 
 LOG_FILE = get_data_path(c.logs_file_name)
 SETTINGS_PATH = get_data_path(c.settings_file_name)
@@ -179,7 +229,7 @@ def get_datasets(load_external=True, force_reload=False):
     global _DATASETS
     if _DATASETS is None or force_reload:
         _DATASETS = {
-            "terms": load_csv_with_types(INTERNAL_ALL_TYPES_CSV),
+            "terms": load_csv_with_types_url(REMOTE_TERMS_URL),
             "experimental": load_experimental_csv(INTERNAL_EXPERIMENTAL_CSV),
             "body_armors": load_body_armors(INTERNAL_BODY_ARMORS_TXT),
             "currency": {},
