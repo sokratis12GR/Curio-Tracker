@@ -194,24 +194,32 @@ def load_csv_from_url(url, row_parser=None, skip_header=True):
 
 _REMOTE_TERMS_CACHE = None
 
-def load_csv_with_types_url(url) -> dict:
+def load_remote_terms(url="https://sokratis.space/curio_tracker/terms.json"):
     global _REMOTE_TERMS_CACHE
 
-    if _REMOTE_TERMS_CACHE is not None:
+    if _REMOTE_TERMS_CACHE:
         return _REMOTE_TERMS_CACHE
 
-    def parser(row):
-        if len(row) >= 2:
-            raw_term, type_name = row[0].strip(), row[1].strip()
-            return smart_title_case(raw_term), type_name
-        return None
+    try:
+        print(f"Fetching remote JSON from {url} ...")
+        with urllib.request.urlopen(url) as response:
+            data = json.loads(response.read().decode("utf-8"))
 
-    rows = load_csv_from_url(url, row_parser=parser)
-    _REMOTE_TERMS_CACHE = {term: type_name for term, type_name in rows if term}
+        parsed = {}
+        for entry in data:
+            name = entry.get("Name", "").strip()
+            type_name = entry.get("Type", "").strip()
+            if name:
+                parsed[smart_title_case(name)] = type_name
 
-    return _REMOTE_TERMS_CACHE
+        _REMOTE_TERMS_CACHE = parsed
+        print(f"Successfully loaded remote JSON ({len(parsed)} terms).")
+        return parsed
 
-REMOTE_TERMS_URL = "https://sokratis.space/curio_tracker/terms.csv"
+    except Exception as e:
+        print(f"Failed to fetch remote JSON: {e}")
+        print("No internal fallback — returning empty dataset.")
+        return {}
 
 LOG_FILE = get_data_path(c.logs_file_name)
 SETTINGS_PATH = get_data_path(c.settings_file_name)
@@ -220,7 +228,6 @@ OUTPUT_CURRENCY_CSV = get_data_path(c.currency_fetch_file_name)
 OUTPUT_TIERS_CSV = get_data_path(c.tiers_fetch_file_name)
 OUTPUT_COLLECTION_CSV = get_data_path(c.collection_fetch_file_name)
 OUTPUT_LEAGUES_CSV = get_data_path(c.poeladder_leagues_fetch_file_name)
-INTERNAL_ALL_TYPES_CSV = get_resource_path(c.file_all_valid_heist_terms)
 INTERNAL_EXPERIMENTAL_CSV = get_resource_path(c.file_experimental_items)
 INTERNAL_BODY_ARMORS_TXT = get_resource_path(c.file_body_armors)
 
@@ -229,7 +236,7 @@ def get_datasets(load_external=True, force_reload=False):
     global _DATASETS
     if _DATASETS is None or force_reload:
         _DATASETS = {
-            "terms": load_csv_with_types_url(REMOTE_TERMS_URL),
+            "terms": load_remote_terms(),
             "experimental": load_experimental_csv(INTERNAL_EXPERIMENTAL_CSV),
             "body_armors": load_body_armors(INTERNAL_BODY_ARMORS_TXT),
             "currency": {},
