@@ -3,16 +3,15 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+import win32api
 
 import requests
 
 # ======================
 GITHUB_OWNER = "sokratis12GR"
 GITHUB_REPO = "Curio-Tracker"
-APP_NAMES = [
-    "Heist Curio Tracker.exe",
-    "Heist.Curio.Tracker.exe",
-]
+PRODUCT_NAME = "Heist Curio Tracker"
+
 EXPECTED_SIGNER = "Sokratis Fotkatzikis"
 # ======================
 
@@ -52,10 +51,24 @@ def verify_signature(file_path):
     return EXPECTED_SIGNER in result.stdout.strip()
 
 def find_existing_app(base_dir):
-    for name in APP_NAMES:
-        path = base_dir / name
-        if path.exists():
-            return path
+    for file in base_dir.glob("*.exe"):
+        try:
+            info = win32api.GetFileVersionInfo(str(file), "\\")
+            lang, codepage = win32api.GetFileVersionInfo(
+                str(file), r"\VarFileInfo\Translation"
+            )[0]
+
+            product = win32api.GetFileVersionInfo(
+                str(file),
+                f"\\StringFileInfo\\{lang:04x}{codepage:04x}\\ProductName"
+            )
+
+            if PRODUCT_NAME.lower() in product.lower():
+                return file
+
+        except Exception:
+            pass
+
     return None
 
 def main():
@@ -64,7 +77,7 @@ def main():
 
     if not app_path:
         print("[ERROR] Could not find existing application executable.")
-        print("Expected one of:", APP_NAMES)
+        print(f"Expected ProductName: {PRODUCT_NAME}")
         return
 
     temp_file = base_dir / "update_tmp.exe"
@@ -78,7 +91,7 @@ def main():
     exe_url = None
     for asset in release.get("assets", []):
         name = asset["name"].lower()
-        if name in ["heist.curio.tracker.exe", "heist curio tracker.exe"]:
+        if "tracker" in name and name.endswith(".exe"):
             exe_url = asset["browser_download_url"]
             break
 
