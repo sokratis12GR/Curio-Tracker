@@ -32,12 +32,12 @@ class CSVManager(BaseDataManager):
         except OSError as e:
             log_message(f"[ERROR] CSV write failed: {e}")
 
-    def get_next_record_number(self):
+    def get_next_record_number(self, force=False):
         from settings import set_setting, get_setting
 
         if self.last_record_number == 0:
             self.last_record_number = get_setting("Application", "csv_current_row", 0)
-            if self.last_record_number == 0 and self.file_path.exists():
+            if (self.last_record_number == 0 or force) and self.file_path.exists():
                 try:
                     with self.file_path.open("r", encoding="utf-8") as f:
                         for row in reversed(list(csv.reader(f))):
@@ -155,6 +155,10 @@ class CSVManager(BaseDataManager):
             return
 
         changed = False
+
+        for i, row in enumerate(rows, start=1):
+            row[csv_record_header] = str(i)
+            changed = True
 
         for i, row in enumerate(rows, start=1):
 

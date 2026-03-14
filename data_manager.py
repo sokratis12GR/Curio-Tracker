@@ -11,7 +11,7 @@ class BaseDataManager(ABC):
         pass
 
     @abstractmethod
-    def get_next_record_number(self):
+    def get_next_record_number(self, force=False):
         pass
 
     @abstractmethod

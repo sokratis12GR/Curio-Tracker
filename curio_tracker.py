@@ -713,6 +713,7 @@ def init_data():
     log_message("Starting Heist Curio Tracker...")
     reload_data_manager()
     data_mgr.upgrade_structure()
+    data_mgr.get_next_record_number(force=True)
     populate_recent_terms()
 
 

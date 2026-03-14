@@ -35,12 +35,12 @@ class JSONManager(BaseDataManager):
         except Exception as e:
             log_message(f"[ERROR] JSON save failed: {e}")
 
-    def get_next_record_number(self):
+    def get_next_record_number(self, force=False):
         from settings import set_setting, get_setting
 
         if self.last_record_number == 0:
             self.last_record_number = get_setting("Application", "json_current_row", 0)
-            if self.last_record_number == 0:
+            if (self.last_record_number == 0 or force) and self.file_path.exists():
                 rows = self.load_dict()
                 if rows:
                     last = rows[-1].get(csv_record_header)
@@ -181,6 +181,9 @@ class JSONManager(BaseDataManager):
             return
 
         changed = False
+        for i, row in enumerate(rows, start=1):
+            row[csv_record_header] = str(i)
+            changed = True
 
         for i, row in enumerate(rows, start=1):
 
