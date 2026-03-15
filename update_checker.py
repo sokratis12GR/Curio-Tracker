@@ -16,7 +16,7 @@ def version_tuple(v: str):
     return tuple(int(x) for x in v.strip("v").split("."))
 
 
-def check_for_updates(root, show_uptodate_popup=False):
+def check_for_updates(root, show_uptodate_popup=False, blocking=False):
     def worker():
         try:
             url = "https://api.github.com/repos/sokratis12GR/Curio-Tracker/releases/latest"
@@ -43,7 +43,11 @@ def check_for_updates(root, show_uptodate_popup=False):
             if show_uptodate_popup:
                 root.after(0, lambda: show_up_to_date_popup(root, None, error=True))
 
-    threading.Thread(target=worker, daemon=True).start()
+    if blocking:
+        worker()   # run immediately (no thread)
+    else:
+        threading.Thread(target=worker, daemon=True).start()
+
 
 def show_up_to_date_popup(root, latest_version=None, error=False):
     popup = ctk.CTkToplevel(root)
