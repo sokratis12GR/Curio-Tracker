@@ -28,7 +28,7 @@ class ItemOverviewFrame:
             border_color=("#e0e0e0", "#40444b"),
             fg_color=("#f4f6f8", "#2f3136")
         )
-        self.frame.grid(row=row_index_start, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+        self.frame.grid(row=row_index_start, column=0, columnspan=2, sticky="new", padx=5, pady=5)
 
         self.frame.configure(width=300)
         self.frame.grid_propagate(True)

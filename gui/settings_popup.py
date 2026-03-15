@@ -90,6 +90,8 @@ class UnifiedSettingsSection:
         )
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
+        self.csv_current_record_number_var = ctk.IntVar(value=(get_setting("Application", "csv_current_row", 0)))
+        self.json_current_record_number_var = ctk.IntVar(value=(get_setting("Application", "json_current_row", 0)))
         self.enable_poeladder_var = ctk.BooleanVar(
             value=get_setting("Application", "enable_poeladder", c.ENABLE_POELADDER))
         self.data_league_var = ctk.StringVar(value=get_setting("Application", "data_league", c.LEAGUE))
@@ -255,6 +257,17 @@ class UnifiedSettingsSection:
         reset_toasts_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 5))
         row += 1
 
+        # Current Record # -- Saved in memory and locally
+        ctk.CTkLabel(frame, text="CSV Current Record:").grid(row=row, column=0, sticky="w")
+        csv_record_entry = ctk.CTkEntry(frame, state="disabled", textvariable=self.csv_current_record_number_var, width=self.width)
+        csv_record_entry.grid(row=row, column=1, sticky="w")
+
+        row += 1
+        ctk.CTkLabel(frame, text="JSON Current Record:").grid(row=row, column=0, sticky="w")
+        json_record_entry = ctk.CTkEntry(frame, state="disabled", textvariable=self.json_current_record_number_var, width=self.width)
+        json_record_entry.grid(row=row, column=1, sticky="w")
+        row += 1
+
         # ---- Duplicate Check ----
         ctk.CTkLabel(frame, text="Seconds Between Dupe Checks:").grid(row=row, column=0, sticky="w")
         row += 1
@@ -340,6 +353,7 @@ class UnifiedSettingsSection:
 
         log_message("Toasts X Offset", offset)
         set_setting("Application", "toast_x_offset", offset)
+
 
     def _update_top_right_target_area_percent(self, *_):
         val = self.top_right_target_area_percent_var.get()

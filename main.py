@@ -129,6 +129,8 @@ def main():
     def initialize_app():
         try:
             player = get_setting("User", "poe_user", tracker.poe_user)
+            check_for_updates(root, blocking=True)
+
             fetch_tiers.run_fetch_curios()
             fetch_collection.run_fetch_curios_threaded(player)
             load_data()
@@ -166,10 +168,20 @@ def start_main_app(root, theme_mode, theme_manager):
     tracker.on_league_change()
 
     layout = create_layout(root)
+    top_frame = layout['top_frame']
+
     treeview = CustomTreeview(layout['tree_frame'], theme_mode, TREE_COLUMNS)
     tree = treeview.tree
     left_frame = layout['left_frame']
     right_frame = layout['right_frame']
+
+    lbl = CTkButton(top_frame, text="Open Collection")
+    lbl.grid(row=0, column=1, sticky="nsew", pady=(5, 2), padx=(5, 0))
+
+    lbl = CTkButton(top_frame, text="Blueprints Information")
+    lbl.grid(row=0, column=2, sticky="nsew", pady=(5, 2), padx=(5, 0))
+
+
     tree_manager = TreeManager(root, tree, theme_mode, tracker)
 
     for col in tree_manager.tree_columns:
@@ -195,7 +207,7 @@ def start_main_app(root, theme_mode, theme_manager):
     tree_manager.bind_overview(item_overview)
 
     menu_bar = create_settings_menu(
-        root,
+        top_frame,
         tracker=tracker,
         theme_manager=theme_manager,
         tree_manager=tree_manager,
@@ -221,7 +233,7 @@ def start_main_app(root, theme_mode, theme_manager):
         if DEBUGGING:
             print(f"[WARN] Could not initialize controller thread: {e}")
 
-    root.after(5000, lambda: check_for_updates(root))
+    # root.after(5000, lambda: check_for_updates(root))
 
     root.mainloop()
 

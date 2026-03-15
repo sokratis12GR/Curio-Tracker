@@ -10,11 +10,11 @@ def create_layout(root):
 
     # --- Top Frame (menu/toolbar) ---
     top_frame = CTkFrame(root, height=0, corner_radius=6)
-    top_frame.grid(row=0, column=0, columnspan=3, sticky="ew", padx=5)
+    top_frame.grid(row=0, column=0, columnspan=3, sticky="nsew", padx=5)
 
     # --- Left Frame ---
     left_frame = CTkFrame(root)
-    left_frame.grid(row=1, column=0, padx=(5, 10), pady=(2,10), sticky="nw")
+    left_frame.grid(row=1, column=0, padx=(5, 10), pady=(2,10), sticky="nsw")
 
     # --- Right Frame ---
     right_frame = CTkFrame(root)
@@ -33,10 +33,10 @@ def create_layout(root):
 
     # Toggle Buttons Frame below tree_frame
     toggle_frame = CTkFrame(right_frame)
-    toggle_frame.grid(row=1, column=0, sticky="sw", pady=(5, 0))
+    toggle_frame.grid(row=1, column=0, sticky="nsw", pady=(5, 0))
 
     total_frame = CTkFrame(right_frame)
-    total_frame.grid(row=1, column=1, sticky="w", pady=(5, 0))
+    total_frame.grid(row=1, column=1, sticky="nsw", pady=(5, 0))
 
     return {
         "top_frame": top_frame,

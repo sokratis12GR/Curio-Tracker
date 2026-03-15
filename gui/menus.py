@@ -15,7 +15,7 @@ from version_utils import VERSION
 
 def create_settings_menu(tabview, tracker, theme_manager, tree_manager: TreeManager, update_info_callback):
     menu_frame = ctk.CTkFrame(tabview, corner_radius=0)
-    menu_frame.grid(row=0, column=0, sticky="w", padx=5)
+    menu_frame.grid(row=0, column=0, sticky="nw", padx=5, pady=5)
 
     def handle_selection(choice):
         if choice == "Keybinds":
@@ -40,7 +40,7 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager: TreeMana
         values=file_menu_items,
         command=handle_selection,
         width=100,
-        anchor="w"
+        anchor="nw"
     )
     menu_dropdown.set("File")
     menu_dropdown.pack(side="left")
