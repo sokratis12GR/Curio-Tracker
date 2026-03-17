@@ -33,48 +33,40 @@ class CSVManager(BaseDataManager):
             log_message(f"[ERROR] CSV write failed: {e}")
 
     def get_next_record_number(self, force=False):
-        from settings import set_setting, get_setting
+        from settings import set_setting
 
-        if self.last_record_number == 0:
-            self.last_record_number = get_setting("Application", "csv_current_row", 0)
-            if (self.last_record_number == 0 or force) and self.file_path.exists():
-                try:
-                    with self.file_path.open("r", encoding="utf-8") as f:
-                        for row in reversed(list(csv.reader(f))):
-                            if row and row[0].isdigit():
-                                self.last_record_number = int(row[0])
-                                break
-                except Exception as e:
-                    log_message(f"[ERROR] Could not read CSV for record number: {e}")
-                    self.last_record_number = 0
+        if force or self.last_record_number == 0:
+            self.recalculate_record_number()
 
-        self.last_record_number += 1
+        if self.file_path.exists():
+            rows = self.load_dict()
+            existing_numbers = {int(row[csv_record_header]) for row in rows if row.get(csv_record_header, "").isdigit()}
+            next_number = 1
+            while next_number in existing_numbers:
+                next_number += 1
+            self.last_record_number = next_number
+        else:
+            self.last_record_number += 1
 
         set_setting("Application", "csv_current_row", self.last_record_number)
-
         return self.last_record_number
 
     def recalculate_record_number(self):
-        """Set last_record_number to the highest Record # in the CSV."""
         from settings import set_setting
 
-        try:
-            if not self.file_path.exists():
-                self.last_record_number = 0
-            else:
+        max_record = 0
+        if self.file_path.exists():
+            try:
                 with self.file_path.open("r", encoding="utf-8") as f:
                     reader = csv.DictReader(f)
-                    max_record = 0
                     for row in reader:
                         val = row.get(csv_record_header, "0")
                         if str(val).isdigit():
                             max_record = max(max_record, int(val))
-                    self.last_record_number = max_record
+            except Exception as e:
+                log_message(f"[ERROR] Could not read CSV for record number: {e}")
 
-        except Exception as e:
-            log_message(f"[ERROR] Could not read CSV for record number: {e}")
-            self.last_record_number = 0
-
+        self.last_record_number = max_record
         set_setting("Application", "csv_current_row", self.last_record_number)
         return self.last_record_number
 
@@ -182,13 +174,12 @@ class CSVManager(BaseDataManager):
 
         last_row = rows[-1].copy()
 
-        # Recalculate max record # from all rows
+        # Ensure last_record_number is current
         self.recalculate_record_number()
 
-        # Assign next unique record number
+        # Assign next unique number
         record_number = self.get_next_record_number()
         last_row[csv_record_header] = str(record_number)
-        self.last_record_number = record_number
 
         if csv_time_header in last_row:
             last_row[csv_time_header] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -198,10 +189,6 @@ class CSVManager(BaseDataManager):
         self.save_dict(root, rows, fieldnames=list(last_row.keys()))
 
         log_message(f"[INFO] Duplicated latest CSV entry → Record {record_number}")
-
-        from settings import set_setting
-        set_setting("Application", "csv_current_row", self.last_record_number)
-
         return last_row
 
     def ensure_data_file(self):
