@@ -7,8 +7,10 @@ import customtkinter
 from customtkinter import *
 
 from fonts import init_font_var, make_font
+from gui.collection_frame import CollectionPopup
 from gui.item_overview_frame import ItemOverviewFrame
 from gui.total_frame import TotalFrame
+from img_utils import preload_all_icons
 from logger import log_message
 from update_checker import check_for_updates
 
@@ -134,6 +136,8 @@ def main():
             fetch_tiers.run_fetch_curios()
             fetch_collection.run_fetch_curios_threaded(player)
             load_data()
+            preload_all_icons(parent=root)
+
             schedule_auto_update(root, player)
             set_tesseract_path()
             tracker.init_data()
@@ -175,7 +179,11 @@ def start_main_app(root, theme_mode, theme_manager):
     left_frame = layout['left_frame']
     right_frame = layout['right_frame']
 
-    lbl = CTkButton(top_frame, text="Open Collection")
+    lbl = CTkButton(
+        top_frame,
+        text="Open Collection",
+        command=lambda: CollectionPopup(parent=root, tracker=tracker).show()
+    )
     lbl.grid(row=0, column=1, sticky="nsew", pady=(5, 2), padx=(5, 0))
 
     lbl = CTkButton(top_frame, text="Blueprints Information")
