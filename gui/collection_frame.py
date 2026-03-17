@@ -1,4 +1,6 @@
 import threading
+import webbrowser
+
 import customtkinter as ctk
 from tkinter import ttk
 from PIL import Image
@@ -34,6 +36,8 @@ class CollectionPopup:
 
         main_frame = ctk.CTkFrame(popup)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        league_name = getattr(self.tracker, "league_version", "")
+        popup.title(f"{self.title} - {league_name}")
 
         search_entry = ctk.CTkEntry(main_frame, placeholder_text="Search...", textvariable=self.search_var)
         search_entry.pack(fill="x", pady=(0, 10))
@@ -41,6 +45,8 @@ class CollectionPopup:
 
         columns = ("Type", "Tier", "Owned")
         self.tree = ttk.Treeview(main_frame, columns=columns, show="tree headings", height=20)
+        self.tree.bind("<Double-1>", self.open_wiki)
+        self.tree.bind("<Motion>", self.on_hover)
 
         self.tree.heading("#0", text="Name", command=lambda: self.sort_by("#0"))
         self.tree.column("#0", width=250, anchor="w")
@@ -50,6 +56,7 @@ class CollectionPopup:
         self.tree.column("Tier", width=80, anchor="center")
         self.tree.heading("Owned", text="Owned", command=lambda: self.sort_by("Owned"))
         self.tree.column("Owned", width=60, anchor="center")
+
 
         scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
@@ -84,54 +91,84 @@ class CollectionPopup:
         popup.focus_force()
         popup.wait_window()
 
+    def on_hover(self, event):
+        col = self.tree.identify_column(event.x)
+        row = self.tree.identify_row(event.y)
+
+        if col == "#0" and row:
+            self.tree.config(cursor="hand2")
+        else:
+            self.tree.config(cursor="")
+
     def _wait_and_load(self):
-        # Wait until collection_dataset exists
-        while not getattr(self.tracker, "collection_dataset", None):
+        while not getattr(self.tracker, "COLLECTION_DATASET_ACTIVE", None):
             import time
             time.sleep(0.1)
         self._load_items_thread()
 
     def load_items(self):
         self.all_items.clear()
+
         datasets = get_datasets(load_external=False)
-        collection = getattr(self.tracker, "collection_dataset", {}) or {}
+        collection_active = getattr(self.tracker, "COLLECTION_DATASET_ACTIVE", {}) or {}
+
         tiers = datasets.get("tiers", {})
         terms = datasets.get("terms", {})
 
         items_by_name = {}
 
-        for league, items in collection.items():
-            for name, data in items.items():
-                normalized_name = name.lower()
+        for name, owned_flag in collection_active.items():
+            normalized_name = name.lower()
 
-                tier_info = None
-                for key, info in tiers.items():
-                    if key.lower() == normalized_name:
-                        tier_info = info
-                        break
+            # --- Tier lookup ---
+            tier_info = None
+            for key, info in tiers.items():
+                if key.lower() == normalized_name:
+                    tier_info = info
+                    break
 
-                type_name = None
-                for key, t_type in terms.items():
-                    if key.lower() == normalized_name:
-                        type_name = t_type
-                        break
+            # --- Type lookup ---
+            type_name = None
+            for key, t_type in terms.items():
+                if key.lower() == normalized_name:
+                    type_name = t_type
+                    break
 
-                if not type_name:
-                    type_name = tier_info.get("type") if tier_info else "Unknown"
+            if not type_name:
+                type_name = tier_info.get("type") if tier_info else "Unknown"
 
-                owned = "✔" if data.get("owned") else "✖"
-                display_name = f"{name} (Replica)" if type_name.lower() == "replica" else name
+            owned = "✔" if owned_flag else "✖"
+            display_name = f"{name} (Replica)" if type_name and type_name.lower() == "replica" else name
 
-                items_by_name[name] = {
-                    "name": display_name,
-                    "base_name": name,
-                    "type": type_name,
-                    "tier": tier_info.get("tier", "") if tier_info else "",
-                    "owned": owned,
-                    "img_url": tier_info.get("img") if tier_info else None,
-                }
+            items_by_name[name] = {
+                "name": display_name,
+                "base_name": name,
+                "type": type_name,
+                "tier": tier_info.get("tier", "") if tier_info else "",
+                "owned": owned,
+                "img_url": tier_info.get("img") if tier_info else None,
+                "wiki": tier_info.get("wiki") if tier_info else None,
+            }
 
         self.all_items = list(items_by_name.values())
+
+    def open_wiki(self, event):
+        row_id = self.tree.identify_row(event.y)
+        col = self.tree.identify_column(event.x)
+
+        # Only trigger if clicking the Name column (#0)
+        if col != "#0" or not row_id:
+            return
+
+        self.tree.selection_set(row_id)
+        item_index = self.tree.index(row_id)
+
+        if 0 <= item_index < len(self.all_items):
+            item = self.all_items[item_index]
+            wiki_url = item.get("wiki")
+
+            if wiki_url:
+                webbrowser.open(wiki_url)
 
     def _load_items_thread(self):
         self.load_items()
