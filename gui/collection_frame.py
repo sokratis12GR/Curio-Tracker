@@ -185,7 +185,6 @@ class CollectionPopup:
         else:
             self._sort_ascending = True  # default ascending
 
-        # Use proper elif chain
         if col == "#0":  # Name
             key_func = lambda x: x.get("base_name", x["name"]).lower()
         elif col == "Type":
