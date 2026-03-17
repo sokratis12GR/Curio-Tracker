@@ -544,6 +544,7 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
         duplicate = match["duplicate"]
         armor_flag = match["armor_enchant_flag"]
         weapon_flag = match["weapon_enchant_flag"]
+        current_number = data_mgr.get_next_record_number()
 
         item_type = term_types.get(utils.smart_title_case(term_title))
 
@@ -595,27 +596,32 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
 
 
 def write_entry(root, text, timestamp, allow_dupes=False) -> None:
-    global stack_sizes, body_armors, experimental_items, parsed_items, data_mgr
+    global stack_sizes, parsed_items, data_mgr
     parsed_items = []
 
     matched_terms = get_matched_terms(text, allow_dupes)
     process_text(root, text, allow_dupes, matched_terms)
 
+    if not matched_terms:
+        return
+
     rows_to_write = []
+
+    next_record_number = data_mgr.get_next_record_number(force=True)
 
     for match in matched_terms:
         term_title = match["term"]
         duplicate = match["duplicate"]
-        term_smart_title = utils.smart_title_case(term_title)
-        item_type = term_types.get(term_smart_title)
+        item_type = term_types.get(utils.smart_title_case(term_title))
         stack_size = stack_sizes.get(term_title, 1)
 
         if not allow_dupes and duplicate:
             continue
 
-        current_number = data_mgr.get_next_record_number()
-        mark_term_as_captured(term_title)
+        current_number = next_record_number
+        next_record_number += 1
 
+        mark_term_as_captured(term_title)
         item = build_parsed_item(
             record=current_number,
             term_title=term_title,
@@ -668,6 +674,8 @@ def write_entry(root, text, timestamp, allow_dupes=False) -> None:
         data_mgr.ensure_data_file()
         data_mgr.append_rows(rows_to_write, root)
 
+    data_mgr.last_record_number = next_record_number - 1
+
 
 def reload_data_manager():
     from settings import get_setting
@@ -713,7 +721,7 @@ def init_data():
     log_message("Starting Heist Curio Tracker...")
     reload_data_manager()
     data_mgr.upgrade_structure()
-    data_mgr.get_next_record_number(force=True)
+    data_mgr.get_next_record_number()
     populate_recent_terms()
 
 

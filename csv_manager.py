@@ -109,10 +109,21 @@ class CSVManager(BaseDataManager):
         write_header = not self.file_path.exists()
         fieldnames = list(rows[0].keys())
 
-        # Assign record numbers if missing
+        if self.file_path.exists():
+            try:
+                with self.file_path.open("r", encoding="utf-8") as f:
+                    reader = list(csv.DictReader(f))
+                    if reader:
+                        val = reader[-1].get(csv_record_header, "0")
+                        if str(val).isdigit():
+                            self.last_record_number = int(val)
+            except Exception as e:
+                log_message(f"[ERROR] Failed reading last record for append: {e}")
+
         for row in rows:
             if not row.get(csv_record_header):
-                row[csv_record_header] = str(self.get_next_record_number())
+                self.last_record_number += 1
+                row[csv_record_header] = str(self.last_record_number)
 
         try:
             with self.file_path.open("a", newline="", encoding="utf-8") as f:
@@ -127,15 +138,6 @@ class CSVManager(BaseDataManager):
             log_message(f"[ERROR] PermissionError: {e}")
         except OSError as e:
             log_message(f"[ERROR] CSV write failed: {e}")
-
-        # Update last_record_number to the max of appended rows
-        try:
-            appended_numbers = [int(row[csv_record_header]) for row in rows if
-                                str(row.get(csv_record_header, "")).isdigit()]
-            if appended_numbers:
-                self.last_record_number = max(appended_numbers)
-        except Exception as e:
-            log_message(f"[ERROR] Failed to update last_record_number: {e}")
 
         from settings import set_setting
         set_setting("Application", "csv_current_row", self.last_record_number)
