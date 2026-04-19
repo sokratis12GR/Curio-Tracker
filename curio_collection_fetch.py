@@ -122,6 +122,8 @@ def fetch_all_ladders(player: str):
                         name = smart_title_case(entry.get("name"))
                         if isinstance(name, str) and name.startswith("Replica "):
                             entry["name"] = name[len("Replica "):]
+                        elif isinstance(name, str):
+                            entry["name"] = name
                         entry["league"] = ladder_key
                     all_curios.extend(curios)
                 else:

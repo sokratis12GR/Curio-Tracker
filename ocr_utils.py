@@ -64,6 +64,29 @@ def smart_title_case(text):
     # Apply smart title casing to each word
     return re.sub(r"\b\w+'?s?\b", lambda m: fix_word(m.group(0)), text)
 
+def normalize_name_for_lookup(name: str) -> str:
+    if not name:
+        return name
+
+    normalized = name
+    normalized = normalized.replace(" Of The ", " of the ")
+    normalized = normalized.replace(" Of ", " of ")
+    normalized = normalized.replace("-Attuned", "-attuned")
+    normalized = normalized.replace("Three-Step", "Three-step")
+
+    return normalized
+
+def canonicalize(text: str) -> str:
+    if not text:
+        return ""
+
+    text = str(text)
+    text = text.replace("’", "'").replace("‘", "'").replace("`", "'")
+    text = remove_possessive_s(text)
+    text = re.sub(r"[^\w\s%';]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip().lower()
 
 def normalize_for_search(s: str) -> str:
     s = s.replace("—", " ").replace("“", " ").replace("”", " ")
