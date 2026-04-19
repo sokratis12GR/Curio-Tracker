@@ -75,7 +75,11 @@ To setup the poeladder function you need to go to https://www.pathofexile.com/my
 Open the tool -> File -> Settings -> PoE Profile: i.e `sokratis12GR#6608` | Data League: `Mercenaries` -> "Fetch Data"/Restart the app.
 
 # Video on how to use:
+ 
+https://youtu.be/7eR9DzgUWNk
 
+
+- (Older version)
 https://youtu.be/BW5GyrDTVss
 
 # Troubleshooting
