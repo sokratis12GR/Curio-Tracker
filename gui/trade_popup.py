@@ -1,4 +1,5 @@
 import json
+import threading
 import urllib.parse
 import webbrowser
 import os
@@ -6,6 +7,8 @@ import os
 import customtkinter as ctk
 from PIL import Image
 from customtkinter import CTkImage
+
+from img_utils import get_icon
 
 TRADE_URL_BASE = "https://www.pathofexile.com/trade/search"
 
@@ -34,18 +37,19 @@ BLUEPRINT_LAYOUTS = [
     "Blueprint: Underbelly",
 ]
 
-BLUEPRINT_ICONS = {
-    "Blueprint: Bunker": "assets/heist/bunker.png",
-    "Blueprint: Records Office": "assets/heist/records_office.png",
-    "Blueprint: Laboratory": "assets/heist/laboratory.png",
-    "Blueprint: Prohibited Library": "assets/heist/prohibited_library.png",
-    "Blueprint: Mansion": "assets/heist/mansion.png",
-    "Blueprint: Smuggler's Den": "assets/heist/smugglers_den.png",
-    "Blueprint: Repository": "assets/heist/repository.png",
-    "Blueprint: Tunnels": "assets/heist/tunnels.png",
-    "Blueprint: Underbelly": "assets/heist/underbelly.png",
-}
+ASSET_BASE = "https://sokratis.space/curio_tracker/assets/heist"
 
+BLUEPRINT_ICONS = {
+    "Blueprint: Bunker": f"{ASSET_BASE}/bunker.png",
+    "Blueprint: Records Office": f"{ASSET_BASE}/records_office.png",
+    "Blueprint: Laboratory": f"{ASSET_BASE}/laboratory.png",
+    "Blueprint: Prohibited Library": f"{ASSET_BASE}/prohibited_library.png",
+    "Blueprint: Mansion": f"{ASSET_BASE}/mansion.png",
+    "Blueprint: Smuggler's Den": f"{ASSET_BASE}/smugglers_den.png",
+    "Blueprint: Repository": f"{ASSET_BASE}/repository.png",
+    "Blueprint: Tunnels": f"{ASSET_BASE}/tunnels.png",
+    "Blueprint: Underbelly": f"{ASSET_BASE}/underbelly.png",
+}
 
 # ---------------- TRADE URL | QUERY ----------------
 def build_blueprint_trade_url(
@@ -148,7 +152,7 @@ class QuickTradePopup:
     CARD_H = 78
 
     COLLAPSED_HEIGHT = 390
-    EXPANDED_HEIGHT = 720
+    EXPANDED_HEIGHT = 640
 
     def __init__(self, parent):
 
@@ -162,27 +166,39 @@ class QuickTradePopup:
 
         self.filters_open = True
 
-        self._load_icons()
+        self.placeholder = CTkImage(
+            light_image=Image.new("RGBA", (32, 32), (150, 150, 150, 255)),
+            dark_image=Image.new("RGBA", (32, 32), (150, 150, 150, 255)),
+            size=(32, 32)
+        )
+
+        self.icons = {}
+        threading.Thread(target=self._wait_and_load_icons, daemon=True).start()
+
         self._build()
 
     # ---------------- ICON SAFE LOAD ----------------
 
-    def _load_icons(self):
-        self.icons = {}
+    def _wait_and_load_icons(self):
+        self.all_icons = {}
 
-        for k, path in BLUEPRINT_ICONS.items():
-            try:
-                if os.path.exists(path):
-                    img = Image.open(path).convert("RGBA")
-                    self.icons[k] = CTkImage(img, img, size=(self.ICON_SIZE, self.ICON_SIZE))
-                else:
-                    raise FileNotFoundError
-            except:
-                self.icons[k] = CTkImage(
-                    Image.new("RGBA", (32, 32), (120, 120, 120, 255)),
-                    Image.new("RGBA", (32, 32), (120, 120, 120, 255)),
-                    size=(32, 32)
-                )
+        for k, url in BLUEPRINT_ICONS.items():
+            tk_img = get_icon(
+                name=k,
+                url=url,
+                size=(self.ICON_SIZE, self.ICON_SIZE),
+                placeholder=self.placeholder,
+                parent=self.popup,
+                return_pil=False,
+            )
+
+            self.all_icons[k] = tk_img or self.placeholder
+
+        self.popup.after(0, self._apply_icons)
+
+    def _apply_icons(self):
+        self.icons = self.all_icons
+        self._build()
 
     # ---------------- BUILD UI ----------------
 
@@ -209,33 +225,45 @@ class QuickTradePopup:
         row += 1
 
         for i in range(3):
-            grid.grid_columnconfigure(i, weight=1)
+            grid.grid_columnconfigure(i, weight=1, uniform="tiles")
 
         for i, b in enumerate(BLUEPRINT_LAYOUTS):
             r, c = divmod(i, 3)
 
-            frame = ctk.CTkFrame(grid, width=80, height=78, corner_radius=10)
-            frame.grid(row=r, column=c, padx=3, pady=3)
-            frame.grid_propagate(False)
-
-            icon = self.icons.get(b)
-
-            btn = ctk.CTkButton(
-                frame,
-                text="",
-                image=icon,
-                fg_color="transparent",
-                hover_color=("gray80", "gray22"),
-                command=lambda x=b: self._select_blueprint(x)
+            frame = ctk.CTkFrame(
+                grid,
+                corner_radius=10,
+                fg_color=("gray90", "gray13")
             )
-            btn.pack(pady=(10, 2))
 
-            ctk.CTkLabel(
+            frame.grid(row=r, column=c, padx=3, pady=3, sticky="nsew")
+
+            icon = self.icons.get(b, self.placeholder)
+
+            icon_label = ctk.CTkLabel(frame, text="", image=icon)
+            icon_label.pack(expand=True)
+
+            text_label = ctk.CTkLabel(
                 frame,
                 text=b.replace("Blueprint: ", ""),
                 font=("Segoe UI", 9)
-            ).pack()
+            )
+            text_label.pack()
 
+            def bind_tile(widget, name=b):
+                widget.bind("<Button-1>", lambda e, n=name: self._select_blueprint(n))
+                widget.configure(cursor="hand2")
+
+            def on_enter(e, f=frame):
+                f.configure(fg_color=("gray80", "gray25"))
+
+            def on_leave(e, f=frame):
+                f.configure(fg_color=("gray90", "gray13"))
+
+            for w in (frame, icon_label, text_label):
+                bind_tile(w)
+                w.bind("<Enter>", on_enter)
+                w.bind("<Leave>", on_leave)
 
 
         # ---------------- FILTER TOGGLE ----------------
