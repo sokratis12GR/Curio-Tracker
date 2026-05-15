@@ -10,9 +10,11 @@ from fonts import init_font_var, make_font
 from gui.collection_frame import CollectionPopup
 from gui.item_overview_frame import ItemOverviewFrame
 from gui.total_frame import TotalFrame
+from gui.trade_popup import show_quick_trade_popup
 from img_utils import preload_all_icons
 from logger import log_message
 from update_checker import check_for_updates
+from version_utils import get_version
 
 _original_destroy = customtkinter.CTkButton.destroy
 
@@ -159,7 +161,7 @@ def main():
 
 
 def start_main_app(root, theme_mode, theme_manager):
-    root.title("Heist Curio Tracker")
+    root.title(f"Heist Curio Tracker - v{get_version()}")
     root.geometry("1200x720")
     root.resizable(True, True)
 
@@ -186,9 +188,16 @@ def start_main_app(root, theme_mode, theme_manager):
     )
     lbl.grid(row=0, column=1, sticky="nsew", pady=(5, 2), padx=(5, 0))
 
-    lbl = CTkButton(top_frame, text="Blueprints Information")
-    lbl.grid(row=0, column=2, sticky="nsew", pady=(5, 2), padx=(5, 0))
+    # lbl_bp = CTkButton(top_frame, text="Blueprints Information")
+    # lbl_bp.grid(row=0, column=2, sticky="nsew", pady=(5, 2), padx=(5, 0)) # TODO: ADD Blueprint encyclopedia with information about traps, monster types, side rooms, etc...
+    quick_trade_btn = CTkButton(
+        top_frame,
+        text="Quick Trade",
+        command=lambda: show_quick_trade_popup(top_frame)
+    )
+    quick_trade_btn.grid(row=0, column=3, sticky="nsew", pady=(5, 2), padx=(5, 0))
 
+    # quick_trade_btn.pack()
 
     tree_manager = TreeManager(root, tree, theme_mode, tracker)
 
