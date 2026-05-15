@@ -47,7 +47,7 @@ BLUEPRINT_ICONS = {
 }
 
 
-# ---------------- TRADE URL ----------------
+# ---------------- TRADE URL | QUERY ----------------
 def build_blueprint_trade_url(
     blueprint_type,
     league="Mirage",
