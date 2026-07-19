@@ -12,6 +12,9 @@ from customtkinter import CTkImage
 class CollectionPopup:
     ICON_SIZE = 24  # icon width/height
 
+    _cached_items = None
+    _cache_lock = threading.Lock()
+
     def __init__(self, parent=None, tracker=None, title="Collection"):
         self.parent = parent
         self.tracker = tracker
@@ -107,50 +110,78 @@ class CollectionPopup:
         self._load_items_thread()
 
     def load_items(self):
-        self.all_items.clear()
-
-        datasets = get_datasets(load_external=False)
         collection_active = getattr(self.tracker, "COLLECTION_DATASET_ACTIVE", {}) or {}
 
-        tiers = datasets.get("tiers", {})
-        terms = datasets.get("terms", {})
+        # Build the cache only once
+        if CollectionPopup._cached_items is None:
+            with CollectionPopup._cache_lock:
+                if CollectionPopup._cached_items is None:
+                    datasets = get_datasets(load_external=False)
 
-        items_by_name = {}
+                    tiers = datasets.get("tiers", {})
+                    terms = datasets.get("terms", {})
 
-        for name, owned_flag in collection_active.items():
-            normalized_name = name.lower()
+                    cached = []
 
-            # --- Tier lookup ---
-            tier_info = None
-            for key, info in tiers.items():
-                if key.lower() == normalized_name:
-                    tier_info = info
-                    break
+                    for name in collection_active.keys():
+                        normalized_name = name.lower()
 
-            # --- Type lookup ---
-            type_name = None
-            for key, t_type in terms.items():
-                if key.lower() == normalized_name:
-                    type_name = t_type
-                    break
+                        # Tier lookup
+                        tier_info = None
+                        for key, info in tiers.items():
+                            if key.lower() == normalized_name:
+                                tier_info = info
+                                break
 
-            if not type_name:
-                type_name = tier_info.get("type") if tier_info else "Unknown"
+                        # Type lookup
+                        type_name = None
+                        for key, t_type in terms.items():
+                            if key.lower() == normalized_name:
+                                type_name = t_type
+                                break
 
-            owned = "✔" if owned_flag else "✖"
-            display_name = f"{name} (Replica)" if type_name and type_name.lower() == "replica" else name
+                        if not type_name:
+                            type_name = tier_info.get("type") if tier_info else "Unknown"
 
-            items_by_name[name] = {
-                "name": display_name,
-                "base_name": name,
-                "type": type_name,
-                "tier": tier_info.get("tier", "") if tier_info else "",
-                "owned": owned,
-                "img_url": tier_info.get("img") if tier_info else None,
-                "wiki": tier_info.get("wiki") if tier_info else None,
-            }
+                        display_name = (
+                            f"{name} (Replica)"
+                            if type_name and type_name.lower() == "replica"
+                            else name
+                        )
 
-        self.all_items = list(items_by_name.values())
+                        cached.append({
+                            "name": display_name,
+                            "base_name": name,
+                            "type": type_name,
+                            "tier": tier_info.get("tier", "") if tier_info else "",
+                            "img_url": tier_info.get("img") if tier_info else None,
+                            "wiki": tier_info.get("wiki") if tier_info else None,
+                        })
+
+                    # Preload icons ONCE
+                    for item in cached:
+                        item["_tk_img"] = (
+                                get_icon(
+                                    name=item["name"],
+                                    url=item.get("img_url"),
+                                    size=(self.ICON_SIZE, self.ICON_SIZE),
+                                    placeholder=self.placeholder,
+                                    parent=self.parent,
+                                    return_pil=False,
+                                )
+                                or self.placeholder
+                        )
+
+                    CollectionPopup._cached_items = cached
+
+        # Build this popup's list from the cache
+        self.all_items = []
+
+        for cached_item in CollectionPopup._cached_items:
+            item = cached_item.copy()
+            owned = collection_active.get(item["base_name"], False)
+            item["owned"] = "✔" if owned else "✖"
+            self.all_items.append(item)
 
     def open_wiki(self, event):
         row_id = self.tree.identify_row(event.y)
@@ -172,18 +203,6 @@ class CollectionPopup:
 
     def _load_items_thread(self):
         self.load_items()
-
-        # Preload icons for all items
-        for item in self.all_items:
-            tk_img = get_icon(
-                name=item["name"],
-                url=item.get("img_url"),
-                size=(self.ICON_SIZE, self.ICON_SIZE),
-                placeholder=self.placeholder,
-                parent=self.parent,
-                return_pil=False,
-            )
-            item["_tk_img"] = tk_img or self.placeholder
 
         if self.parent:
             self.parent.after(0, self.refresh_tree)

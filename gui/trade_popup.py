@@ -8,6 +8,7 @@ import customtkinter as ctk
 from PIL import Image
 from customtkinter import CTkImage
 
+from config import LEAGUE
 from img_utils import get_icon
 
 TRADE_URL_BASE = "https://www.pathofexile.com/trade/search"
@@ -54,7 +55,7 @@ BLUEPRINT_ICONS = {
 # ---------------- TRADE URL | QUERY ----------------
 def build_blueprint_trade_url(
     blueprint_type,
-    league="Mirage",
+    league=LEAGUE,
     wings_min=4,
     wings_max=4,
     ilvl_min=83,
