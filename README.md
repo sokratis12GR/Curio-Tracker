@@ -31,7 +31,7 @@ Alt+3 - Highlights the highest value curio in the wing
 
 ### Example Usages of the tool:
 
-<img width="1917" height="1030" alt="image" src="https://github.com/user-attachments/assets/e6bfbebd-131d-4883-9175-028e3aca3895" />
+<img width="1917" height="1030" alt="image" src="https://i.imgur.com/0sxChtv.png" />
 
 ## Toasts when capturing a curio that showcase the captured item(s) in the top right of the screen:
 
