@@ -131,7 +131,9 @@ class UnifiedSettingsSection:
         row += 1
 
         # ---- HDR ----
-        ctk.CTkCheckBox(frame, text="Enable HDR Filtering (Experimental)", variable=self.enable_hdr_filtering_var,
+        ctk.CTkLabel(frame, text="(Experimental)", font=make_font(12, "bold")).grid(row=row, column=0, sticky="w")
+        row += 1
+        ctk.CTkCheckBox(frame, text="Enable HDR Filtering", variable=self.enable_hdr_filtering_var,
                         command=self._toggle_hdr).grid(
             row=row, column=0, columnspan=1, sticky="w"
         )
