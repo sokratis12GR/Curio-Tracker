@@ -75,11 +75,11 @@ info_show_keys_capture = None
 info_show_keys_snippet = None
 info_show_keys_layout = None
 info_show_keys_exit = None
-
+IS_HDR_ENABLED = False
 
 def initialize_settings():
     global capture_key, exit_key, layout_capture_key, snippet_key, duplicate_latest_key, delete_latest_key, show_highest_value_key, enable_debugging_key
-    global pytesseract_path, time_last_dupe_check_seconds, LEAGUE
+    global pytesseract_path, time_last_dupe_check_seconds, LEAGUE, IS_HDR_ENABLED
     from settings import get_setting, set_setting, write_settings
 
     # Ensure defaults exist
@@ -101,6 +101,7 @@ def initialize_settings():
     pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
     time_last_dupe_check_seconds = int(get_setting('Application', 'time_last_dupe_check_seconds', 60))
     LEAGUE = get_setting('Application', 'data_league')
+    IS_HDR_ENABLED = get_setting('Application', 'is_hdr_filtering_enabled')
 
 
 settings = DEFAULT_SETTINGS
@@ -276,6 +277,36 @@ TOAST_Y_OFFSET_MIN = 0
 TOAST_Y_OFFSET_MAX = 500
 TOAST_X_OFFSET_MIN = -4000
 TOAST_X_OFFSET_MAX = 4000
+
+### HDR START
+
+# Enchant (HDR shifted gray/beige)
+enchant_l_hsv_hdr = [0, 0, 80]
+enchant_u_hsv_hdr = [140, 80, 230]
+
+
+# Replica (HDR blue)
+replica_l_hsv_hdr = [90, 20, 70]
+replica_u_hsv_hdr = [140, 180, 255]
+
+
+# Rare (washed gold)
+rare_l_hsv_hdr = [15, 10, 80]
+rare_u_hsv_hdr = [50, 180, 255]
+
+
+# Currency (gray blue)
+currency_l_hsv_hdr = [80, 0, 100]
+currency_u_hsv_hdr = [140, 80, 255]
+
+
+# Scarab
+scarab_l_hsv_hdr = [0,0,100]
+scarab_u_hsv_hdr = [180,20,230]
+
+### HDR END
+
+### DEFAULT FILTERING
 
 ## Replica / Unique: #AF6025
 replica_l_hsv = [5, 100, 80]

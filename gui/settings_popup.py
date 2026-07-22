@@ -96,6 +96,9 @@ class UnifiedSettingsSection:
             value=get_setting("Application", "enable_poeladder", c.ENABLE_POELADDER))
         self.data_league_var = ctk.StringVar(value=get_setting("Application", "data_league", c.LEAGUE))
         self.poe_player_var = ctk.StringVar(value=get_setting("User", "poe_user", ""))
+
+        self.enable_hdr_filtering_var = ctk.BooleanVar(
+            value=get_setting("Application", "is_hdr_filtering_enabled", c.IS_HDR_ENABLED))
         self.dupe_duration = ctk.IntVar(value=get_setting("Application", "time_last_dupe_check_seconds", 60))
         self.font_selector_var = ctk.StringVar(value=get_setting("Application", "font_family", "Segoe UI"))
         self.collection_missing_color_var = ctk.StringVar(
@@ -126,8 +129,17 @@ class UnifiedSettingsSection:
         font_cb.grid(row=row, column=1, sticky="w")
         self.font_selector_var.trace_add("write", self._update_application_font)
         row += 1
+
+        # ---- HDR ----
+        ctk.CTkCheckBox(frame, text="Enable HDR Filtering (Experimental)", variable=self.enable_hdr_filtering_var,
+                        command=self._toggle_hdr).grid(
+            row=row, column=0, columnspan=1, sticky="w"
+        )
+        row += 1
+
         add_separator(frame, row)
         row += 1
+
 
         # ---- Player ----
         ctk.CTkLabel(frame, text="Player & League", font=make_font(13, "bold")).grid(
@@ -458,6 +470,12 @@ class UnifiedSettingsSection:
             self.dynamic_data_league_cb.configure(state=cb_state)
 
         self.tree_manager.refresh_treeview(self.tracker)
+
+    def _toggle_hdr(self):
+        enabled = self.enable_hdr_filtering_var.get()
+        set_setting("Application", "is_hdr_filtering_enabled", enabled)
+        log_message("HDR", enabled)
+        c.IS_HDR_ENABLED = enabled
 
     def _fetch_poeladder(self):
         player = self.poe_player_var.get().strip()

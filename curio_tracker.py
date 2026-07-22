@@ -217,7 +217,14 @@ def get_poe_bbox():
 #############################################################################
 def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
     if apply_filter:
+        if c.IS_HDR_ENABLED:
+            image_np = hdr_remove_shine(image_np)
+            if c.DEBUGGING:
+                cv2.imwrite("hdr_fixed.png", cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+
         image_np_filtered = filter_item_text(image_np)
+        if c.DEBUGGING:
+            cv2.imwrite("filtered.png", cv2.cvtColor(image_np_filtered, cv2.COLOR_RGB2BGR))
     else:
         image_np_filtered = image_np
 
@@ -245,6 +252,123 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
 
     return utils.smart_title_case(text), image_np
 
+# def hdr_remove_shine(image_np):
+#     hsv = cv2.cvtColor(
+#         image_np,
+#         cv2.COLOR_RGB2HSV
+#     )
+#
+#     h, s, v = cv2.split(hsv)
+#
+#     bg = cv2.GaussianBlur(
+#         v,
+#         (31, 31),
+#         0
+#     )
+#
+#     shine = cv2.subtract(v, bg)
+#
+#     v = np.where(
+#         shine > 150,
+#         v * 0.75,
+#         v
+#     )
+#
+#     v = np.clip(
+#         v,
+#         0,
+#         255
+#     ).astype(np.uint8)
+#
+#     hsv = cv2.merge([h, s, v])
+#
+#     rgb = cv2.cvtColor(
+#         hsv,
+#         cv2.COLOR_HSV2RGB
+#     )
+#
+#     gray = cv2.cvtColor(
+#         rgb,
+#         cv2.COLOR_RGB2GRAY
+#     )
+#
+#     clahe = cv2.createCLAHE(
+#         clipLimit=2.0,
+#         tileGridSize=(8, 8)
+#     )
+#     gray = clahe.apply(gray)
+#
+#     cv2.imwrite("01_rgb.png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+#     cv2.imwrite("02_gray.png", gray)
+#
+#     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+#
+#     clahe = cv2.createCLAHE(
+#         clipLimit=2.0,
+#         tileGridSize=(8, 8)
+#     )
+#     gray = clahe.apply(gray)
+#
+#     return gray
+
+#############################################################################
+# Experimental Shine Removal & Readability improvements for                 #
+# HDR Curio Tracking                                                        #
+#############################################################################
+def hdr_remove_shine(image_np):
+    if image_np.shape[-1] == 4:
+        image_np = cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
+
+    hsv = cv2.cvtColor(image_np, cv2.COLOR_RGB2HSV)
+
+    hue, sat, val = cv2.split(hsv)
+
+    height, width = val.shape
+
+    kernel = int(min(height, width) * 0.05)
+    kernel = max(31, min(kernel, 61))
+
+    if kernel % 2 == 0:
+        kernel += 1
+
+    bg = cv2.GaussianBlur(val, (kernel, kernel), 0)
+
+    shine = cv2.subtract(val, bg)
+
+    val_float = val.astype(np.float32)
+
+    mask = (shine > 210) & (val > 240)
+
+    val_float[mask] *= 0.90
+
+    val = np.clip(val_float, 0, 255).astype(np.uint8)
+
+    hsv = cv2.merge((hue, sat, val))
+
+    rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+
+    clahe = cv2.createCLAHE(
+        clipLimit=1.5,
+        tileGridSize=(8, 8)
+    )
+
+    gray = clahe.apply(gray)
+    if c.DEBUGGING:
+        cv2.imwrite("shine_mask.png", mask.astype(np.uint8) * 255)
+        print(
+            "VAL:",
+            val.min(),
+            val.max(),
+            "SHINE:",
+            shine.min(),
+            shine.max(),
+            "PERCENTILES:",
+            np.percentile(shine, [90, 95, 99, 99.9])
+        )
+    return cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+
 
 #############################################################
 # Saves the information on the screen based on colors       #
@@ -252,6 +376,7 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
 #############################################################
 def filter_item_text(image_np, fullscreen=False):
     img_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
     color_ranges = {
@@ -279,7 +404,6 @@ def filter_item_text(image_np, fullscreen=False):
         cv2.imwrite("ocr_debug_highlighted.png", debug_image)
 
     return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
-
 
 ####################################################################
 # Checks for a match of x/y and if currency applies the stack size #
