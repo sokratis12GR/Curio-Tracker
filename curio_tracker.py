@@ -44,6 +44,8 @@ else:
 # default values in case they only run area lvl 83 blueprints
 blueprint_area_level = c.default_bp_lvl
 blueprint_layout = c.default_bp_area
+bp_enchantment = c.SET_BP_ENCHANTMENT_FOR_RUNS
+
 poe_user = c.poe_user
 league_version = c.poe_league
 duplicate_duration_time = c.time_last_dupe_check_seconds
@@ -767,6 +769,7 @@ def write_entry(root, text, timestamp, allow_dupes=False) -> None:
             six_l_val=CURRENCY_DATASET.get(term_title, {}).get("six_link"),
             picked=False,
             owned=COLLECTION_DATASET_ACTIVE.get(term_title, False),
+            bp_enchantment=c.SET_BP_ENCHANTMENT_FOR_RUNS
         )
 
         parsed_items.append(item)
@@ -790,6 +793,8 @@ def write_entry(root, text, timestamp, allow_dupes=False) -> None:
             c.csv_flag_header: False,
             c.csv_time_header: timestamp,
             c.csv_picked_header: False,
+            c.csv_owned_header: COLLECTION_DATASET_ACTIVE.get(term_title, False),
+            c.csv_enchantment_header: c.SET_BP_ENCHANTMENT_FOR_RUNS
         }
 
         rows_to_write.append(row_dict)
@@ -838,6 +843,7 @@ def build_row_dict(record_number, term_title, item_type, stack_size, timestamp):
         c.csv_flag_header: False,
         c.csv_time_header: timestamp,
         c.csv_picked_header: False,
+        c.csv_enchantment_header: "None"
     }
 
 
@@ -880,6 +886,7 @@ def parse_items_from_rows(rows):
         timestamp = row.get(c.csv_time_header, "")
         # owned = row.get(c.csv_owned_header, "")
         picked = row.get(c.csv_picked_header, False)
+        bp_enchantment = row.get(c.csv_enchantment_header, "None")
 
         for col_name, inferred_type in column_to_type.items():
             value = row.get(col_name)
@@ -923,6 +930,7 @@ def parse_items_from_rows(rows):
                 img=img,
                 five_l_val=five_l_est,
                 six_l_val=six_l_est,
+                bp_enchantment=bp_enchantment
             )
             parsed_items.append(item)
 

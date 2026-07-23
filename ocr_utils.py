@@ -383,6 +383,7 @@ def build_parsed_item(
         img="",
         five_l_val="",
         six_l_val="",
+        bp_enchantment="None"
 ):
     ts = parse_timestamp(timestamp)
 
@@ -447,7 +448,8 @@ def build_parsed_item(
         wiki=wiki,
         img=img,
         five_l_val=five_l_val,
-        six_l_val=six_l_val
+        six_l_val=six_l_val,
+        bp_enchantment=bp_enchantment
     )
     if item_type == c.EXPERIMENTAL_TYPE:
         implicits_lines = experimental_items.get(term_title, [])

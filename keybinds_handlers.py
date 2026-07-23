@@ -218,6 +218,41 @@ def handle_show_highest_value(root, tree_manager: TreeManager, controls):
 
     log_message(f"[DEBUG] Highest value recent item: {item.item_name} ({parse_value(highest_entry)} chaos)")
 
+def handle_cycle_bp_enchantment(root):
+    try:
+        current = c.SET_BP_ENCHANTMENT_FOR_RUNS
+
+        try:
+            index = c.BP_ENCHANTMENT_OPTIONS.index(current)
+        except ValueError:
+            index = 0
+
+        index = (index + 1) % len(c.BP_ENCHANTMENT_OPTIONS)
+
+        new_enchantment = c.BP_ENCHANTMENT_OPTIONS[index]
+
+        c.SET_BP_ENCHANTMENT_FOR_RUNS = new_enchantment
+
+        tracker.bp_enchantment = new_enchantment
+
+        from settings import set_setting
+        set_setting("Blueprint","bp_enchantment", new_enchantment)
+
+        if are_toasts_enabled:
+            toasts.show_message(
+                root,
+                f"Blueprint Enchantment: {new_enchantment}",
+                duration=2500
+            )
+
+        if c.ENABLE_LOGGING:
+            tracker.log_message(
+                f"Blueprint Enchantment set to: {new_enchantment}"
+            )
+
+    except Exception as e:
+        if c.DEBUGGING:
+            print(e)
 
 def register_handlers(root, tree_manager, controls):
     return {
@@ -228,5 +263,7 @@ def register_handlers(root, tree_manager, controls):
         'duplicate_latest': lambda: handle_duplicate_latest(root, tree_manager, controls),
         'delete_latest': lambda: handle_delete_latest(root, tree_manager, controls),
         'show_highest_value': lambda: handle_show_highest_value(root, tree_manager, controls),
-        'debug': lambda: handle_debugging_toggle()
+        'debug': lambda: handle_debugging_toggle(),
+        'cycle_bp_enchantment': lambda: handle_cycle_bp_enchantment(root)
     }
+

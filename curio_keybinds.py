@@ -38,6 +38,7 @@ keybinds = [
     ("Delete Latest", hotkey_default('delete_latest'), 'delete_latest'),
     ("Show Highest Value", hotkey_default('show_highest_value'), 'show_highest_value'),
     ("Debugging", hotkey_default('debug'), 'debug'),
+    ("Cycle BP Enchantment", hotkey_default('cycle_bp_enchantment'), 'cycle_bp_enchantment'),
 ]
 
 DEFAULT_KEYBINDS = [
@@ -49,6 +50,7 @@ DEFAULT_KEYBINDS = [
     ("Delete Latest", 'alt+2', 'delete_latest'),
     ("Show Highest Value", 'alt+3', 'show_highest_value'),
     ("Debugging", 'alt+d', 'debug'),
+    ("Cycle BP Enchantment", "alt+4", "cycle_bp_enchantment"),
 ]
 
 # ---------------- Runtime storage ----------------

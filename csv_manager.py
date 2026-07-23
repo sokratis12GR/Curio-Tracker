@@ -144,29 +144,74 @@ class CSVManager(BaseDataManager):
 
     def upgrade_structure(self):
         rows = self.load_dict()
+
         if not rows:
             log_message(f"[INFO] File not found or empty: {self.file_path}")
             return
 
         changed = False
 
-        for i, row in enumerate(rows, start=1):
-            row[csv_record_header] = str(i)
-            changed = True
+        required_headers = self.get_csv_headers()
 
-        for i, row in enumerate(rows, start=1):
+        # Existing headers
+        # existing_headers = list(rows[0].keys())
+        existing_headers = [
+            h for h in rows[0].keys()
+            if h is not None
+        ]
 
-            if not str(row.get(csv_record_header, "")).isdigit():
+        for row in rows:
+            if None in row:
+                row.pop(None)
+                changed = True
+
+        # Add missing columns
+        for header in required_headers:
+            if header not in existing_headers:
+                existing_headers.append(header)
+                changed = True
+
+                # Default values for new columns
+                for row in rows:
+                    if header == csv_enchantment_header:
+                        row[header] = "None"
+                    elif header == csv_picked_header:
+                        row[header] = "False"
+                    elif header == csv_owned_header:
+                        row[header] = "False"
+                    else:
+                        row[header] = ""
+
+        # Fix record numbers
+        for i, row in enumerate(rows, start=1):
+            if row.get(csv_record_header) != str(i):
                 row[csv_record_header] = str(i)
                 changed = True
 
+        # Ensure required defaults
+        for row in rows:
             if not row.get(csv_picked_header):
                 row[csv_picked_header] = "False"
                 changed = True
 
+            if not row.get(csv_owned_header):
+                row[csv_owned_header] = "False"
+                changed = True
+
+            if not row.get(csv_enchantment_header):
+                row[csv_enchantment_header] = "None"
+                changed = True
+
         if changed:
-            self.save_dict(None, rows, fieldnames=list(rows[0].keys()))
-            log_message(f"[INFO] CSV structure upgraded → {self.file_path}")
+            self.save_dict(
+                None,
+                rows,
+                fieldnames=existing_headers
+            )
+
+            log_message(
+                f"[INFO] CSV structure upgraded → {self.file_path}"
+            )
 
     def duplicate_latest(self, root):
         rows = self.load_dict()
@@ -195,12 +240,37 @@ class CSVManager(BaseDataManager):
 
     def ensure_data_file(self):
         if not self.file_path.exists():
-            headers = [
-                "Record #", "League", "Logged By", "Blueprint Type", "Area Level",
-                "Trinket", "Replacement", "Replica", "Experimented Base Type",
-                "Weapon Enchantment", "Armor Enchantment", "Scarab", "Currency",
-                "Stack Size", "Variant", "Flag?", "Time", "Picked", "Owned"
-            ]
-            with open(self.file_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=headers)
+            with self.file_path.open(
+                    "w",
+                    newline="",
+                    encoding="utf-8"
+            ) as f:
+                writer = csv.DictWriter(
+                    f,
+                    fieldnames=self.get_csv_headers()
+                )
                 writer.writeheader()
+
+    def get_csv_headers(self):
+        return [
+            csv_record_header,
+            csv_league_header,
+            csv_loggedby_header,
+            csv_blueprint_header,
+            csv_area_level_header,
+            csv_trinket_header,
+            csv_replacement_header,
+            csv_replica_header,
+            csv_experimented_header,
+            csv_weapon_enchant_header,
+            csv_armor_enchant_header,
+            csv_scarab_header,
+            csv_currency_header,
+            csv_stack_size_header,
+            csv_variant_header,
+            csv_flag_header,
+            csv_time_header,
+            csv_picked_header,
+            csv_owned_header,
+            csv_enchantment_header,
+        ]

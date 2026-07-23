@@ -171,6 +171,7 @@ def start_main_app(root, theme_mode, theme_manager):
     tracker.poe_user = get_setting("User", "poe_user", tracker.poe_user)
     tracker.blueprint_layout = get_setting("Blueprint", "layout", tracker.blueprint_layout)
     tracker.blueprint_area_level = get_setting("Blueprint", "area_level", tracker.blueprint_area_level)
+    tracker.bp_enchantment = get_setting("Blueprint", "bp_enchantment", tracker.bp_enchantment)
     tracker.on_league_change()
 
     layout = create_layout(root)

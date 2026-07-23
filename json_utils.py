@@ -21,6 +21,7 @@ def rows_to_nested_json(rows: list[dict]) -> dict:
         league_name = row["League"]
         blueprint_name = row["Blueprint Type"]
         area_level = row["Area Level"]
+        bp_enchantment = row.get("BP Enchantment", "None")
         timestamp = row.get("Time", "")
         picked = row.get("Picked", False)
         stack_size = row.get("Stack Size", "")
@@ -60,11 +61,19 @@ def rows_to_nested_json(rows: list[dict]) -> dict:
             player["Leagues"].append(league)
 
         # Find or create blueprint
-        blueprint = next((b for b in league["Blueprints"] if b["Blueprint"] == blueprint_name), None)
+        blueprint = next(
+            (
+                b for b in league["Blueprints"]
+                if b["Blueprint"] == blueprint_name
+                   and b.get("BPEnchantment", "None") == bp_enchantment
+            ),
+            None
+        )
         if not blueprint:
             blueprint = {
                 "Blueprint": blueprint_name,
                 "AreaLevel": area_level,
+                "BPEnchantment": bp_enchantment,
                 "Rewards": []
             }
             league["Blueprints"].append(blueprint)
@@ -84,6 +93,7 @@ def nested_json_to_rows(nested: dict) -> list[dict]:
             for blueprint in league.get("Blueprints", []):
                 blueprint_name = blueprint["Blueprint"]
                 area_level = blueprint.get("AreaLevel", "")
+                bp_enchantment = blueprint.get("BPEnchantment", "None")
 
                 for reward in blueprint.get("Rewards", []):
                     row = {
@@ -92,6 +102,7 @@ def nested_json_to_rows(nested: dict) -> list[dict]:
                         "League": league_name,
                         "Blueprint Type": blueprint_name,
                         "Area Level": area_level,
+                        "BP Enchantment": bp_enchantment,
                         "Time": reward.get("Timestamp", ""),
                         "Picked": reward.get("Picked", False),
                         "Stack Size": reward.get("StackSize", "")

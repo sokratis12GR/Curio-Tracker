@@ -22,10 +22,35 @@ class JSONManager(BaseDataManager):
         try:
             with self.file_path.open("r", encoding="utf-8") as f:
                 nested = json.load(f)
+
+                changed = self.upgrade_json_enchantments(nested)
+
+                if changed:
+                    with self.file_path.open("w", encoding="utf-8") as out:
+                        json.dump(
+                            nested,
+                            out,
+                            ensure_ascii=False,
+                            indent=2
+                        )
+
             return nested_json_to_rows(nested)
         except Exception as e:
             log_message(f"[ERROR] JSON load failed: {e}")
             return []
+
+    def upgrade_json_enchantments(self, nested):
+        changed = False
+
+        for player in nested.get("Players", []):
+            for league in player.get("Leagues", []):
+                for blueprint in league.get("Blueprints", []):
+
+                    if "BPEnchantment" not in blueprint:
+                        blueprint["BPEnchantment"] = "None"
+                        changed = True
+
+        return changed
 
     def save_dict(self, root, rows, fieldnames):
         try:
@@ -102,10 +127,11 @@ class JSONManager(BaseDataManager):
                 row[csv_record_header] = str(self.get_next_record_number())
             player_name = row["Logged By"].split("#")[0]
             league_name = row["League"]
-            blueprint_name = row["Blueprint Type"]
-            area_level = row["Area Level"]
+            blueprint_name = row.get("Blueprint Type", "")
+            area_level = row.get("Area Level", "")
             timestamp = row.get("Time", "")
             picked = row.get("Picked", False)
+            bp_enchantment = row.get("BP Enchantment", "None")
 
             # Determine reward and type
             reward_name = ""
@@ -143,11 +169,19 @@ class JSONManager(BaseDataManager):
                 player["Leagues"].append(league)
 
             # Find or create blueprint
-            blueprint = next((b for b in league["Blueprints"] if b["Blueprint"] == blueprint_name), None)
+            blueprint = next(
+                (
+                    b for b in league["Blueprints"]
+                    if b["Blueprint"] == blueprint_name
+                       and b.get("BPEnchantment", "None") == bp_enchantment
+                ),
+                None
+            )
             if not blueprint:
                 blueprint = {
                     "Blueprint": blueprint_name,
                     "AreaLevel": area_level,
+                    "BPEnchantment": bp_enchantment,
                     "Rewards": []
                 }
                 league["Blueprints"].append(blueprint)
@@ -194,6 +228,13 @@ class JSONManager(BaseDataManager):
             if "Picked" not in row:
                 row["Picked"] = "False"
                 changed = True
+            if "Owned" not in row:
+                row["Owned"] = "False"
+                changed = True
+            if "BP Enchantment" not in row:
+                row["BP Enchantment"] = "None"
+                changed = True
+
 
         if changed:
             self.save_dict(None, rows, fieldnames=list(rows[0].keys()))

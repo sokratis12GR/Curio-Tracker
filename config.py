@@ -50,7 +50,8 @@ DEFAULT_SETTINGS = {
         'debug_key': 'alt+d',
         'duplicate_latest_key': 'alt+1',
         'delete_latest_key': 'alt+2',
-        'show_highest_value_key': 'alt+s'
+        'show_highest_value_key': 'alt+s',
+        "cycle_bp_enchantment_key": "alt+4"
     },
     'DEFAULT': {
         'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe',
@@ -69,6 +70,7 @@ duplicate_latest_key = None
 delete_latest_key = None
 show_highest_value_key = None
 enable_debugging_key = None
+cycle_bp_enchantment_key = None
 pytesseract_path = None
 time_last_dupe_check_seconds = None
 info_show_keys_capture = None
@@ -77,8 +79,9 @@ info_show_keys_layout = None
 info_show_keys_exit = None
 IS_HDR_ENABLED = False
 
+
 def initialize_settings():
-    global capture_key, exit_key, layout_capture_key, snippet_key, duplicate_latest_key, delete_latest_key, show_highest_value_key, enable_debugging_key
+    global capture_key, exit_key, layout_capture_key, snippet_key, duplicate_latest_key, delete_latest_key, show_highest_value_key, enable_debugging_key, cycle_bp_enchantment_key
     global pytesseract_path, time_last_dupe_check_seconds, LEAGUE, IS_HDR_ENABLED
     from settings import get_setting, set_setting, write_settings
 
@@ -98,6 +101,7 @@ def initialize_settings():
     delete_latest_key = get_setting('Hotkeys', 'delete_latest_key')
     show_highest_value_key = get_setting('Hotkeys', 'show_highest_value_key')
     enable_debugging_key = get_setting('Hotkeys', 'debug_key')
+    cycle_bp_enchantment_key = get_setting('Hotkeys', 'cycle_bp_enchantment_key')
     pytesseract_path = get_setting('DEFAULT', 'pytesseract_path')
     time_last_dupe_check_seconds = int(get_setting('Application', 'time_last_dupe_check_seconds', 60))
     LEAGUE = get_setting('Application', 'data_league')
@@ -143,6 +147,17 @@ time_options = [
     "Last week", "Last 2 weeks", "Last month", "Last year", "Custom..."
 ]
 
+BP_ENCHANTMENT_OPTIONS = [
+    "None",
+    "Heist Targets are always Currency or Scarabs",
+    "Heist Targets are always Replica Unique Items",
+    "Heist Targets are always Enchanted Armaments",
+    "Heist Targets are always Thieves' Trinkets",
+    "Heist Targets are always Experimented Items"
+]
+
+SET_BP_ENCHANTMENT_FOR_RUNS = BP_ENCHANTMENT_OPTIONS[0]
+
 TREE_COLUMNS = [
     {"id": "record", "label": "Record", "width": 100, "sort_reverse": True, "visible": True},
     {"id": "item", "label": "Item / Enchant", "width": 420, "sort_reverse": False, "visible": True},
@@ -158,6 +173,7 @@ TREE_COLUMNS = [
     {"id": "player", "label": "Found by", "width": 120, "sort_reverse": False, "visible": True},
     {"id": "league", "label": "League", "width": 100, "sort_reverse": False, "visible": True},
     {"id": "time", "label": "Time", "width": 150, "sort_reverse": True, "visible": True},
+    {"id": "bp_enchantment", "label": "BP Enchantment", "width": 350, "sort_reverse": True, "visible": True},
 ]
 
 COLOR = {
@@ -228,6 +244,7 @@ csv_time_header = "Time"
 csv_tier_header = "Tier"
 csv_picked_header = "Picked"
 csv_owned_header = "Owned"
+csv_enchantment_header = "BP Enchantment"
 
 csv_type_header = "Type"
 csv_value_header = "Value"
@@ -284,25 +301,21 @@ TOAST_X_OFFSET_MAX = 4000
 enchant_l_hsv_hdr = [0, 0, 80]
 enchant_u_hsv_hdr = [140, 80, 230]
 
-
 # Replica (HDR blue)
 replica_l_hsv_hdr = [90, 20, 70]
 replica_u_hsv_hdr = [140, 180, 255]
-
 
 # Rare (washed gold)
 rare_l_hsv_hdr = [15, 10, 80]
 rare_u_hsv_hdr = [50, 180, 255]
 
-
 # Currency (gray blue)
 currency_l_hsv_hdr = [80, 0, 100]
 currency_u_hsv_hdr = [140, 80, 255]
 
-
 # Scarab
-scarab_l_hsv_hdr = [0,0,100]
-scarab_u_hsv_hdr = [180,20,230]
+scarab_l_hsv_hdr = [0, 0, 100]
+scarab_u_hsv_hdr = [180, 20, 230]
 
 ### HDR END
 
