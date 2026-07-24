@@ -6,10 +6,11 @@ from statistics import median
 import pandas as pd
 import requests
 
-from config import LEAGUES_TO_FETCH
+from config import LEAGUES_TO_FETCH, APP_DISPLAY_NAME, DISCORD_USERNAME, CONTACT
 from load_utils import get_datasets, OUTPUT_CURRENCY_CSV, LOCK_FILE
 from logger import log_message
 from shared_lock import is_recent_run, update_lock
+from version_utils import VERSION
 
 # === THREADING FLAGS ===
 FETCH_DONE = threading.Event()
@@ -18,7 +19,13 @@ IS_FETCHING = False
 # === CONFIG ===
 MIN_SECONDS_BETWEEN_RUNS = 2 * 60 * 60  # 2 hours
 
-HEADERS = {"User-Agent": "fetch-poe-ninja-script/1.0"}
+HEADERS = {
+    "User-Agent": (
+        f"{APP_DISPLAY_NAME}/{VERSION} "
+        f"(Economy value fetcher for heist items; contact: {CONTACT} | discord: {DISCORD_USERNAME})"
+    ),
+    "Accept": "application/json",
+}
 VALID_TYPES = ["Currency", "Scarab", "Replica", "Replacement", "Experimental"]
 
 ITEMS_TYPE_MAP = get_datasets()["terms"]
@@ -63,8 +70,7 @@ def normalize_name_for_lookup(name: str) -> str:
     return normalized
 
 SESSION = requests.Session()
-SESSION.headers.update({"User-Agent": "fetch-poe-ninja-script/1.0"})
-
+SESSION.headers.update(HEADERS)
 
 def fetch_category(cat_name, api_endpoint, league):
     params = {"league": league}

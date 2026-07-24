@@ -37,7 +37,6 @@ from load_utils import get_resource_path
 _GLOBAL_ICON = None
 _GLOBAL_ICO = None
 
-
 def _ensure_icons(widget):
     global _GLOBAL_ICON, _GLOBAL_ICO
     if _GLOBAL_ICON is None:

@@ -1,10 +1,13 @@
+import json
 import threading
+import urllib.parse
 import webbrowser
 from PIL import Image, ImageTk
 from customtkinter import *
 from customtkinter import CTkImage
 from io import BytesIO
 
+import config
 import currency_utils
 from config import IMAGE_COL_WIDTH, ROW_HEIGHT
 from fonts import make_font
@@ -76,7 +79,7 @@ class ItemOverviewFrame:
         self.row_index += 1
 
         # Data Fields
-        self.fields = ["Wiki", "Type", "Est. Value", "5-L Value", "6-L Value", "Tier", "Stack Size", "Owned", "Picked"]
+        self.fields = ["Wiki", "Trade", "Type", "Est. Value", "5-L Value", "6-L Value", "Tier", "Stack Size", "Owned", "Picked"]
         for field in self.fields:
             lbl_field = CTkLabel(self.frame, text=f"{field}:", anchor="w", width=120)
             lbl_field.grid(row=self.row_index, column=0, sticky="w", padx=10, pady=(0, 5))
@@ -180,3 +183,61 @@ class ItemOverviewFrame:
             value_lbl.bind("<Button-1>", lambda e, url=wiki_url: webbrowser.open(url))
             field_lbl.grid()
             value_lbl.grid()
+
+        # --- Trade link (Replicas + Experimental only) ---
+        trade_url = generate_trade_url(item)
+
+        if trade_url:
+            field_lbl, value_lbl = self.label_pairs["Trade"]
+            value_lbl.configure(
+                font=make_font(12, underline=True),
+                text="Open Trade Search",
+                cursor="hand2"
+            )
+            value_lbl.unbind("<Button-1>")
+            value_lbl.bind(
+                "<Button-1>",
+                lambda e, url=trade_url: webbrowser.open(url)
+            )
+            field_lbl.grid()
+            value_lbl.grid()
+
+
+def generate_trade_url(item):
+    item_type = getattr(item, "type", None)
+    name = parse_item_name(item)
+
+    if not name or item_type not in ("Replica", "Experimental"):
+        return None
+
+    league = config.LEAGUE
+
+    query = {
+        "query": {
+            "filters": {
+                "type_filters": {
+                    "filters": {}
+                },
+                "misc_filters": {
+                    "filters": {
+                        "foulborn_item": {
+                            "option": "false"
+                        }
+                    }
+                }
+            },
+            "status": {
+                "option": "securable"
+            },
+            "name": name
+        }
+    }
+
+    encoded_query = urllib.parse.quote(
+        json.dumps(query, separators=(",", ":"))
+    )
+
+    return (
+        f"https://www.pathofexile.com/trade/search/"
+        f"{league}?q={encoded_query}"
+    )

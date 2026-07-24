@@ -5,6 +5,10 @@ import sys
 # LOADS THE SETTINGS VALUES SET IN USER_SETTINGS.INI                 #
 ######################################################################
 # -------------------- Paths --------------------
+APP_DISPLAY_NAME = "Heist Curio Tracker"
+CONTACT = "https://github.com/sokratis12GR/Curio-Tracker/issues"
+DISCORD_USERNAME = "sokratis12GR"
+
 APP_NAME = "HeistCurioTracker"
 if getattr(sys, 'frozen', False):
     # Running as bundled exe

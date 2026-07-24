@@ -5,9 +5,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import requests
 
+from config import APP_DISPLAY_NAME, CONTACT, DISCORD_USERNAME
 from load_utils import OUTPUT_COLLECTION_CSV, OUTPUT_LEAGUES_CSV
 from logger import log_message
 from ocr_utils import smart_title_case
+from version_utils import VERSION
 
 # === THREADING FLAGS ===
 FETCH_DONE = threading.Event()
@@ -15,7 +17,13 @@ IS_FETCHING = False
 PLAYER_LADDERS = {}
 
 # === CONFIG ===
-HEADERS = {"User-Agent": "fetch-poeladder-player-curios/1.0"}
+HEADERS = {
+    "User-Agent": (
+        f"{APP_DISPLAY_NAME}/{VERSION} "
+        f"(PoE collection tracker; contact: {CONTACT} | discord: {DISCORD_USERNAME})"
+    ),
+    "Accept": "application/json",
+}
 API_URL = "https://poeladder.com/api/v1/users/{player}/curio"
 
 # === SESSION FOR THREAD-SAFE REQUESTS ===
