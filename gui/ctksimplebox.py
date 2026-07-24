@@ -2,7 +2,7 @@ import customtkinter as ctk
 
 
 class CTkMessageBox:
-    def __init__(self, parent=None, min_size=(250, 20), max_size=(300, 100)):
+    def __init__(self, parent=None, min_size=(300, 120), max_size=(500, 400)):
         self.parent = parent
         self.min_size = min_size
         self.max_size = max_size
@@ -19,7 +19,12 @@ class CTkMessageBox:
         frame = ctk.CTkFrame(popup)
         frame.pack(padx=20, pady=20, fill="both", expand=True)
 
-        ctk.CTkLabel(frame, text=message, wraplength=300).pack(pady=(0, 10))
+        ctk.CTkLabel(
+            frame,
+            text=message,
+            wraplength=420,
+            justify="left"
+        ).pack(pady=(0, 10), padx=10)
 
         result = {"value": None}
 
@@ -40,10 +45,13 @@ class CTkMessageBox:
             ctk.CTkButton(frame, text="OK", command=on_ok, width=80).pack()
 
         # Center popup
-        popup.update_idletasks()
-        w, h = popup.winfo_width(), popup.winfo_height()
+        popup.update()
+        w = popup.winfo_reqwidth()
+        h = popup.winfo_reqheight()
+
         x = (popup.winfo_screenwidth() // 2) - (w // 2)
         y = (popup.winfo_screenheight() // 2) - (h // 2)
+
         popup.geometry(f"{w}x{h}+{x}+{y}")
 
         popup.wait_window()

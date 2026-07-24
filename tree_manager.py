@@ -1,7 +1,9 @@
+import math
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from tkinter import messagebox, Menu
+from tkinter import Menu
+from gui.ctksimplebox import CTkMessageBox
 
 from customtkinter import *
 from pytz import InvalidTimeError
@@ -29,6 +31,7 @@ class TreeManager:
         self.overview_frame = None
         self.tree = tree
         self.tracker = tracker
+        self.msgbox = CTkMessageBox(self.root)
         saved_mode = get_setting("Application", "export_mode", default="CSV").upper()
         base = Path(data_file_base)
 
@@ -217,7 +220,7 @@ class TreeManager:
         else:
             msg = f"Are you sure you want to delete these {len(selected)} records?"
 
-        confirm = messagebox.askyesno("Confirm Deletion", msg)
+        confirm = self.msgbox.askyesno("Confirm Deletion", msg)
         if not confirm:
             return
 
@@ -254,7 +257,7 @@ class TreeManager:
 
         if confirm:
             msg = f"Are you sure you want to delete this record?\n\n{item_name or iid}"
-            if not messagebox.askyesno("Confirm Deletion", msg):
+            if not self.msgbox.askyesno("Confirm Deletion", msg):
                 return False
 
         # Perform the deletion
@@ -273,7 +276,7 @@ class TreeManager:
 
     def delete_latest_entry(self):
         if not self.all_item_iids:
-            messagebox.showinfo("Info", "No entries available to delete.")
+            self.msgbox.showinfo("Info", "No entries available to delete.")
             return
 
         max_record_number = -1
@@ -287,7 +290,7 @@ class TreeManager:
                     continue
 
         if max_record_number == -1:
-            messagebox.showinfo("Info", "No record entries found to delete.")
+            self.msgbox.showinfo("Info", "No record entries found to delete.")
             return
 
         self.delete_item_from_tree(record_number=max_record_number)
@@ -314,17 +317,69 @@ class TreeManager:
         else:
             self.reapply_row_formatting()
             self.sort_tree("record")
+
+            self.msgbox.showinfo(
+                "Loading Complete",
+                f"Finished loading {len(items):,} records."
+            )
+
             if post_callback:
                 post_callback()
 
     # @pyinstrument.profile()
-    def load_all_items_threaded(self, tracker, post_callback=None, limit=None):
+    def load_all_items_threaded(
+            self,
+            tracker,
+            post_callback=None,
+            limit=None,
+            batch_size=200,
+            ask_confirmation=True,
+    ):
         self.clear_tree()
         self.should_cancel_process = False
 
+        if ask_confirmation:
+            try:
+                total_lines = self.data_mgr.get_record_count()
+            except AttributeError:
+                total_lines = len(tracker.load_all_parsed_items(self.data_mgr))
+
+            if limit is not None:
+                total_lines = min(total_lines, limit)
+
+            chunks = math.ceil(total_lines / batch_size)
+
+            seconds_per_item = 0.01
+
+            estimated_seconds = total_lines * seconds_per_item
+
+            if estimated_seconds < 60:
+                estimate_text = f"{estimated_seconds:.0f} seconds"
+            elif estimated_seconds < 3600:
+                estimate_text = f"{estimated_seconds / 60:.1f} minutes"
+            else:
+                estimate_text = f"{estimated_seconds / 3600:.1f} hours"
+
+            confirm = self.msgbox.askyesno(
+                "Load All Data",
+                f"This operation will load approximately:\n\n"
+                f"• Records: {total_lines:,}\n"
+                f"• Batches: {chunks:,}\n"
+                f"• Batch Size: {batch_size}\n"
+                f"• Estimated Time: {estimate_text}\n\n"
+                "Loading a very large dataset may make the application temporarily less responsive.\n\n"
+                "Do you want to continue?"
+            )
+
+            if not confirm:
+                return
+
         def worker():
             all_items = tracker.load_all_parsed_items(self.data_mgr)
-            all_items.sort(key=lambda item: getattr(item, "time", datetime.min), reverse=True)
+            all_items.sort(
+                key=lambda item: getattr(item, "time", datetime.min),
+                reverse=True
+            )
 
             if limit is not None:
                 all_items = all_items[:limit]
@@ -333,9 +388,9 @@ class TreeManager:
                 50,
                 self._add_items_in_batches,
                 all_items,
-                200,
+                batch_size,
                 0,
-                post_callback
+                post_callback,
             )
 
         threading.Thread(target=worker, daemon=True).start()
@@ -493,7 +548,7 @@ class TreeManager:
                 # Validate and update
                 stack_val = currency_utils.convert_to_int(new_value) if new_value != "" else ""
                 if stack_val != "" and not (1 <= stack_val <= 40):
-                    messagebox.showerror("Invalid Stack Size", "Enter a number between 1–40 or leave blank.")
+                    self.msgbox.showerror("Invalid Stack Size", "Enter a number between 1–40 or leave blank.")
                     return
 
                 self.tree.set(row_id, col_name, stack_val)
@@ -738,7 +793,7 @@ class TreeManager:
             if not new_value:
                 return
 
-            confirm = messagebox.askyesno(
+            confirm = self.msgbox.askyesno(
                 "Confirm Mass Change",
                 f"Change {len(selected)} rows?\n\n"
                 f"{column} → {new_value}"

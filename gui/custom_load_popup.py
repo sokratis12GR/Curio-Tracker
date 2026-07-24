@@ -1,3 +1,5 @@
+import time
+
 from customtkinter import CTkInputDialog
 
 from gui.ctksimplebox import CTkMessageBox
@@ -10,13 +12,14 @@ class CustomLoader:
         self.controls = controls
         self.tree_manager = tree_manager
         self.tracker = tracker
-
-        import tkinter.messagebox as messagebox
         self.msgbox = CTkMessageBox(root)
-        messagebox.showinfo = self.msgbox.showinfo
-        messagebox.showwarning = self.msgbox.showwarning
-        messagebox.showerror = self.msgbox.showerror
-        messagebox.askyesno = self.msgbox.askyesno
+
+        # import tkinter.messagebox as messagebox
+        # self.msgbox = CTkMessageBox(root)
+        # messagebox.showinfo = self.msgbox.showinfo
+        # messagebox.showwarning = self.msgbox.showwarning
+        # messagebox.showerror = self.msgbox.showerror
+        # messagebox.askyesno = self.msgbox.askyesno
 
     def run(self):
         try:
@@ -36,12 +39,41 @@ class CustomLoader:
             self.msgbox.showerror("Invalid Input", "Please enter a valid number.")
             return
 
+        estimated_seconds = max_items * 0.01
+
+        if estimated_seconds < 60:
+            estimate_text = f"{estimated_seconds:.0f} seconds"
+        elif estimated_seconds < 3600:
+            estimate_text = f"{estimated_seconds / 60:.1f} minutes"
+        else:
+            estimate_text = f"{estimated_seconds / 3600:.1f} hours"
+
+        confirm = self.msgbox.askyesno(
+            "Load Entries",
+            f"Load approximately:\n\n"
+            f"• Entries: {max_items:,}\n"
+            f"• Batch Size: 200\n"
+            f"• Estimated Time: {estimate_text}\n\n"
+            "Large loads may temporarily reduce responsiveness.\n\n"
+            "Continue?"
+        )
+
+        if not confirm:
+            return
+
         # Clear existing tree
+        self.load_start_time = time.perf_counter()
         self.tree_manager.clear_tree()
 
         all_items = self.tracker.load_all_parsed_items(self.tree_manager.data_mgr)
         if not all_items:
-            self.msgbox.showinfo("Load Entries", "No items available to load.")
+            elapsed = time.perf_counter() - self.load_start_time
+
+            self.msgbox.showinfo(
+                "Load Entries",
+                f"No items available to load.\n\n"
+                f"Completed in {elapsed:.1f} seconds."
+            )
             return
 
         # Reverse so newest first
@@ -62,7 +94,10 @@ class CustomLoader:
             self.tree_manager.reapply_row_formatting()
             self.tree_manager.filter_tree_by_time()
             self.controls.update_total_items_count()
+            elapsed = time.perf_counter() - self.load_start_time
+
             self.msgbox.showinfo(
                 "Load Entries",
-                f"Loaded {len(items)} entries successfully."
+                f"Loaded {len(items):,} entries successfully.\n\n"
+                f"Completed in {elapsed:.1f} seconds."
             )
