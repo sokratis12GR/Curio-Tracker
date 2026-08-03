@@ -33,15 +33,15 @@ ITEMS_TYPE_MAP = get_datasets()["terms"]
 ITEMS_TYPE_MAP["Chaos Orb"] = "Currency"
 
 CATEGORIES_API = {
-    "Currency": "currency",
-    "Scarabs": "item",
-    "Unique Flasks": "item",
-    "Unique Jewels": "item",
-    "Unique Accessories": "item",
-    "Unique Armours": "item",
-    "Unique Weapons": "item",
-    "Unique Map": "item",
-    "Base Types": "item"
+    "Currency": "exchange",
+    "Scarabs": "exchange",
+    "Unique Flasks": "stash",
+    "Unique Jewels": "stash",
+    "Unique Accessories": "stash",
+    "Unique Armours": "stash",
+    "Unique Weapons": "stash",
+    "Unique Map": "stash",
+    "Base Types": "stash"
 }
 
 ITEM_TYPE_MAP = {
@@ -69,25 +69,90 @@ def normalize_name_for_lookup(name: str) -> str:
 
     return normalized
 
+
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
 
+
 def fetch_category(cat_name, api_endpoint, league):
-    params = {"league": league}
-    params["type"] = "Currency" if api_endpoint == "currency" else ITEM_TYPE_MAP.get(cat_name, cat_name)
+    item_type = ITEM_TYPE_MAP.get(cat_name, cat_name)
+
+    if cat_name == "Currency":
+        item_type = "Currency"
+
+    if api_endpoint == "exchange":
+        url = (
+            "https://poe.ninja/poe1/api/economy/"
+            "exchange/current/overview"
+        )
+    else:
+        url = (
+            "https://poe.ninja/poe1/api/economy/"
+            "stash/current/item/overview"
+        )
+
+    params = {
+        "league": league,
+        "type": item_type
+    }
 
     try:
         resp = SESSION.get(
-            f"https://poe.ninja/poe1/api/economy/stash/current/{api_endpoint}/overview",
+            url,
             params=params,
             timeout=20
         )
         resp.raise_for_status()
-        data = resp.json().get("lines", [])
-        return cat_name, data
+
+        data = resp.json()
+
+        if api_endpoint == "exchange":
+            lines = normalize_exchange_data(data)
+        else:
+            lines = data.get("lines", [])
+
+        return cat_name, lines
+
     except Exception as e:
         print(f"Error fetching {cat_name}: {e}")
         return cat_name, []
+
+
+def normalize_exchange_data(data):
+    items_by_id = {
+        item.get("id"): item
+        for item in data.get("items", [])
+        if item.get("id")
+    }
+
+    core = data.get("core", {})
+    rates = core.get("rates", {})
+    divine_rate = rates.get("divine")
+
+    normalized_lines = []
+
+    for line in data.get("lines", []):
+        item_id = line.get("id")
+        item = items_by_id.get(item_id, {})
+
+        chaos_value = line.get("primaryValue")
+
+        divine_value = None
+        if isinstance(chaos_value, (int, float)) and isinstance(divine_rate, (int, float)):
+            divine_value = chaos_value * divine_rate
+
+        normalized_lines.append({
+            **line,
+            "name": item.get("name"),
+            "detailsId": item.get("detailsId"),
+            "image": item.get("image"),
+            "category": item.get("category"),
+            "chaosValue": chaos_value,
+            "chaosEquivalent": chaos_value,
+            "divineValue": divine_value
+        })
+
+    return normalized_lines
 
 
 def build_lookup_dict(category_data):
@@ -202,19 +267,54 @@ def fetch_all_items(league: str):
                 chaos_value = 1
                 buying = selling = 1
                 exalted_value = divine_value = "N/A"
-            elif csv_type == "Currency":
-                chaos_value = line.get("chaosEquivalent")
-                buying = selling = round(chaos_value, 2) if isinstance(chaos_value, (int, float)) else "N/A"
-                exalted_value = divine_value = "N/A"
+
+            elif csv_type in ("Currency", "Scarab"):
+                chaos_value = (
+                        line.get("chaosValue")
+                        or line.get("chaosEquivalent")
+                )
+
+                divine_value = line.get("divineValue")
+                exalted_value = "N/A"
+
+                buying = selling = (
+                    round(chaos_value, 2)
+                    if isinstance(chaos_value, (int, float))
+                    else "N/A"
+                )
+
             else:
-                chaos_value = line.get("chaosValue") or line.get("chaosEquivalent")
+                chaos_value = (
+                        line.get("chaosValue")
+                        or line.get("chaosEquivalent")
+                )
+
                 exalted_value = line.get("exaltedValue")
                 divine_value = line.get("divineValue")
-                buying = selling = round(chaos_value, 2) if isinstance(chaos_value, (int, float)) else "N/A"
 
-            chaos_value = round(chaos_value, 2) if isinstance(chaos_value, (int, float)) else "N/A"
-            exalted_value = round(exalted_value, 2) if isinstance(exalted_value, (int, float)) else "N/A"
-            divine_value = round(divine_value, 2) if isinstance(divine_value, (int, float)) else "N/A"
+                buying = selling = (
+                    round(chaos_value, 2)
+                    if isinstance(chaos_value, (int, float))
+                    else "N/A"
+                )
+
+            chaos_value = (
+                round(chaos_value, 2)
+                if isinstance(chaos_value, (int, float))
+                else "N/A"
+            )
+
+            exalted_value = (
+                round(exalted_value, 2)
+                if isinstance(exalted_value, (int, float))
+                else "N/A"
+            )
+
+            divine_value = (
+                round(divine_value, 4)
+                if isinstance(divine_value, (int, float))
+                else "N/A"
+            )
 
         if csv_type in ["Scarab", "Currency"] and buying == "N/A" and selling == "N/A":
             continue
