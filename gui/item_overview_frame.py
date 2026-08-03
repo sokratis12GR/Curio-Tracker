@@ -1,20 +1,19 @@
 import json
-import threading
 import urllib.parse
 import webbrowser
-from PIL import Image, ImageTk
+
+from PIL import Image
 from customtkinter import *
 from customtkinter import CTkImage
-from io import BytesIO
 
 import config
 import currency_utils
 from config import IMAGE_COL_WIDTH, ROW_HEIGHT
 from fonts import make_font
+from img_utils import get_icon
 from ocr_utils import parse_item_name
 from renderer import render_item
 from tree_utils import pad_image
-from img_utils import get_icon
 
 
 class ItemOverviewFrame:
@@ -79,7 +78,8 @@ class ItemOverviewFrame:
         self.row_index += 1
 
         # Data Fields
-        self.fields = ["Wiki", "Trade", "Type", "Est. Value", "5-L Value", "6-L Value", "Tier", "Stack Size", "Owned", "Picked"]
+        self.fields = ["Wiki", "Trade", "Type", "Est. Value", "5-L Value", "6-L Value", "Tier", "Stack Size", "Owned",
+                       "Picked"]
         for field in self.fields:
             lbl_field = CTkLabel(self.frame, text=f"{field}:", anchor="w", width=120)
             lbl_field.grid(row=self.row_index, column=0, sticky="w", padx=10, pady=(0, 5))
@@ -205,15 +205,39 @@ class ItemOverviewFrame:
 
 def generate_trade_url(item):
     item_type = getattr(item, "type", None)
-    name = parse_item_name(item)
 
-    if not name or item_type not in ("Replica", "Experimental"):
+    if item_type not in ("Replica", "Experimental"):
+        return None
+
+    if item_type == "Experimental":
+        name = (
+            getattr(item, "base_type", None)
+            or getattr(item, "baseType", None)
+            or getattr(item, "experimental_base", None)
+            or getattr(item, "name", None)
+            or parse_item_name(item)
+        )
+
+        name = name.replace("-Attuned", "-attuned")
+    else:
+        name = parse_item_name(item)
+
+    if not name:
         return None
 
     league = config.LEAGUE
 
     query = {
         "query": {
+            "status": {
+                "option": "securable"
+            },
+            "stats": [
+                {
+                    "type": "and",
+                    "filters": []
+                }
+            ],
             "filters": {
                 "type_filters": {
                     "filters": {}
@@ -225,19 +249,28 @@ def generate_trade_url(item):
                         }
                     }
                 }
-            },
-            "status": {
-                "option": "securable"
-            },
-            "name": name
+            }
+        },
+        "sort": {
+            "price": "asc"
         }
     }
 
+    if item_type == "Replica":
+        query["query"]["name"] = name
+    else:
+        query["query"]["type"] = name
+
+    # print(f"[Trade Search] Type: {item_type}")
+    # print(f"[Trade Search] Name: {name}")
+    # print(json.dumps(query, indent=4))
+
     encoded_query = urllib.parse.quote(
-        json.dumps(query, separators=(",", ":"))
+        json.dumps(query, separators=(",", ":")),
+        safe=""
     )
 
     return (
         f"https://www.pathofexile.com/trade/search/"
-        f"{league}?q={encoded_query}"
+        f"{urllib.parse.quote(str(league), safe='')}?q={encoded_query}"
     )
