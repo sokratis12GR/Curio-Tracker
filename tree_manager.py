@@ -296,7 +296,7 @@ class TreeManager:
         self.delete_item_from_tree(record_number=max_record_number)
 
     # @pyinstrument.profile()
-    def _add_items_in_batches(self, items, batch_size=200, start_index=0, post_callback=None):
+    def _add_items_in_batches(self, items, batch_size=200, start_index=0, post_callback=None, ask_for_confirmation=True):
         if self.should_cancel_process:
             return
         end_index = min(start_index + batch_size, len(items))
@@ -318,10 +318,11 @@ class TreeManager:
             self.reapply_row_formatting()
             self.sort_tree("record")
 
-            self.msgbox.showinfo(
+            if ask_for_confirmation:
+                self.msgbox.showinfo(
                 "Loading Complete",
                 f"Finished loading {len(items):,} records."
-            )
+                )
 
             if post_callback:
                 post_callback()
@@ -391,6 +392,7 @@ class TreeManager:
                 batch_size,
                 0,
                 post_callback,
+                ask_confirmation
             )
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1107,7 +1109,7 @@ class TreeManager:
             self.tree.item(iid, tags=(tag,))
 
     # @pyinstrument.profile()
-    def refresh_treeview(self, tracker=None):
+    def refresh_treeview(self, tracker=None, ask_for_confirmation=False):
         print("[DEBUG] Refreshing treeview...")
 
         previous_count = len(self.all_item_iids)
@@ -1118,7 +1120,7 @@ class TreeManager:
         self.update_total_labels()
 
         if tracker is not None and previous_count > 0:
-            self.load_all_items_threaded(tracker, limit=previous_count)
+            self.load_all_items_threaded(tracker, limit=previous_count, ask_confirmation=ask_for_confirmation)
         # elif tracker is not None:
         #     self.load_all_items_threaded(tracker)
         else:
