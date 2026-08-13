@@ -33,6 +33,7 @@ class SettingsPopup:
         self.popup.resizable(False, False)
         self.popup.grab_set()
         self.popup.focus_force()
+        self.popup.protocol("WM_DELETE_WINDOW", self.close)
 
         # Scrollable frame
         self.scroll_frame = ctk.CTkScrollableFrame(
@@ -50,7 +51,12 @@ class SettingsPopup:
         # Bottom button
         bottom_frame = ctk.CTkFrame(self.popup, fg_color="transparent")
         bottom_frame.pack(fill="x", pady=(5, 10))
-        ctk.CTkButton(bottom_frame, text="Close", command=self.popup.destroy, width=100).pack(pady=5)
+        ctk.CTkButton(
+            bottom_frame,
+            text="Close",
+            command=self.close,
+            width=100
+        ).pack(pady=5)
 
         # Center popup
         self.popup.update_idletasks()
@@ -59,6 +65,9 @@ class SettingsPopup:
         y = (self.popup.winfo_screenheight() // 2) - (h // 2)
         self.popup.geometry(f"{w}x{h}+{x}+{y}")
 
+    def close(self):
+        toasts.hide_example()
+        self.popup.destroy()
 
 # -------------------------------
 # Unified Section (All Settings)
@@ -90,6 +99,7 @@ class UnifiedSettingsSection:
         )
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
+        self.example_toast_btn = None
         self.csv_current_record_number_var = ctk.IntVar(value=(get_setting("Application", "csv_current_row", 0)))
         self.json_current_record_number_var = ctk.IntVar(value=(get_setting("Application", "json_current_row", 0)))
         self.enable_poeladder_var = ctk.BooleanVar(
@@ -260,6 +270,22 @@ class UnifiedSettingsSection:
         pick_btn.grid(row=row, column=1, sticky="e")
 
         row += 1
+
+        self.example_toast_btn = ctk.CTkButton(
+            frame,
+            text="SHOW EXAMPLE",
+            command=self._toggle_example_toast,
+            width=self.long_width
+        )
+        self.example_toast_btn.grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            sticky="w",
+            pady=(10, 5)
+        )
+        row += 1
+
         reset_toasts_btn = ctk.CTkButton(
             frame,
             text="Reset Toast Settings",
@@ -321,8 +347,8 @@ class UnifiedSettingsSection:
         val = self.toasts_position_var.get()
         if not val:
             return
-        log_message("Toasts Position", val)
-        set_setting("Application", "toast_position", val)
+
+        toasts.set_toast_position(val, self.parent)
 
     def _update_toasts_y_offset(self, *_):
 
@@ -343,8 +369,7 @@ class UnifiedSettingsSection:
             self.toasts_y_offset_var.set(str(offset))
             return
 
-        log_message("Toasts Y Offset", offset)
-        set_setting("Application", "toast_y_offset", offset)
+        toasts.set_toast_y_offset(offset, self.parent)
 
     def _update_toasts_x_offset(self, *_):
 
@@ -365,8 +390,7 @@ class UnifiedSettingsSection:
             self.toasts_x_offset_var.set(str(offset))
             return
 
-        log_message("Toasts X Offset", offset)
-        set_setting("Application", "toast_x_offset", offset)
+        toasts.set_toast_x_offset(offset, self.parent)
 
 
     def _update_top_right_target_area_percent(self, *_):
@@ -388,6 +412,14 @@ class UnifiedSettingsSection:
 
         log_message("Top Right Target Area Percent", percent)
         set_setting("Application", "top_right_target_area_percent", percent)
+
+    def _toggle_example_toast(self):
+        visible = toasts.toggle_example(self.parent)
+
+        if self.example_toast_btn:
+            self.example_toast_btn.configure(
+                text="HIDE EXAMPLE" if visible else "SHOW EXAMPLE"
+            )
 
     def _reset_toast_settings(self):
         log_message("Resetting toast settings to defaults")
@@ -419,6 +451,9 @@ class UnifiedSettingsSection:
         # ---- Apply Live ----
         toasts.toggle_toasts(default_enabled)
         toasts.set_toast_duration(default_duration)
+        toasts.set_toast_position(default_position)
+        toasts.set_toast_y_offset(default_y)
+        toasts.set_toast_x_offset(default_x)
 
         # Reposition existing toasts immediately
         try:
@@ -449,8 +484,7 @@ class UnifiedSettingsSection:
             chosen = color_code[1]
             self.collection_missing_color_var.set(chosen)
             self.color_preview.configure(fg_color=chosen)
-            set_setting("Application", "collection_missing_color", chosen)
-            log_message("Collection Missing Color set to", chosen)
+            toasts.set_collection_missing_color(chosen)
 
     def _update_toasts_duration(self, *_):
         val = self.toasts_duration_var.get().strip()

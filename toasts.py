@@ -20,15 +20,34 @@ TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
 TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
 ARE_TOASTS_ENABLED = get_setting('Application', 'are_toasts_enabled', True)
 TOAST_POSITION = get_setting("Application", "toast_position", "top_right")
+TOAST_Y_OFFSET = int(get_setting("Application", "toast_y_offset", 80))
+TOAST_X_OFFSET = int(get_setting("Application", "toast_x_offset", 0))
+COLLECTION_MISSING_COLOR = get_setting("Application", "collection_missing_color", "#00FF00")
 
+TOAST_FONT = None
+TOAST_HEADLINE_FONT = None
+EXAMPLE_TOAST = None
+
+def get_toast_font():
+    global TOAST_FONT
+    if TOAST_FONT is None:
+        TOAST_FONT = fonts.make_font(11)
+    return TOAST_FONT
+
+
+def get_toast_headline_font():
+    global TOAST_HEADLINE_FONT
+    if TOAST_HEADLINE_FONT is None:
+        TOAST_HEADLINE_FONT = fonts.make_font(size=10, weight="bold")
+    return TOAST_HEADLINE_FONT
 
 def reposition(root):
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
 
-    position = get_setting("Application", "toast_position", "top_right")
-    y_offset = int(get_setting("Application", "toast_y_offset", 80))
-    x_offset = int(get_setting("Application", "toast_x_offset", 0))
+    position = TOAST_POSITION
+    y_offset = TOAST_Y_OFFSET
+    x_offset = TOAST_X_OFFSET
 
     alive = [t for t in TOASTS if t.winfo_exists()]
     TOASTS[:] = alive
@@ -73,10 +92,11 @@ def get_toast_duration_ms():
 
 
 def create_toast(root, message, image=None, duration=None, is_missing=False, item=None,
-                 tree_manager: TreeManager = None, tracker=None):
-    if not ARE_TOASTS_ENABLED:
+                 tree_manager: TreeManager = None, tracker=None, force_show=False, auto_close=True):
+    if not ARE_TOASTS_ENABLED and not force_show:
         return None
-    duration = duration or get_toast_duration_ms()
+    if duration is None:
+        duration = get_toast_duration_ms()
 
     toast = tk.Toplevel(root)
     toast.overrideredirect(True)
@@ -84,7 +104,7 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
     toast.attributes("-topmost", True)
     toast.attributes("-toolwindow", True)
 
-    missing_color = get_setting("Application", "collection_missing_color", "#00FF00")
+    missing_color = COLLECTION_MISSING_COLOR
     border_color = missing_color if is_missing else "black"
     border_thickness = 4 if is_missing else 0
 
@@ -108,24 +128,37 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
         toast.img_ref = image
 
     # Add text
-    text_label = tk.Label(frame, text=message, bg="black", font=fonts.make_font(11), fg="white", anchor="w")
+    text_label = tk.Label(frame, text=message, bg="black", font=get_toast_font(), fg="white", anchor="w")
     text_label.pack(side="left")
 
-    check_var = ctk.StringVar(value="False")
-
-    def mark_picked():
-        picked = getattr(item, "picked", False)
-        item_text = utils.parse_item_name(item)
-        # print(f"{item_text} - {picked} updated to {check_var.get()}")
-        tree_manager.data_mgr.modify_record(root, record_number, item_text, updates={"Picked": check_var.get()})
-        if tree_manager is not None:
-            tree_manager.refresh_treeview(tracker=tracker)
-        root.focus_force()
-        return
-
     if item is not None:
-        pickup_checkbox = ctk.CTkCheckBox(frame, text="", width=4, border_color=get_border_color(item),
-                                          variable=check_var, command=mark_picked, onvalue="True", offvalue="False")
+        check_var = ctk.StringVar(value="False")
+
+        def mark_picked():
+            item_text = utils.parse_item_name(item)
+
+            if tree_manager is not None:
+                tree_manager.data_mgr.modify_record(
+                    root,
+                    record_number,
+                    item_text,
+                    updates={"Picked": check_var.get()}
+                )
+                tree_manager.refresh_treeview(tracker=tracker)
+
+            root.focus_force()
+            return
+
+        pickup_checkbox = ctk.CTkCheckBox(
+            frame,
+            text="",
+            width=4,
+            border_color=get_border_color(item),
+            variable=check_var,
+            command=mark_picked,
+            onvalue="True",
+            offvalue="False"
+        )
         pickup_checkbox.pack(side="right", padx=(10, 0))
 
     toast.lift()
@@ -145,7 +178,9 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
             pass
         reposition(root)
 
-    toast.after(duration, close_toast)
+    if auto_close:
+        toast.after(duration, close_toast)
+
     return toast
 
 
@@ -233,7 +268,7 @@ def show_custom(root, item, options: CustomToastOptions):
     tk_img = ImageTk.PhotoImage(img)
 
     border_color = options.border_color or (
-        get_setting("Application", "collection_missing_color", "#00FF00") if is_missing else "black")
+        COLLECTION_MISSING_COLOR if is_missing else "black")
     border_thickness = options.border_thickness or (3 if is_missing else 0)
     if options.is_highlight:
         border_color = options.border_color or "#FFD700"  # gold
@@ -260,7 +295,7 @@ def show_custom(root, item, options: CustomToastOptions):
                 headline_label = tk.Label(
                     text_frame,
                     text=options.headline,
-                    font=fonts.make_font(size=10, weight="bold"),
+                    font=get_toast_headline_font(),
                     bg="black",
                     fg="white",
                     anchor="w",
@@ -285,6 +320,70 @@ def show_custom(root, item, options: CustomToastOptions):
     return toast
 
 
+def show_example(root):
+    global EXAMPLE_TOAST
+
+    if EXAMPLE_TOAST is not None:
+        try:
+            if EXAMPLE_TOAST.winfo_exists():
+                return EXAMPLE_TOAST
+        except tk.TclError:
+            pass
+
+        EXAMPLE_TOAST = None
+
+    message = (
+        "Toast Preview\n"
+        "Record: 12345\n"
+        "Replica Example Item | Tier: 1\n"
+        "Estimated Value: 125 Chaos"
+    )
+
+    EXAMPLE_TOAST = create_toast(
+        root,
+        message,
+        is_missing=True,
+        force_show=True,
+        auto_close=False
+    )
+
+    return EXAMPLE_TOAST
+
+
+def hide_example():
+    global EXAMPLE_TOAST
+
+    if EXAMPLE_TOAST is None:
+        return
+
+    if EXAMPLE_TOAST in TOASTS:
+        TOASTS.remove(EXAMPLE_TOAST)
+
+    try:
+        EXAMPLE_TOAST.destroy()
+    except tk.TclError:
+        pass
+
+    EXAMPLE_TOAST = None
+
+
+def toggle_example(root):
+    global EXAMPLE_TOAST
+
+    if EXAMPLE_TOAST is not None:
+        try:
+            if EXAMPLE_TOAST.winfo_exists():
+                hide_example()
+                reposition(root)
+                return False
+        except tk.TclError:
+            EXAMPLE_TOAST = None
+
+    show_example(root)
+    reposition(root)
+    return True
+
+
 def toggle_toasts(enabled: bool):
     global ARE_TOASTS_ENABLED
     ARE_TOASTS_ENABLED = enabled
@@ -297,3 +396,51 @@ def set_toast_duration(seconds: int):
     TOASTS_DURATION = seconds
     set_setting('Application', 'toasts_duration_seconds', seconds)
     log_message(f"Toast duration set to: {seconds}s")
+
+def set_toast_position(position: str, root=None):
+    global TOAST_POSITION
+    TOAST_POSITION = position
+    set_setting("Application", "toast_position", position)
+
+    if root is not None:
+        reposition(root)
+
+    log_message(f"Toast position set to: {position}")
+
+
+def set_toast_y_offset(offset: int, root=None):
+    global TOAST_Y_OFFSET
+    TOAST_Y_OFFSET = int(offset)
+    set_setting("Application", "toast_y_offset", TOAST_Y_OFFSET)
+
+    if root is not None:
+        reposition(root)
+
+    log_message(f"Toast Y offset set to: {TOAST_Y_OFFSET}px")
+
+
+def set_toast_x_offset(offset: int, root=None):
+    global TOAST_X_OFFSET
+    TOAST_X_OFFSET = int(offset)
+    set_setting("Application", "toast_x_offset", TOAST_X_OFFSET)
+
+    if root is not None:
+        reposition(root)
+
+    log_message(f"Toast X offset set to: {TOAST_X_OFFSET}px")
+
+
+def set_collection_missing_color(color: str):
+    global COLLECTION_MISSING_COLOR
+    COLLECTION_MISSING_COLOR = color
+    set_setting("Application", "collection_missing_color", color)
+
+    if EXAMPLE_TOAST is not None:
+        try:
+            if EXAMPLE_TOAST.winfo_exists():
+                frame = EXAMPLE_TOAST.winfo_children()[0]
+                frame.configure(highlightbackground=color)
+        except (tk.TclError, IndexError):
+            pass
+
+    log_message(f"Collection missing color set to: {color}")
