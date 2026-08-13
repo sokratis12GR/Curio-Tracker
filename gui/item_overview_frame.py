@@ -1,6 +1,6 @@
 import json
 import urllib.parse
-import webbrowser
+from link_utils import generate_trade_url_from_values, open_url
 
 from PIL import Image
 from customtkinter import *
@@ -129,6 +129,22 @@ class ItemOverviewFrame:
         icon_url = getattr(item, "img", None)
         item_type = getattr(item, "type", None)
 
+        if item_type == "Experimental":
+            trade_name = (
+                    getattr(item, "base_type", None)
+                    or getattr(item, "baseType", None)
+                    or getattr(item, "experimental_base", None)
+                    or getattr(item, "name", None)
+                    or parse_item_name(item)
+            )
+        else:
+            trade_name = parse_item_name(item)
+
+        trade_url = generate_trade_url_from_values(
+            item_type,
+            trade_name
+        )
+
         display_value = currency_utils.calculate_estimate_value(item)
         five_link_value = currency_utils.calculate_five_link_estimate_value(item)
         six_link_value = currency_utils.calculate_six_link_estimate_value(item)
@@ -178,15 +194,20 @@ class ItemOverviewFrame:
         # --- Wiki link ---
         if wiki_url:
             field_lbl, value_lbl = self.label_pairs["Wiki"]
-            value_lbl.configure(font=make_font(12, underline=True), text="Open Wiki Page", cursor="hand2")
+            value_lbl.configure(
+                font=make_font(12, underline=True),
+                text="Open Wiki Page",
+                cursor="hand2"
+            )
             value_lbl.unbind("<Button-1>")
-            value_lbl.bind("<Button-1>", lambda e, url=wiki_url: webbrowser.open(url))
+            value_lbl.bind(
+                "<Button-1>",
+                lambda e, url=wiki_url: open_url(url)
+            )
             field_lbl.grid()
             value_lbl.grid()
 
         # --- Trade link (Replicas + Experimental only) ---
-        trade_url = generate_trade_url(item)
-
         if trade_url:
             field_lbl, value_lbl = self.label_pairs["Trade"]
             value_lbl.configure(
@@ -197,80 +218,7 @@ class ItemOverviewFrame:
             value_lbl.unbind("<Button-1>")
             value_lbl.bind(
                 "<Button-1>",
-                lambda e, url=trade_url: webbrowser.open(url)
+                lambda e, url=trade_url: open_url(url)
             )
             field_lbl.grid()
             value_lbl.grid()
-
-
-def generate_trade_url(item):
-    item_type = getattr(item, "type", None)
-
-    if item_type not in ("Replica", "Experimental"):
-        return None
-
-    if item_type == "Experimental":
-        name = (
-            getattr(item, "base_type", None)
-            or getattr(item, "baseType", None)
-            or getattr(item, "experimental_base", None)
-            or getattr(item, "name", None)
-            or parse_item_name(item)
-        )
-
-        name = name.replace("-Attuned", "-attuned")
-    else:
-        name = parse_item_name(item)
-
-    if not name:
-        return None
-
-    league = config.LEAGUE
-
-    query = {
-        "query": {
-            "status": {
-                "option": "securable"
-            },
-            "stats": [
-                {
-                    "type": "and",
-                    "filters": []
-                }
-            ],
-            "filters": {
-                "type_filters": {
-                    "filters": {}
-                },
-                "misc_filters": {
-                    "filters": {
-                        "foulborn_item": {
-                            "option": "false"
-                        }
-                    }
-                }
-            }
-        },
-        "sort": {
-            "price": "asc"
-        }
-    }
-
-    if item_type == "Replica":
-        query["query"]["name"] = name
-    else:
-        query["query"]["type"] = name
-
-    # print(f"[Trade Search] Type: {item_type}")
-    # print(f"[Trade Search] Name: {name}")
-    # print(json.dumps(query, indent=4))
-
-    encoded_query = urllib.parse.quote(
-        json.dumps(query, separators=(",", ":")),
-        safe=""
-    )
-
-    return (
-        f"https://www.pathofexile.com/trade/search/"
-        f"{urllib.parse.quote(str(league), safe='')}?q={encoded_query}"
-    )
