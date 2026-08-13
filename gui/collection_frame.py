@@ -79,13 +79,13 @@ class CollectionPopup:
         self.tree.column("#0", width=250, anchor="w")
 
         self.tree.heading("Type", text="Type", command=lambda: self.sort_by("Type"))
-        self.tree.column("Type", width=90, anchor="center")
+        self.tree.column("Type", width=120, anchor="center")
 
         self.tree.heading("Tier", text="Tier", command=lambda: self.sort_by("Tier"))
         self.tree.column("Tier", width=70, anchor="center")
 
         self.tree.heading("Found", text="Found", command=lambda: self.sort_by("Found"))
-        self.tree.column("Found", width=65, anchor="center")
+        self.tree.column("Found", width=80, anchor="center")
 
         self.tree.heading("Owned", text="Owned", command=lambda: self.sort_by("Owned"))
         self.tree.column("Owned", width=60, anchor="center")
