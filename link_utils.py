@@ -57,7 +57,10 @@ def generate_trade_url_from_values(item_type, name):
     }
 
     if item_type == "Replica":
-        query["query"]["name"] = "Replica " + name
+        if not name.lower().startswith("replica "):
+            name = "Replica " + name
+
+        query["query"]["name"] = name
     elif item_type == "Replacement":
         query["query"]["name"] = name
     else:
