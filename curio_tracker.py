@@ -60,6 +60,29 @@ parsed_items = []
 MAX_RECENT_TERMS = 5  # keep last 5 entries in memory
 recent_terms = []  # list of tuples: (term, datetime)
 
+VALID_STACK_MAX_VALUES = frozenset({20, 30, 40})
+
+OCR_DIGIT_TRANSLATION = str.maketrans({
+    "O": "0", "o": "0",
+    "I": "1", "l": "1", "!": "1", "i": "1",
+    "B": "8",
+    "S": "5", "s": "5",
+    "g": "9", "q": "9",
+    "\\": "/", "-": "/", "|": "/",
+})
+
+STACK_RATIO_PATTERN = re.compile(r"\b(\d{1,3})\s*[/|\\\-]\s*(\d{2})\b")
+
+OCR_COLOR_RANGES = tuple(
+    (np.asarray(lo, dtype=np.uint8), np.asarray(hi, dtype=np.uint8))
+    for lo, hi in (
+        (c.replica_l_hsv, c.replica_u_hsv),
+        (c.rare_l_hsv, c.rare_u_hsv),
+        (c.currency_l_hsv, c.currency_u_hsv),
+        (c.scarab_l_hsv, c.scarab_u_hsv),
+        (c.enchant_l_hsv, c.enchant_u_hsv),
+    )
+)
 
 def populate_recent_terms(within_seconds: int = None, max_items: int = None):
     global recent_terms
@@ -175,14 +198,24 @@ all_terms = set(term_types.keys())
 body_armors = datasets["body_armors"]
 owned_items = {}
 PRECOMP_TERMS = []
-for t in all_terms:
-    cleaned = utils.remove_possessive_s(t)
-    PRECOMP_TERMS.append((
-        t,  # original term
-        utils.normalize_for_search(cleaned),  # normalized for search
-        utils.smart_title_case(cleaned)  # smart title version
-    ))
+for term in all_terms:
+    cleaned = utils.remove_possessive_s(term)
+    normalized_term = utils.normalize_for_search(cleaned)
+    term_type = term_types.get(term, "")
+    term_type_cmp = utils.smart_title_case(term_type) if isinstance(term_type, str) else ""
+    enchant_parts = None
 
+    if ";" in cleaned and term_type_cmp in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE):
+        enchant_parts = tuple(
+            utils.normalize_for_search(utils.smart_title_case(part.strip()))
+            for part in cleaned.split(";", 1)
+        )
+
+    PRECOMP_TERMS.append((
+        term,
+        normalized_term,
+        enchant_parts
+    ))
 
 def build_enchant_type_lookup(term_types):
     lookup = defaultdict(set)
@@ -254,64 +287,6 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
 
     return utils.smart_title_case(text), image_np
 
-# def hdr_remove_shine(image_np):
-#     hsv = cv2.cvtColor(
-#         image_np,
-#         cv2.COLOR_RGB2HSV
-#     )
-#
-#     h, s, v = cv2.split(hsv)
-#
-#     bg = cv2.GaussianBlur(
-#         v,
-#         (31, 31),
-#         0
-#     )
-#
-#     shine = cv2.subtract(v, bg)
-#
-#     v = np.where(
-#         shine > 150,
-#         v * 0.75,
-#         v
-#     )
-#
-#     v = np.clip(
-#         v,
-#         0,
-#         255
-#     ).astype(np.uint8)
-#
-#     hsv = cv2.merge([h, s, v])
-#
-#     rgb = cv2.cvtColor(
-#         hsv,
-#         cv2.COLOR_HSV2RGB
-#     )
-#
-#     gray = cv2.cvtColor(
-#         rgb,
-#         cv2.COLOR_RGB2GRAY
-#     )
-#
-#     clahe = cv2.createCLAHE(
-#         clipLimit=2.0,
-#         tileGridSize=(8, 8)
-#     )
-#     gray = clahe.apply(gray)
-#
-#     cv2.imwrite("01_rgb.png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
-#     cv2.imwrite("02_gray.png", gray)
-#
-#     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-#
-#     clahe = cv2.createCLAHE(
-#         clipLimit=2.0,
-#         tileGridSize=(8, 8)
-#     )
-#     gray = clahe.apply(gray)
-#
-#     return gray
 
 #############################################################################
 # Experimental Shine Removal & Readability improvements for                 #
@@ -378,21 +353,13 @@ def hdr_remove_shine(image_np):
 #############################################################
 def filter_item_text(image_np, fullscreen=False):
     img_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-
-    color_ranges = {
-        "unique": (c.replica_l_hsv, c.replica_u_hsv),
-        "rare": (c.rare_l_hsv, c.rare_u_hsv),
-        "currency": (c.currency_l_hsv, c.currency_u_hsv),
-        "scarab": (c.scarab_l_hsv, c.scarab_u_hsv),
-        "enchant": (c.enchant_l_hsv, c.enchant_u_hsv),
-    }
 
     # Create combined mask
     combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
-    for lo, hi in color_ranges.values():
-        combined_mask |= cv2.inRange(hsv, np.array(lo), np.array(hi))
+    for lo, hi in OCR_COLOR_RANGES:
+        current_mask = cv2.inRange(hsv, lo, hi)
+        cv2.bitwise_or(combined_mask, current_mask, dst=combined_mask)
 
     # Morphological operations
     kernel = np.ones((1, 1), np.uint8)
@@ -407,39 +374,25 @@ def filter_item_text(image_np, fullscreen=False):
 
     return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
 
+
 ####################################################################
 # Checks for a match of x/y and if currency applies the stack size #
 ####################################################################
-def extract_currency_value(text, matched_term, term_types):
+def extract_currency_value(lines, title_lines, matched_term, term_types):
     if term_types.get(matched_term) not in {c.CURRENCY_TYPE, c.SCARAB_TYPE}:
         return None
 
-    lines = text.splitlines()
-    idx = next((i for i, line in enumerate(lines) if matched_term.title() in line.title()), None)
+    matched_title = matched_term.title()
+    idx = next((i for i, line in enumerate(title_lines) if matched_title in line), None)
     if idx is None:
         return None
 
-    valid_max_values = {20, 30, 40}
-
-    # OCR digit normalizer
-    def normalize_ocr_text(text):
-        replace_map = {
-            'O': '0', 'o': '0',
-            'I': '1', 'l': '1', '!': '1', 'i': '1',
-            'B': '8',
-            'S': '5', 's': '5',
-            'g': '9', 'q': '9',
-            '\\': '/', '-': '/', '|': '/',
-        }
-        return ''.join(replace_map.get(c, c) for c in text)
-
     # Search current and next 2 lines
     for j in range(idx, min(idx + 3, len(lines))):
-        line = lines[j]
-        line = normalize_ocr_text(line)
+        line = lines[j].translate(OCR_DIGIT_TRANSLATION)
 
         # Match flexible patterns like 19/20, 19 / 20, 19|20, etc.
-        match = re.search(r"\b(\d{1,3})\s*[/|\\\-]\s*(\d{2})\b", line)
+        match = STACK_RATIO_PATTERN.search(line)
         if match:
             raw_current, raw_max = match.groups()
 
@@ -449,11 +402,11 @@ def extract_currency_value(text, matched_term, term_types):
             except ValueError:
                 continue
 
-            if maximum in valid_max_values and 0 <= current <= maximum:
-                return (current, maximum)
+            if maximum in VALID_STACK_MAX_VALUES and 0 <= current <= maximum:
+                return current, maximum
 
             # Fallback fix: take last digit of current if it's obviously wrong
-            if maximum in valid_max_values:
+            if maximum in VALID_STACK_MAX_VALUES:
                 current_last = int(str(current)[-1])
                 if current_last <= maximum:
                     return current_last, maximum
@@ -464,33 +417,25 @@ def extract_currency_value(text, matched_term, term_types):
 #################################################
 # Check if a term or combo term is in the text. #
 #################################################
-def is_term_match(term, text) -> bool:
-    # Pre-normalize text once
-    norm_lines = [utils.normalize_for_search(line) for line in text.splitlines()]
-
-    # Determine type of term
-    term_type = term_types.get(term, "")
-    term_type_cmp = utils.smart_title_case(term_type) if isinstance(term_type, str) else ""
-
+def is_term_match(normalized_term, normalized_lines, enchant_parts=None) -> bool:
     # --- Handle Enchant Combos ---
-    if ";" in term and term_type_cmp in (c.ARMOR_ENCHANT_TYPE, c.WEAPON_ENCHANT_TYPE):
-        part1, part2 = [utils.normalize_for_search(utils.smart_title_case(p.strip())) for p in term.split(";")]
+    if enchant_parts is not None:
+        part1, part2 = enchant_parts
 
-        for i, line in enumerate(norm_lines):
+        for i, line in enumerate(normalized_lines):
             if part1 in line or part2 in line:
                 # Look ahead 2 lines for the other part
                 for j in range(1, 3):
-                    if i + j < len(norm_lines):
-                        if (part1 in line and part2 in norm_lines[i + j]) or (
-                                part2 in line and part1 in norm_lines[i + j]):
+                    if i + j < len(normalized_lines):
+                        if (part1 in line and part2 in normalized_lines[i + j]) or (
+                                part2 in line and part1 in normalized_lines[i + j]):
                             if c.DEBUGGING:
                                 print(f"[EnchantCombo] Found combo '{part1}' & '{part2}' at lines {i} and {i + j}")
                             return True
         return False
 
     # --- Standard Term Matching ---
-    norm_term = utils.normalize_for_search(term)
-    return any(norm_term in line for line in norm_lines)
+    return any(normalized_term in line for line in normalized_lines)
 
 
 def is_duplicate_recent_entry(value):
@@ -563,9 +508,13 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
     original_text = text
 
     text_clean = utils.remove_possessive_s(text)
+    normalized_lines = tuple(
+        utils.normalize_for_search(line)
+        for line in text_clean.splitlines()
+    )
 
-    for original_term, norm_cleaned, title_cleaned in PRECOMP_TERMS:
-        if is_term_match(title_cleaned, text_clean):
+    for original_term, normalized_term, enchant_parts in PRECOMP_TERMS:
+        if is_term_match(normalized_term, normalized_lines, enchant_parts):
             duplicate = is_duplicate_recent_entry(original_term)
             all_candidates.append((original_term, duplicate))
 
@@ -665,6 +614,9 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
     if matched_terms is None:
         matched_terms = get_matched_terms(text, allow_dupes)
 
+    raw_lines = text.splitlines()
+    title_lines = tuple(line.title() for line in raw_lines)
+
     for match in matched_terms:
         term_title = match["term"]
         duplicate = match["duplicate"]
@@ -675,7 +627,7 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
         item_type = term_types.get(utils.smart_title_case(term_title))
 
         # Extract stack size / currency ratio
-        ratio = extract_currency_value(text, term_title, term_types)
+        ratio = extract_currency_value(raw_lines, title_lines, term_title, term_types)
         if ratio:
             stack_size = f"{ratio[0]}"
             stack_sizes[term_title] = stack_size
@@ -717,7 +669,7 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
     else:
         status = f"{c.matches_not_found} Attempt: #{attempt}"
         toasts.show_message(root, status)
-        log_message(status)  # clear leftover chars
+        log_message(status)
         attempt += 1
 
 
@@ -748,6 +700,11 @@ def write_entry(root, text, timestamp, allow_dupes=False) -> None:
         next_record_number += 1
 
         mark_term_as_captured(term_title)
+
+        currency_data = CURRENCY_DATASET.get(term_title, {})
+        tier_data = TIERS_DATASET.get(term_title, {})
+        owned = COLLECTION_DATASET_ACTIVE.get(term_title, False)
+
         item = build_parsed_item(
             record=current_number,
             term_title=term_title,
@@ -760,15 +717,15 @@ def write_entry(root, text, timestamp, allow_dupes=False) -> None:
             blueprint_type=blueprint_layout,
             logged_by=poe_user,
             league=league_version,
-            chaos_value=CURRENCY_DATASET.get(term_title, {}).get("chaos"),
-            divine_value=CURRENCY_DATASET.get(term_title, {}).get("divine"),
-            tier=TIERS_DATASET.get(term_title, {}).get("tier", ""),
-            wiki=TIERS_DATASET.get(term_title, {}).get("wiki", ""),
-            img=TIERS_DATASET.get(term_title, {}).get("img", ""),
-            five_l_val=CURRENCY_DATASET.get(term_title, {}).get("five_link"),
-            six_l_val=CURRENCY_DATASET.get(term_title, {}).get("six_link"),
+            chaos_value=currency_data.get("chaos"),
+            divine_value=currency_data.get("divine"),
+            tier=tier_data.get("tier", ""),
+            wiki=tier_data.get("wiki", ""),
+            img=tier_data.get("img", ""),
+            five_l_val=currency_data.get("five_link"),
+            six_l_val=currency_data.get("six_link"),
             picked=False,
-            owned=COLLECTION_DATASET_ACTIVE.get(term_title, False),
+            owned=owned,
             bp_enchantment=c.SET_BP_ENCHANTMENT_FOR_RUNS
         )
 
@@ -793,7 +750,7 @@ def write_entry(root, text, timestamp, allow_dupes=False) -> None:
             c.csv_flag_header: False,
             c.csv_time_header: timestamp,
             c.csv_picked_header: False,
-            c.csv_owned_header: COLLECTION_DATASET_ACTIVE.get(term_title, False),
+            c.csv_owned_header: owned,
             c.csv_enchantment_header: c.SET_BP_ENCHANTMENT_FOR_RUNS
         }
 
@@ -822,6 +779,7 @@ def reload_data_manager():
         _data_mgr = CSVManager(_base)
 
     return _data_mgr
+
 
 def build_row_dict(record_number, term_title, item_type, stack_size, timestamp):
     return {
@@ -940,9 +898,11 @@ def parse_items_from_rows(rows):
 
     return parsed_items
 
+
 def load_all_parsed_items(_data_mgr: BaseDataManager):
     rows = _data_mgr.load_dict()
     return parse_items_from_rows(rows)
+
 
 def load_recent_parsed_items(_data_mgr: BaseDataManager, within_seconds=120, max_items=5):
     rows = _data_mgr.load_dict()
@@ -971,6 +931,7 @@ def load_recent_parsed_items(_data_mgr: BaseDataManager, within_seconds=120, max
     recent_rows = recent_rows[-max_items:]
     return parse_items_from_rows(recent_rows)
 
+
 #####################################################
 # Captures the entire screen, afterwards using      #
 # OCR reads the texts and checks for matches.       #
@@ -987,6 +948,7 @@ def capture_once(root):
 
     os.makedirs(c.saves_dir, exist_ok=True)
     write_entry(root, full_text, utils.now_timestamp(), allow_dupes=False)
+
 
 def capture_snippet(root, on_done):
     validate_attempt(c.capturing_prompt)
