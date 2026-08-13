@@ -105,7 +105,7 @@ def handle_duplicate_latest(root, tree_manager: TreeManager, controls):
     duplicated_item = tracker.parse_items_from_rows([latest_dupe])[0]
 
     if are_toasts_enabled:
-        toasts.show(root, duplicated_item)
+        toasts.show(root, duplicated_item, tree_manager=tree_manager, tracker=tracker)
 
     # Add to tree and update count
     tree_manager.add_item_to_tree(duplicated_item)
