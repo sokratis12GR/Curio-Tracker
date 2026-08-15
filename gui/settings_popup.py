@@ -9,7 +9,7 @@ from customtkinter import CTkFrame
 import config as c
 import curio_collection_fetch
 import toasts
-from fonts import font_family_var, update_all_fonts, make_font, init_font_var
+from fonts import update_all_fonts, make_font, init_font_var
 from load_utils import get_datasets
 from logger import log_message
 from settings import get_setting, set_setting
@@ -69,6 +69,7 @@ class SettingsPopup:
         toasts.hide_example()
         self.popup.destroy()
 
+
 # -------------------------------
 # Unified Section (All Settings)
 # -------------------------------
@@ -91,14 +92,29 @@ class UnifiedSettingsSection:
         self.poeladder_leagues = list(self.leagues_dict.keys())
         # Variables
         self.theme_selector_var = ctk.StringVar(value=get_setting("Application", "theme_mode", c.DEFAULT_THEME_MODE))
-        self.toasts_position_var = ctk.StringVar(value=get_setting("Application", "toast_position", c.DEFAULT_TOAST_POSITION))
-        self.toasts_y_offset_var = ctk.StringVar(value=str(get_setting("Application", "toast_y_offset", c.DEFAULT_TOAST_Y_OFFSET)))
-        self.toasts_x_offset_var = ctk.StringVar(value=str(get_setting("Application", "toast_x_offset", c.DEFAULT_TOAST_X_OFFSET)))
+        self.toasts_position_var = ctk.StringVar(
+            value=get_setting("Application", "toast_position", c.DEFAULT_TOAST_POSITION))
+        self.toasts_y_offset_var = ctk.StringVar(
+            value=str(get_setting("Application", "toast_y_offset", c.DEFAULT_TOAST_Y_OFFSET)))
+        self.toasts_x_offset_var = ctk.StringVar(
+            value=str(get_setting("Application", "toast_x_offset", c.DEFAULT_TOAST_X_OFFSET)))
         self.top_right_target_area_percent_var = ctk.StringVar(
             value=str(get_setting("Application", "top_right_target_area_percent", c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT))
         )
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
+        self.toast_image_width_var = ctk.StringVar(
+            value=str(get_setting("Application","toast_image_width",c.DEFAULT_TOAST_IMAGE_WIDTH))
+        )
+        self.toast_row_height_var = ctk.StringVar(
+            value=str(get_setting("Application","toast_row_height",c.DEFAULT_TOAST_ROW_HEIGHT))
+        )
+        self.toast_font_size_var = ctk.StringVar(
+            value=str(get_setting("Application","toast_font_size",c.DEFAULT_TOAST_FONT_SIZE))
+        )
+        self.toast_headline_font_size_var = ctk.StringVar(
+            value=str(get_setting("Application","toast_headline_font_size",c.DEFAULT_TOAST_HEADLINE_FONT_SIZE))
+        )
         self.example_toast_btn = None
         self.csv_current_record_number_var = ctk.IntVar(value=(get_setting("Application", "csv_current_row", 0)))
         self.json_current_record_number_var = ctk.IntVar(value=(get_setting("Application", "json_current_row", 0)))
@@ -151,7 +167,6 @@ class UnifiedSettingsSection:
 
         add_separator(frame, row)
         row += 1
-
 
         # ---- Player ----
         ctk.CTkLabel(frame, text="Player & League", font=make_font(13, "bold")).grid(
@@ -233,7 +248,8 @@ class UnifiedSettingsSection:
         row += 1
 
         ctk.CTkLabel(frame, text="Position:").grid(row=row, column=0, sticky="w")
-        toast_position_cb = ctk.CTkComboBox(frame, variable=self.toasts_position_var, values=c.VALID_TOAST_POSITIONS, width=self.width)
+        toast_position_cb = ctk.CTkComboBox(frame, variable=self.toasts_position_var, values=c.VALID_TOAST_POSITIONS,
+                                            width=self.width)
         toast_position_cb.grid(row=row, column=1, sticky="w")
         self.toasts_position_var.trace_add("write", self._update_toasts_position)
         row += 1
@@ -256,6 +272,97 @@ class UnifiedSettingsSection:
         duration_entry = ctk.CTkEntry(frame, textvariable=self.toasts_duration_var, width=self.width)
         duration_entry.grid(row=row, column=1, sticky="w")
         self.toasts_duration_var.trace_add("write", self._update_toasts_duration)
+        row += 1
+        ctk.CTkLabel(
+            frame,
+            text="Toast Image Width (px):"
+        ).grid(row=row, column=0, sticky="w")
+
+        image_width_entry = ctk.CTkEntry(
+            frame,
+            textvariable=self.toast_image_width_var,
+            width=self.width
+        )
+        image_width_entry.grid(row=row, column=1, sticky="w")
+
+        image_width_entry.bind(
+            "<Return>",
+            lambda e: self._update_toast_image_width()
+        )
+        image_width_entry.bind(
+            "<FocusOut>",
+            lambda e: self._update_toast_image_width()
+        )
+
+        row += 1
+
+        ctk.CTkLabel(
+            frame,
+            text="Toast Row Height (px):"
+        ).grid(row=row, column=0, sticky="w")
+
+        row_height_entry = ctk.CTkEntry(
+            frame,
+            textvariable=self.toast_row_height_var,
+            width=self.width
+        )
+        row_height_entry.grid(row=row, column=1, sticky="w")
+
+        row_height_entry.bind(
+            "<Return>",
+            lambda e: self._update_toast_row_height()
+        )
+        row_height_entry.bind(
+            "<FocusOut>",
+            lambda e: self._update_toast_row_height()
+        )
+
+        row += 1
+
+        ctk.CTkLabel(
+            frame,
+            text="Toast Font Size:"
+        ).grid(row=row, column=0, sticky="w")
+
+        font_size_entry = ctk.CTkEntry(
+            frame,
+            textvariable=self.toast_font_size_var,
+            width=self.width
+        )
+        font_size_entry.grid(row=row, column=1, sticky="w")
+
+        font_size_entry.bind(
+            "<Return>",
+            lambda e: self._update_toast_font_size()
+        )
+        font_size_entry.bind(
+            "<FocusOut>",
+            lambda e: self._update_toast_font_size()
+        )
+
+        row += 1
+
+        ctk.CTkLabel(
+            frame,
+            text="Toast Headline Font Size:"
+        ).grid(row=row, column=0, sticky="w")
+
+        headline_font_size_entry = ctk.CTkEntry(
+            frame,
+            textvariable=self.toast_headline_font_size_var,
+            width=self.width
+        )
+        headline_font_size_entry.grid(row=row, column=1, sticky="w")
+
+        headline_font_size_entry.bind(
+            "<Return>",
+            lambda e: self._update_toast_headline_font_size()
+        )
+        headline_font_size_entry.bind(
+            "<FocusOut>",
+            lambda e: self._update_toast_headline_font_size()
+        )
+
         row += 1
 
         # ---- Collection Missing Color ----
@@ -299,12 +406,14 @@ class UnifiedSettingsSection:
 
         # Current Record # -- Saved in memory and locally
         ctk.CTkLabel(frame, text="CSV Current Record:").grid(row=row, column=0, sticky="w")
-        csv_record_entry = ctk.CTkEntry(frame, state="disabled", textvariable=self.csv_current_record_number_var, width=self.width)
+        csv_record_entry = ctk.CTkEntry(frame, state="disabled", textvariable=self.csv_current_record_number_var,
+                                        width=self.width)
         csv_record_entry.grid(row=row, column=1, sticky="w")
 
         row += 1
         ctk.CTkLabel(frame, text="JSON Current Record:").grid(row=row, column=0, sticky="w")
-        json_record_entry = ctk.CTkEntry(frame, state="disabled", textvariable=self.json_current_record_number_var, width=self.width)
+        json_record_entry = ctk.CTkEntry(frame, state="disabled", textvariable=self.json_current_record_number_var,
+                                         width=self.width)
         json_record_entry.grid(row=row, column=1, sticky="w")
         row += 1
 
@@ -320,7 +429,6 @@ class UnifiedSettingsSection:
         self.dupe_label = ctk.CTkLabel(frame, text=f"{self.dupe_duration.get()}s")
         self.dupe_label.grid(row=row, column=1, sticky="w", padx=10, pady=(10, 0))
         row += 1
-
 
         return row
 
@@ -392,7 +500,6 @@ class UnifiedSettingsSection:
 
         toasts.set_toast_x_offset(offset, self.parent)
 
-
     def _update_top_right_target_area_percent(self, *_):
         val = self.top_right_target_area_percent_var.get()
 
@@ -413,6 +520,70 @@ class UnifiedSettingsSection:
         log_message("Top Right Target Area Percent", percent)
         set_setting("Application", "top_right_target_area_percent", percent)
 
+    def _update_toast_image_width(self, *_):
+        val = self.toast_image_width_var.get().strip()
+
+        try:
+            width = int(val)
+        except ValueError:
+            width = c.DEFAULT_TOAST_IMAGE_WIDTH
+
+        width = max(
+            c.TOAST_IMAGE_WIDTH_MIN,
+            min(c.TOAST_IMAGE_WIDTH_MAX, width)
+        )
+
+        self.toast_image_width_var.set(str(width))
+        toasts.set_toast_image_width(width, self.parent)
+
+    def _update_toast_row_height(self, *_):
+        val = self.toast_row_height_var.get().strip()
+
+        try:
+            height = int(val)
+        except ValueError:
+            height = c.DEFAULT_TOAST_ROW_HEIGHT
+
+        height = max(
+            c.TOAST_ROW_HEIGHT_MIN,
+            min(c.TOAST_ROW_HEIGHT_MAX, height)
+        )
+
+        self.toast_row_height_var.set(str(height))
+        toasts.set_toast_row_height(height, self.parent)
+
+    def _update_toast_font_size(self, *_):
+        val = self.toast_font_size_var.get().strip()
+
+        try:
+            size = int(val)
+        except ValueError:
+            size = c.DEFAULT_TOAST_FONT_SIZE
+
+        size = max(
+            c.TOAST_FONT_SIZE_MIN,
+            min(c.TOAST_FONT_SIZE_MAX, size)
+        )
+
+        self.toast_font_size_var.set(str(size))
+        toasts.set_toast_font_size(size, self.parent)
+
+    def _update_toast_headline_font_size(self, *_):
+        val = self.toast_headline_font_size_var.get().strip()
+
+        try:
+            size = int(val)
+        except ValueError:
+            size = c.DEFAULT_TOAST_HEADLINE_FONT_SIZE
+
+        size = max(
+            c.TOAST_HEADLINE_FONT_SIZE_MIN,
+            min(c.TOAST_HEADLINE_FONT_SIZE_MAX, size)
+        )
+
+        self.toast_headline_font_size_var.set(str(size))
+        toasts.set_toast_headline_font_size(size, self.parent)
+
     def _toggle_example_toast(self):
         visible = toasts.toggle_example(self.parent)
 
@@ -431,6 +602,10 @@ class UnifiedSettingsSection:
         default_duration = c.DEFAULT_TOAST_DURATION
         default_area = c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT
         default_enabled = c.DEFAULT_TOAST_ENABLE
+        default_image_width = c.DEFAULT_TOAST_IMAGE_WIDTH
+        default_row_height = c.DEFAULT_TOAST_ROW_HEIGHT
+        default_font_size = c.DEFAULT_TOAST_FONT_SIZE
+        default_headline_font_size = c.DEFAULT_TOAST_HEADLINE_FONT_SIZE
 
         # ---- Persist ----
         set_setting("Application", "toast_position", default_position)
@@ -439,7 +614,11 @@ class UnifiedSettingsSection:
         set_setting("Application", "top_right_target_area_percent", default_area)
         set_setting("Application", "toasts_duration_seconds", default_duration)
         set_setting("Application", "are_toasts_enabled", default_enabled)
-
+        set_setting("Application", "toast_image_width", default_image_width)
+        set_setting("Application", "toast_row_height", default_row_height)
+        set_setting("Application", "toast_font_size", default_font_size)
+        set_setting("Application","toast_headline_font_size",default_headline_font_size
+                    )
         # ---- Update UI ----
         self.toasts_position_var.set(default_position)
         self.toasts_y_offset_var.set(str(default_y))
@@ -447,6 +626,10 @@ class UnifiedSettingsSection:
         self.top_right_target_area_percent_var.set(str(default_area))
         self.toasts_duration_var.set(str(default_duration))
         self.toasts_var.set(default_enabled)
+        self.toast_image_width_var.set(str(default_image_width))
+        self.toast_row_height_var.set(str(default_row_height))
+        self.toast_font_size_var.set(str(default_font_size))
+        self.toast_headline_font_size_var.set(str(default_headline_font_size))
 
         # ---- Apply Live ----
         toasts.toggle_toasts(default_enabled)
@@ -454,9 +637,14 @@ class UnifiedSettingsSection:
         toasts.set_toast_position(default_position)
         toasts.set_toast_y_offset(default_y)
         toasts.set_toast_x_offset(default_x)
+        toasts.set_toast_image_width(default_image_width)
+        toasts.set_toast_row_height(default_row_height)
+        toasts.set_toast_font_size(default_font_size)
+        toasts.set_toast_headline_font_size(default_headline_font_size)
 
         # Reposition existing toasts immediately
         try:
+            toasts.refresh_example(self.parent)
             toasts.reposition(self.parent)
         except Exception:
             pass

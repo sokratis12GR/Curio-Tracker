@@ -1,9 +1,11 @@
 import tkinter as tk
+import urllib.request
 from dataclasses import dataclass
+from io import BytesIO
 from typing import Optional
 
 import customtkinter as ctk
-from PIL import ImageTk
+from PIL import Image, ImageTk
 
 import currency_utils
 import fonts
@@ -13,8 +15,10 @@ from renderer import render_item, get_border_color
 from settings import get_setting, set_setting
 from tree_manager import TreeManager
 
-IMAGE_COL_WIDTH = 200
-ROW_HEIGHT = 40
+IMAGE_COL_WIDTH = int(get_setting("Application", "toast_image_width", 200))
+ROW_HEIGHT = int(get_setting("Application", "toast_row_height", 40))
+TOAST_FONT_SIZE = int(get_setting("Application", "toast_font_size", 11))
+TOAST_HEADLINE_FONT_SIZE = int(get_setting("Application", "toast_headline_font_size", 10))
 TOASTS = []
 TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
 TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
@@ -28,18 +32,35 @@ TOAST_FONT = None
 TOAST_HEADLINE_FONT = None
 EXAMPLE_TOAST = None
 
+EXAMPLE_IMAGE_URL = (
+    "https://web.poecdn.com/gen/image/"
+    "WzI1LDE0LHsiZiI6IjJESXRlbXMvQmVsdHMvQmF0ZWRCcmVhdGgiLCJzY2FsZSI6MX1d/"
+    "726ab7c1f0/BatedBreath.png"
+)
+
+EXAMPLE_SOURCE_IMAGE = None
+
+
 def get_toast_font():
     global TOAST_FONT
+
     if TOAST_FONT is None:
-        TOAST_FONT = fonts.make_font(11)
+        TOAST_FONT = fonts.make_font(TOAST_FONT_SIZE)
+
     return TOAST_FONT
 
 
 def get_toast_headline_font():
     global TOAST_HEADLINE_FONT
+
     if TOAST_HEADLINE_FONT is None:
-        TOAST_HEADLINE_FONT = fonts.make_font(size=10, weight="bold")
+        TOAST_HEADLINE_FONT = fonts.make_font(
+            size=TOAST_HEADLINE_FONT_SIZE,
+            weight="bold"
+        )
+
     return TOAST_HEADLINE_FONT
+
 
 def reposition(root):
     screen_w = root.winfo_screenwidth()
@@ -211,8 +232,7 @@ def show(root, item, message=None, duration=None, tree_manager: TreeManager = No
         message = (added_owned_txt + added_record_number_txt + item_text + added_stack_size_txt + added_tier_txt +
                    added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt)
 
-    img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
-    tk_img = ImageTk.PhotoImage(img)
+    tk_img = render_toast_image(item)
 
     return create_toast(root, message, image=tk_img, duration=duration, is_missing=is_missing, item=item,
                         tree_manager=tree_manager, tracker=tracker)
@@ -233,7 +253,6 @@ class CustomToastOptions:
     show_estimated_value: Optional[bool] = None
     custom_message: Optional[str] = None
     headline: Optional[str] = None
-
 
 def show_custom(root, item, options: CustomToastOptions):
     item_text = utils.parse_item_name(item)
@@ -264,8 +283,7 @@ def show_custom(root, item, options: CustomToastOptions):
             added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt
     )
 
-    img = render_item(item).resize((IMAGE_COL_WIDTH - 4, ROW_HEIGHT))
-    tk_img = ImageTk.PhotoImage(img)
+    tk_img = render_toast_image(item)
 
     border_color = options.border_color or (
         COLLECTION_MISSING_COLOR if is_missing else "black")
@@ -306,6 +324,7 @@ def show_custom(root, item, options: CustomToastOptions):
             text_label = tk.Label(
                 text_frame,
                 text=main_message,
+                font=get_toast_font(),
                 bg="black",
                 fg="white",
                 anchor="w",
@@ -320,6 +339,80 @@ def show_custom(root, item, options: CustomToastOptions):
     return toast
 
 
+@dataclass
+class ExampleItemName:
+    lines: list
+
+
+@dataclass
+class ExampleToastItem:
+    item_name: str = "Bated Breath"
+    name: str = "Bated Breath"
+    type: str = "Replica"
+
+    itemRarity: str = "Unique"
+    itemClass: str = None
+
+    itemName: ExampleItemName = None
+
+    tier: int = 0
+    record_number: int = 12345
+    owned: bool = False
+    duplicate: bool = False
+
+    quality: int = 0
+    itemLevel: int = 0
+    corrupted: bool = False
+
+    baseStats: list = None
+    requirements: list = None
+    implicits: list = None
+    enchants: list = None
+    affixes: list = None
+    runes: list = None
+
+    flavorText: dict = None
+
+    stack_size: Optional[int] = None
+    stack_size_max: Optional[int] = None
+
+    estimated_value: Optional[float] = None
+    estimated_value_chaos: Optional[float] = None
+    chaos_value: Optional[float] = None
+
+    icon: str = (
+        "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQmVsdHMvQmF0ZWRCcmVhdGgiLCJzY2FsZSI6MX1d/726ab7c1f0/BatedBreath.png"
+    )
+
+    def __post_init__(self):
+        if self.itemName is None:
+            self.itemName = ExampleItemName(
+                lines=["Replica Bated Breath"]
+            )
+
+        if self.baseStats is None:
+            self.baseStats = []
+
+        if self.requirements is None:
+            self.requirements = []
+
+        if self.implicits is None:
+            self.implicits = []
+
+        if self.enchants is None:
+            self.enchants = []
+
+        if self.affixes is None:
+            self.affixes = []
+
+        if self.runes is None:
+            self.runes = []
+
+        if self.flavorText is None:
+            self.flavorText = {
+                "lines": []
+            }
+
 def show_example(root):
     global EXAMPLE_TOAST
 
@@ -332,22 +425,40 @@ def show_example(root):
 
         EXAMPLE_TOAST = None
 
+    item = ExampleToastItem()
+
     message = (
-        "Toast Preview\n"
+        "EXAMPLE TOAST PREVIEW | Missing\n"
         "Record: 12345\n"
-        "Replica Example Item | Tier: 1\n"
-        "Estimated Value: 125 Chaos"
+        "Replica Bated Breath | Tier: 0\n"
+        "Estimated Value: 100 Divines"
     )
+
+    tk_img = render_toast_image(item)
 
     EXAMPLE_TOAST = create_toast(
         root,
         message,
+        image=tk_img,
         is_missing=True,
         force_show=True,
         auto_close=False
     )
 
     return EXAMPLE_TOAST
+
+
+def render_toast_image(item):
+    img = render_item(item)
+
+    img = img.resize(
+        (
+            max(1, IMAGE_COL_WIDTH - 4),
+            max(1, ROW_HEIGHT)
+        )
+    )
+
+    return ImageTk.PhotoImage(img)
 
 
 def hide_example():
@@ -365,6 +476,33 @@ def hide_example():
         pass
 
     EXAMPLE_TOAST = None
+
+
+def get_example_image():
+    global EXAMPLE_SOURCE_IMAGE
+
+    try:
+        if EXAMPLE_SOURCE_IMAGE is None:
+            with urllib.request.urlopen(EXAMPLE_IMAGE_URL, timeout=5) as response:
+                image_data = response.read()
+
+            EXAMPLE_SOURCE_IMAGE = Image.open(
+                BytesIO(image_data)
+            ).convert("RGBA")
+
+        resized = EXAMPLE_SOURCE_IMAGE.resize(
+            (
+                max(1, IMAGE_COL_WIDTH - 4),
+                max(1, ROW_HEIGHT)
+            ),
+            Image.Resampling.LANCZOS
+        )
+
+        return ImageTk.PhotoImage(resized)
+
+    except Exception as e:
+        log_message(f"[WARN] Failed to load example toast image: {e}")
+        return None
 
 
 def toggle_example(root):
@@ -391,11 +529,89 @@ def toggle_toasts(enabled: bool):
     log_message(f"Toasts enabled: {enabled}")
 
 
+def refresh_example(root):
+    global EXAMPLE_TOAST
+
+    if EXAMPLE_TOAST is None:
+        return
+
+    try:
+        if not EXAMPLE_TOAST.winfo_exists():
+            EXAMPLE_TOAST = None
+            return
+    except tk.TclError:
+        EXAMPLE_TOAST = None
+        return
+
+    hide_example()
+    show_example(root)
+    reposition(root)
+
+
+def set_toast_image_width(width: int, root=None):
+    global IMAGE_COL_WIDTH
+
+    IMAGE_COL_WIDTH = int(width)
+    set_setting("Application", "toast_image_width", IMAGE_COL_WIDTH)
+
+    if root is not None:
+        refresh_example(root)
+
+    log_message(f"Toast image width set to: {IMAGE_COL_WIDTH}px")
+
+
+def set_toast_row_height(height: int, root=None):
+    global ROW_HEIGHT
+
+    ROW_HEIGHT = int(height)
+    set_setting("Application", "toast_row_height", ROW_HEIGHT)
+
+    if root is not None:
+        refresh_example(root)
+
+    log_message(f"Toast row height set to: {ROW_HEIGHT}px")
+
+
+def set_toast_font_size(size: int, root=None):
+    global TOAST_FONT_SIZE, TOAST_FONT
+
+    TOAST_FONT_SIZE = int(size)
+    TOAST_FONT = None
+
+    set_setting("Application", "toast_font_size", TOAST_FONT_SIZE)
+
+    if root is not None:
+        refresh_example(root)
+
+    log_message(f"Toast font size set to: {TOAST_FONT_SIZE}")
+
+
+def set_toast_headline_font_size(size: int, root=None):
+    global TOAST_HEADLINE_FONT_SIZE, TOAST_HEADLINE_FONT
+
+    TOAST_HEADLINE_FONT_SIZE = int(size)
+    TOAST_HEADLINE_FONT = None
+
+    set_setting(
+        "Application",
+        "toast_headline_font_size",
+        TOAST_HEADLINE_FONT_SIZE
+    )
+
+    if root is not None:
+        refresh_example(root)
+
+    log_message(
+        f"Toast headline font size set to: {TOAST_HEADLINE_FONT_SIZE}"
+    )
+
+
 def set_toast_duration(seconds: int):
     global TOASTS_DURATION
     TOASTS_DURATION = seconds
     set_setting('Application', 'toasts_duration_seconds', seconds)
     log_message(f"Toast duration set to: {seconds}s")
+
 
 def set_toast_position(position: str, root=None):
     global TOAST_POSITION
