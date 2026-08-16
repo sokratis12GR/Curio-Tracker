@@ -4,7 +4,6 @@ import webbrowser
 from tkinter import colorchooser
 
 import customtkinter as ctk
-from customtkinter import CTkFrame
 
 import config as c
 import curio_collection_fetch
@@ -15,6 +14,39 @@ from logger import log_message
 from settings import get_setting, set_setting
 from themes import apply_theme
 from tree_manager import TreeManager
+
+
+# -------------------------------
+# Collapsible Section
+# -------------------------------
+class CollapsibleSection(ctk.CTkFrame):
+    def __init__(self, parent, title, expanded=True):
+        super().__init__(parent, fg_color="transparent")
+        self.title = title
+        self.expanded = expanded
+
+        self.header = ctk.CTkButton(self, text="", anchor="w", height=34, command=self.toggle)
+        self.header.pack(fill="x", pady=(3, 0))
+
+        self.content = ctk.CTkFrame(self, fg_color="transparent")
+        if self.expanded:
+            self.content.pack(fill="x", padx=8, pady=(5, 8))
+
+        self._update_header()
+
+    def _update_header(self):
+        arrow = "▼" if self.expanded else "▶"
+        self.header.configure(text=f"{arrow}  {self.title}")
+
+    def toggle(self):
+        self.expanded = not self.expanded
+
+        if self.expanded:
+            self.content.pack(fill="x", padx=8, pady=(5, 8))
+        else:
+            self.content.pack_forget()
+
+        self._update_header()
 
 
 # -------------------------------
@@ -35,30 +67,20 @@ class SettingsPopup:
         self.popup.focus_force()
         self.popup.protocol("WM_DELETE_WINDOW", self.close)
 
-        # Scrollable frame
         self.scroll_frame = ctk.CTkScrollableFrame(
             self.popup,
             label_text="Configuration",
-            label_font=make_font(14, "bold"),
+            label_font=make_font(14, "bold")
         )
         self.scroll_frame.pack(fill="both", expand=True, padx=10)
 
-        # Unified section
         self.app_section = UnifiedSettingsSection(parent, tracker, theme_manager, tree_manager)
-        row = 0
-        row = self.app_section.build(self.scroll_frame, row)
+        self.app_section.build(self.scroll_frame)
 
-        # Bottom button
         bottom_frame = ctk.CTkFrame(self.popup, fg_color="transparent")
         bottom_frame.pack(fill="x", pady=(5, 10))
-        ctk.CTkButton(
-            bottom_frame,
-            text="Close",
-            command=self.close,
-            width=100
-        ).pack(pady=5)
+        ctk.CTkButton(bottom_frame, text="Close", command=self.close, width=100).pack(pady=5)
 
-        # Center popup
         self.popup.update_idletasks()
         w, h = self.popup.winfo_width(), self.popup.winfo_height()
         x = (self.popup.winfo_screenwidth() // 2) - (w // 2)
@@ -71,7 +93,7 @@ class SettingsPopup:
 
 
 # -------------------------------
-# Unified Section (All Settings)
+# Unified Settings
 # -------------------------------
 class UnifiedSettingsSection:
     def __init__(self, parent, tracker, theme_manager, tree_manager: TreeManager):
@@ -79,18 +101,22 @@ class UnifiedSettingsSection:
         self.tracker = tracker
         self.theme_manager = theme_manager
         self.tree_manager = tree_manager
+
         self.dynamic_data_league_cb = None
         self.poe_entry = None
         self.fetch_collection_btn = None
         self.color_preview = None
         self.poeladder_label = None
+        self.example_toast_btn = None
+        self.dupe_label = None
+
         self.width = 220
         self.long_width = 420
 
         self.datasets = get_datasets()
-        self.leagues_dict = self.datasets.get("leagues", {})  # dict keyed by league_name
+        self.leagues_dict = self.datasets.get("leagues", {})
         self.poeladder_leagues = list(self.leagues_dict.keys())
-        # Variables
+
         self.theme_selector_var = ctk.StringVar(value=get_setting("Application", "theme_mode", c.DEFAULT_THEME_MODE))
         self.toasts_position_var = ctk.StringVar(
             value=get_setting("Application", "toast_position", c.DEFAULT_TOAST_POSITION))
@@ -101,116 +127,127 @@ class UnifiedSettingsSection:
         self.top_right_target_area_percent_var = ctk.StringVar(
             value=str(get_setting("Application", "top_right_target_area_percent", c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT))
         )
+
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
         self.toast_image_width_var = ctk.StringVar(
-            value=str(get_setting("Application","toast_image_width",c.DEFAULT_TOAST_IMAGE_WIDTH))
+            value=str(get_setting("Application", "toast_image_width", c.DEFAULT_TOAST_IMAGE_WIDTH))
         )
         self.toast_image_height_var = ctk.StringVar(
             value=str(get_setting("Application", "toast_image_height", c.DEFAULT_TOAST_IMAGE_HEIGHT))
         )
         self.toast_font_size_var = ctk.StringVar(
-            value=str(get_setting("Application","toast_font_size",c.DEFAULT_TOAST_FONT_SIZE))
+            value=str(get_setting("Application", "toast_font_size", c.DEFAULT_TOAST_FONT_SIZE))
         )
         self.toast_headline_font_size_var = ctk.StringVar(
-            value=str(get_setting("Application","toast_headline_font_size",c.DEFAULT_TOAST_HEADLINE_FONT_SIZE))
+            value=str(get_setting("Application", "toast_headline_font_size", c.DEFAULT_TOAST_HEADLINE_FONT_SIZE))
         )
-        self.example_toast_btn = None
-        self.csv_current_record_number_var = ctk.IntVar(value=(get_setting("Application", "csv_current_row", 0)))
-        self.json_current_record_number_var = ctk.IntVar(value=(get_setting("Application", "json_current_row", 0)))
+
+        self.csv_current_record_number_var = ctk.IntVar(value=get_setting("Application", "csv_current_row", 0))
+        self.json_current_record_number_var = ctk.IntVar(value=get_setting("Application", "json_current_row", 0))
+
         self.enable_poeladder_var = ctk.BooleanVar(
-            value=get_setting("Application", "enable_poeladder", c.ENABLE_POELADDER))
+            value=get_setting("Application", "enable_poeladder", c.ENABLE_POELADDER)
+        )
         self.data_league_var = ctk.StringVar(value=get_setting("Application", "data_league", c.LEAGUE))
         self.poe_player_var = ctk.StringVar(value=get_setting("User", "poe_user", ""))
 
         self.enable_hdr_filtering_var = ctk.BooleanVar(
-            value=get_setting("Application", "is_hdr_filtering_enabled", c.IS_HDR_ENABLED))
+            value=get_setting("Application", "is_hdr_filtering_enabled", c.IS_HDR_ENABLED)
+        )
+
         self.dupe_duration = ctk.IntVar(value=get_setting("Application", "time_last_dupe_check_seconds", 60))
         self.font_selector_var = ctk.StringVar(value=get_setting("Application", "font_family", "Segoe UI"))
         self.collection_missing_color_var = ctk.StringVar(
-            value=get_setting("Application", "collection_missing_color", "#FF0000")  # default red
+            value=get_setting("Application", "collection_missing_color", "#FF0000")
         )
         self.dynamic_data_league_var = ctk.StringVar(
-            value=get_setting("Application", "poeladder_ggg_league", c.FIXED_LADDER_IDENTIFIER))
-        self.dupe_label = None
-
-    def build(self, frame, row_start):
-        row = row_start
-
-        # ---- Header ----
-        ctk.CTkLabel(frame, text="Application", font=make_font(15, "bold")).grid(
-            row=row, column=0, columnspan=2, sticky="w", pady=(5, 10)
+            value=get_setting("Application", "poeladder_ggg_league", c.FIXED_LADDER_IDENTIFIER)
         )
-        row += 1
 
-        # ---- Theme ----
+    def build(self, frame):
+        general = CollapsibleSection(frame, "General", expanded=True)
+        general.pack(fill="x", pady=2)
+        self._build_general(general.content)
+
+        player = CollapsibleSection(frame, "Player & League", expanded=True)
+        player.pack(fill="x", pady=2)
+        self._build_player(player.content)
+
+        poeladder = CollapsibleSection(frame, "PoE Ladder", expanded=False)
+        poeladder.pack(fill="x", pady=2)
+        self._build_poeladder(poeladder.content)
+
+        capture = CollapsibleSection(frame, "Capture / OCR", expanded=False)
+        capture.pack(fill="x", pady=2)
+        self._build_capture(capture.content)
+
+        toast_section = CollapsibleSection(frame, "Toasts (Notifications)", expanded=False)
+        toast_section.pack(fill="x", pady=2)
+        self._build_toasts(toast_section.content)
+
+        records = CollapsibleSection(frame, "Records & Duplicate Check", expanded=False)
+        records.pack(fill="x", pady=2)
+        self._build_records(records.content)
+
+    # -------------------------------
+    # General
+    # -------------------------------
+    def _build_general(self, frame):
+        row = 0
+
         ctk.CTkLabel(frame, text="Theme (requires restart):").grid(row=row, column=0, sticky="w")
         theme_cb = ctk.CTkComboBox(frame, variable=self.theme_selector_var, values=c.theme_modes, width=self.width)
         theme_cb.grid(row=row, column=1, sticky="w")
         self.theme_selector_var.trace_add("write", self._update_application_theme)
         row += 1
-        # ---- Font ----
+
         ctk.CTkLabel(frame, text="Font Family:").grid(row=row, column=0, sticky="w")
         font_cb = ctk.CTkComboBox(frame, variable=self.font_selector_var, values=c.available_fonts, width=self.width)
         font_cb.grid(row=row, column=1, sticky="w")
         self.font_selector_var.trace_add("write", self._update_application_font)
         row += 1
 
-        # ---- HDR ----
-        ctk.CTkLabel(frame, text="(Experimental)", font=make_font(12, "bold")).grid(row=row, column=0, sticky="w")
+        ctk.CTkLabel(frame, text="(Experimental)", font=make_font(12, "bold")).grid(row=row, column=0, sticky="w",
+                                                                                    pady=(5, 0))
         row += 1
+
         ctk.CTkCheckBox(frame, text="Enable HDR Filtering", variable=self.enable_hdr_filtering_var,
-                        command=self._toggle_hdr).grid(
-            row=row, column=0, columnspan=1, sticky="w"
-        )
-        row += 1
+                        command=self._toggle_hdr).grid(row=row, column=0, columnspan=2, sticky="w")
 
-        add_separator(frame, row)
-        row += 1
-
-        # ---- Player ----
-        ctk.CTkLabel(frame, text="Player & League", font=make_font(13, "bold")).grid(
-            row=row, column=0, columnspan=2, sticky="w", pady=(5, 5)
-        )
-        row += 1
+    # -------------------------------
+    # Player & League
+    # -------------------------------
+    def _build_player(self, frame):
+        row = 0
 
         ctk.CTkLabel(frame, text="PoE Profile (player#1234):").grid(row=row, column=0, sticky="w")
-        self.poe_entry = ctk.CTkEntry(
-            frame,
-            textvariable=self.poe_player_var,
-            width=self.width
-        )
+        self.poe_entry = ctk.CTkEntry(frame, textvariable=self.poe_player_var, width=self.width)
         self.poe_entry.grid(row=row, column=1, sticky="w")
-        self.poe_entry.configure(
-            validate="key",
-            validatecommand=(self.poe_entry.register(self._validate_poe_live), "%P"))
+        self.poe_entry.configure(validate="key",
+                                 validatecommand=(self.poe_entry.register(self._validate_poe_live), "%P"))
         self.poe_player_var.trace_add("write", self._update_tracker_poe_player)
         row += 1
 
-        # ---- Data League ----
         ctk.CTkLabel(frame, text="(poe.ninja) Data League:").grid(row=row, column=0, sticky="w")
-        league_cb2 = ctk.CTkComboBox(frame, variable=self.data_league_var, values=c.LEAGUES_TO_FETCH, width=self.width)
-        league_cb2.grid(row=row, column=1, sticky="w")
+        league_cb = ctk.CTkComboBox(frame, variable=self.data_league_var, values=c.LEAGUES_TO_FETCH, width=self.width)
+        league_cb.grid(row=row, column=1, sticky="w")
         self.data_league_var.trace_add("write", self._on_data_league_change)
-        row += 1
 
-        add_separator(frame, row)
-        row += 1
+    # -------------------------------
+    # PoE Ladder
+    # -------------------------------
+    def _build_poeladder(self, frame):
+        row = 0
 
-        self.poeladder_label = ctk.CTkLabel(frame, text="PoE Ladder", font=make_font(13, "bold"))
-        self.poeladder_label.grid(row=row, column=0, columnspan=2, sticky="w")
-
-        self.poeladder_label = ctk.CTkLabel(frame, text="(How to setup)", font=make_font(9, "bold", underline=True),
+        self.poeladder_label = ctk.CTkLabel(frame, text="How to setup", font=make_font(9, "bold", underline=True),
                                             cursor="hand2")
-        self.poeladder_label.grid(row=row, column=0, columnspan=2, sticky="w", padx=75)
-        self.poeladder_label.bind(
-            "<Button-1>", self.open_poeladder_link)
+        self.poeladder_label.grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        self.poeladder_label.bind("<Button-1>", self.open_poeladder_link)
         row += 1
 
         ctk.CTkCheckBox(frame, text="Enable Integration", variable=self.enable_poeladder_var,
-                        command=self._toggle_poeladder).grid(
-            row=row, column=0, columnspan=1, sticky="w"
-        )
+                        command=self._toggle_poeladder).grid(row=row, column=0, columnspan=2, sticky="w")
         row += 1
 
         ctk.CTkLabel(frame, text="Collection League:").grid(row=row, column=0, sticky="w")
@@ -222,25 +259,31 @@ class UnifiedSettingsSection:
             width=self.width,
             state="normal" if self.enable_poeladder_var.get() else "disabled"
         )
-        self.dynamic_data_league_cb.grid(row=row, column=1, columnspan=1, sticky="w")
+        self.dynamic_data_league_cb.grid(row=row, column=1, sticky="w")
         self.dynamic_data_league_var.trace_add("write", self._on_dynamic_league_change)
         row += 1
 
         fetch_btn_state = "normal" if self.enable_poeladder_var.get() else "disabled"
         self.fetch_collection_btn = ctk.CTkButton(frame, text="Fetch Collection", state=fetch_btn_state,
-                                                  command=self._fetch_poeladder,
-                                                  width=self.long_width)
-        self.fetch_collection_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(5, 10))
-        row += 1
+                                                  command=self._fetch_poeladder, width=self.long_width)
+        self.fetch_collection_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
-        add_separator(frame, row)
-        row += 1
+    # -------------------------------
+    # Capture / OCR
+    # -------------------------------
+    def _build_capture(self, frame):
+        row = 0
 
-        # ---- Toasts ----
-        ctk.CTkLabel(frame, text="Toasts (Notifications)", font=make_font(13, "bold")).grid(
-            row=row, column=0, columnspan=2, sticky="w", pady=(5, 5)
-        )
-        row += 1
+        ctk.CTkLabel(frame, text="Layout Capture Area (% of screen):").grid(row=row, column=0, sticky="w")
+        area_entry = ctk.CTkEntry(frame, textvariable=self.top_right_target_area_percent_var, width=self.width)
+        area_entry.grid(row=row, column=1, sticky="w")
+        self.top_right_target_area_percent_var.trace_add("write", self._update_top_right_target_area_percent)
+
+    # -------------------------------
+    # Toasts
+    # -------------------------------
+    def _build_toasts(self, frame):
+        row = 0
 
         ctk.CTkCheckBox(frame, text="Enable Toasts", variable=self.toasts_var, command=self._toggle_toasts).grid(
             row=row, column=0, columnspan=2, sticky="w"
@@ -248,28 +291,22 @@ class UnifiedSettingsSection:
         row += 1
 
         ctk.CTkLabel(frame, text="Position:").grid(row=row, column=0, sticky="w")
-        toast_position_cb = ctk.CTkComboBox(frame, variable=self.toasts_position_var, values=c.VALID_TOAST_POSITIONS,
-                                            width=self.width)
+        toast_position_cb = ctk.CTkComboBox(frame, variable=self.toasts_position_var,
+                                            values=c.VALID_TOAST_POSITIONS, width=self.width)
         toast_position_cb.grid(row=row, column=1, sticky="w")
         self.toasts_position_var.trace_add("write", self._update_toasts_position)
         row += 1
 
         ctk.CTkLabel(frame, text="Y Offset (px):").grid(row=row, column=0, sticky="w")
-        offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_y_offset_var, width=self.width)
-        offset_entry.grid(row=row, column=1, sticky="w")
+        y_offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_y_offset_var, width=self.width)
+        y_offset_entry.grid(row=row, column=1, sticky="w")
         self.toasts_y_offset_var.trace_add("write", self._update_toasts_y_offset)
         row += 1
 
         ctk.CTkLabel(frame, text="X Offset (px):").grid(row=row, column=0, sticky="w")
-        offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_x_offset_var, width=self.width)
-        offset_entry.grid(row=row, column=1, sticky="w")
+        x_offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_x_offset_var, width=self.width)
+        x_offset_entry.grid(row=row, column=1, sticky="w")
         self.toasts_x_offset_var.trace_add("write", self._update_toasts_x_offset)
-        row += 1
-
-        ctk.CTkLabel(frame, text="Layout Capture Area (% of screen):").grid(row=row, column=0, sticky="w")
-        area_entry = ctk.CTkEntry(frame, textvariable=self.top_right_target_area_percent_var, width=self.width)
-        area_entry.grid(row=row, column=1, sticky="w")
-        self.top_right_target_area_percent_var.trace_add("write", self._update_top_right_target_area_percent)
         row += 1
 
         ctk.CTkLabel(frame, text="Duration (sec):").grid(row=row, column=0, sticky="w")
@@ -306,92 +343,103 @@ class UnifiedSettingsSection:
         headline_font_size_entry.bind("<FocusOut>", lambda e: self._update_toast_headline_font_size())
         row += 1
 
-        # ---- Collection Missing Color ----
         ctk.CTkLabel(frame, text="Collection Missing Color:").grid(row=row, column=0, sticky="w")
 
-        # Preview color box
         self.color_preview = ctk.CTkFrame(frame, width=60, height=25, fg_color=self.collection_missing_color_var.get())
         self.color_preview.grid(row=row, column=1, sticky="w", padx=(0, 10))
 
-        # Button to open color picker
         pick_btn = ctk.CTkButton(frame, text="Pick", width=60, command=self._pick_collection_color)
         pick_btn.grid(row=row, column=1, sticky="e")
-
         row += 1
 
-        self.example_toast_btn = ctk.CTkButton(
-            frame,
-            text="SHOW EXAMPLE",
-            command=self._toggle_example_toast,
-            width=self.long_width
-        )
-        self.example_toast_btn.grid(
-            row=row,
-            column=0,
-            columnspan=2,
-            sticky="w",
-            pady=(10, 5)
-        )
+        self.example_toast_btn = ctk.CTkButton(frame, text="SHOW EXAMPLE",
+                                               command=self._toggle_example_toast, width=self.long_width)
+        self.example_toast_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 5))
         row += 1
 
-        reset_toasts_btn = ctk.CTkButton(
-            frame,
-            text="Reset Toast Settings",
-            fg_color="#8B0000",
-            hover_color="#A00000",
-            command=self._reset_toast_settings,
-            width=self.long_width
-        )
-        reset_toasts_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 5))
-        row += 1
+        reset_toasts_btn = ctk.CTkButton(frame, text="Reset Toast Settings", fg_color="#8B0000",
+                                         hover_color="#A00000", command=self._reset_toast_settings,
+                                         width=self.long_width)
+        reset_toasts_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(5, 5))
 
-        # Current Record # -- Saved in memory and locally
+    # -------------------------------
+    # Records / Duplicates
+    # -------------------------------
+    def _build_records(self, frame):
+        row = 0
+
         ctk.CTkLabel(frame, text="CSV Current Record:").grid(row=row, column=0, sticky="w")
         csv_record_entry = ctk.CTkEntry(frame, state="disabled", textvariable=self.csv_current_record_number_var,
                                         width=self.width)
         csv_record_entry.grid(row=row, column=1, sticky="w")
-
         row += 1
+
         ctk.CTkLabel(frame, text="JSON Current Record:").grid(row=row, column=0, sticky="w")
         json_record_entry = ctk.CTkEntry(frame, state="disabled", textvariable=self.json_current_record_number_var,
                                          width=self.width)
         json_record_entry.grid(row=row, column=1, sticky="w")
         row += 1
 
-        # ---- Duplicate Check ----
         ctk.CTkLabel(frame, text="Seconds Between Dupe Checks:").grid(row=row, column=0, sticky="w")
         row += 1
-        dupe_slider = ctk.CTkSlider(
-            frame, from_=c.MIN_DUPE_DURATION, to=c.MAX_DUPE_DURATION, variable=self.dupe_duration
-        )
+
+        dupe_slider = ctk.CTkSlider(frame, from_=c.MIN_DUPE_DURATION, to=c.MAX_DUPE_DURATION,
+                                    variable=self.dupe_duration)
         dupe_slider.grid(row=row, column=0, sticky="w", pady=(10, 0))
         dupe_slider.bind("<ButtonRelease-1>", lambda e: self._update_dupe_slider())
 
         self.dupe_label = ctk.CTkLabel(frame, text=f"{self.dupe_duration.get()}s")
         self.dupe_label.grid(row=row, column=1, sticky="w", padx=10, pady=(10, 0))
-        row += 1
 
-        return row
-
+    # -------------------------------
+    # Validation / Links
+    # -------------------------------
     def _validate_poe_live(self, proposed_value):
         if re.match(r"^[A-Za-z0-9_#]*$", proposed_value):
             return True
+
         self.parent.bell()
         return False
 
     def open_poeladder_link(self, event=None):
         webbrowser.open(
-            "https://poeladder.com/faqs#How_do_I_know_which_item_to_pick_from_a_Curio_box_when_I_run_a_Grand_Heist_Wing")
+            "https://poeladder.com/faqs#How_do_I_know_which_item_to_pick_from_a_Curio_box_when_I_run_a_Grand_Heist_Wing"
+        )
 
-    # ---- Handlers ----
+    # -------------------------------
+    # Application Handlers
+    # -------------------------------
     def _update_application_theme(self, *_):
         val = self.theme_selector_var.get()
         if not val:
             return
+
         log_message("Theme Selector", val)
         set_setting("Application", "theme_mode", val)
         switch_mode(val)
 
+    def _update_application_font(self, *_):
+        new_family = self.font_selector_var.get()
+        if not new_family:
+            return
+
+        set_setting("Application", "font_family", new_family)
+
+        from fonts import font_family_var, _ensure_font_var
+
+        _ensure_font_var(master=self.parent)
+        font_family_var.set(new_family)
+        update_all_fonts(self.parent)
+
+    def _toggle_hdr(self):
+        enabled = self.enable_hdr_filtering_var.get()
+        set_setting("Application", "is_hdr_filtering_enabled", enabled)
+        log_message("HDR", enabled)
+        c.IS_HDR_ENABLED = enabled
+
+    # -------------------------------
+    # Toast Handlers
+    # -------------------------------
     def _update_toasts_position(self, *_):
         val = self.toasts_position_var.get()
         if not val:
@@ -400,20 +448,18 @@ class UnifiedSettingsSection:
         toasts.set_toast_position(val, self.parent)
 
     def _update_toasts_y_offset(self, *_):
-
         val = self.toasts_y_offset_var.get()
+
         if val in ("", "-", "+"):
             return
 
-        if not val:
-            return
         try:
             offset = int(val)
         except ValueError:
             return
+
         offset = max(c.TOAST_Y_OFFSET_MIN, min(c.TOAST_Y_OFFSET_MAX, offset))
 
-        # write back if clamped
         if str(offset) != val:
             self.toasts_y_offset_var.set(str(offset))
             return
@@ -421,45 +467,23 @@ class UnifiedSettingsSection:
         toasts.set_toast_y_offset(offset, self.parent)
 
     def _update_toasts_x_offset(self, *_):
-
         val = self.toasts_x_offset_var.get()
+
         if val in ("", "-", "+"):
             return
 
-        if not val:
-            return
         try:
             offset = int(val)
         except ValueError:
             return
+
         offset = max(c.TOAST_X_OFFSET_MIN, min(c.TOAST_X_OFFSET_MAX, offset))
 
-        # write back if clamped
         if str(offset) != val:
             self.toasts_x_offset_var.set(str(offset))
             return
 
         toasts.set_toast_x_offset(offset, self.parent)
-
-    def _update_top_right_target_area_percent(self, *_):
-        val = self.top_right_target_area_percent_var.get()
-
-        if val in ("", ".", "-", "+"):
-            return
-
-        try:
-            percent = float(val)
-        except ValueError:
-            return
-
-        percent = max(0.01, min(1.00, percent))
-
-        if str(percent) != val:
-            self.top_right_target_area_percent_var.set(str(percent))
-            return
-
-        log_message("Top Right Target Area Percent", percent)
-        set_setting("Application", "top_right_target_area_percent", percent)
 
     def _update_toast_image_width(self, *_):
         val = self.toast_image_width_var.get().strip()
@@ -513,18 +537,43 @@ class UnifiedSettingsSection:
         self.toast_headline_font_size_var.set(str(size))
         toasts.set_toast_headline_font_size(size, self.parent)
 
+    def _update_toasts_duration(self, *_):
+        val = self.toasts_duration_var.get().strip()
+
+        if not val:
+            return
+
+        try:
+            dur = int(val)
+        except ValueError:
+            return
+
+        set_setting("Application", "toasts_duration_seconds", dur)
+        toasts.set_toast_duration(dur)
+
+    def _toggle_toasts(self):
+        enabled = self.toasts_var.get()
+        set_setting("Application", "are_toasts_enabled", enabled)
+        toasts.toggle_toasts(enabled)
+
     def _toggle_example_toast(self):
         visible = toasts.toggle_example(self.parent)
 
         if self.example_toast_btn:
-            self.example_toast_btn.configure(
-                text="HIDE EXAMPLE" if visible else "SHOW EXAMPLE"
-            )
+            self.example_toast_btn.configure(text="HIDE EXAMPLE" if visible else "SHOW EXAMPLE")
+
+    def _pick_collection_color(self):
+        color_code = colorchooser.askcolor(title="Choose Collection Missing Color")
+
+        if color_code and color_code[1]:
+            chosen = color_code[1]
+            self.collection_missing_color_var.set(chosen)
+            self.color_preview.configure(fg_color=chosen)
+            toasts.set_collection_missing_color(chosen)
 
     def _reset_toast_settings(self):
         log_message("Resetting toast settings to defaults")
 
-        # ---- Defaults ----
         default_position = c.DEFAULT_TOAST_POSITION
         default_y = c.DEFAULT_TOAST_Y_OFFSET
         default_x = c.DEFAULT_TOAST_X_OFFSET
@@ -536,7 +585,6 @@ class UnifiedSettingsSection:
         default_font_size = c.DEFAULT_TOAST_FONT_SIZE
         default_headline_font_size = c.DEFAULT_TOAST_HEADLINE_FONT_SIZE
 
-        # ---- Persist ----
         set_setting("Application", "toast_position", default_position)
         set_setting("Application", "toast_y_offset", default_y)
         set_setting("Application", "toast_x_offset", default_x)
@@ -546,9 +594,8 @@ class UnifiedSettingsSection:
         set_setting("Application", "toast_image_width", default_image_width)
         set_setting("Application", "toast_image_height", default_image_height)
         set_setting("Application", "toast_font_size", default_font_size)
-        set_setting("Application","toast_headline_font_size",default_headline_font_size
-                    )
-        # ---- Update UI ----
+        set_setting("Application", "toast_headline_font_size", default_headline_font_size)
+
         self.toasts_position_var.set(default_position)
         self.toasts_y_offset_var.set(str(default_y))
         self.toasts_x_offset_var.set(str(default_x))
@@ -560,7 +607,6 @@ class UnifiedSettingsSection:
         self.toast_font_size_var.set(str(default_font_size))
         self.toast_headline_font_size_var.set(str(default_headline_font_size))
 
-        # ---- Apply Live ----
         toasts.toggle_toasts(default_enabled)
         toasts.set_toast_duration(default_duration)
         toasts.set_toast_position(default_position)
@@ -571,7 +617,6 @@ class UnifiedSettingsSection:
         toasts.set_toast_font_size(default_font_size)
         toasts.set_toast_headline_font_size(default_headline_font_size)
 
-        # Reposition existing toasts immediately
         try:
             toasts.refresh_example(self.parent)
             toasts.reposition(self.parent)
@@ -580,60 +625,50 @@ class UnifiedSettingsSection:
 
         log_message("Toast settings reset complete")
 
-    def _update_application_font(self, *_):
-        new_family = self.font_selector_var.get()
-        if not new_family:
+    # -------------------------------
+    # Capture
+    # -------------------------------
+    def _update_top_right_target_area_percent(self, *_):
+        val = self.top_right_target_area_percent_var.get()
+
+        if val in ("", ".", "-", "+"):
             return
-        set_setting("Application", "font_family", new_family)
-        from fonts import font_family_var, _ensure_font_var
-        _ensure_font_var(master=self.parent)
-        font_family_var.set(new_family)
-        update_all_fonts(self.parent)
 
-    def _toggle_toasts(self):
-        enabled = self.toasts_var.get()
-        set_setting("Application", "are_toasts_enabled", enabled)
-        toasts.toggle_toasts(enabled)
+        try:
+            percent = float(val)
+        except ValueError:
+            return
 
-    def _pick_collection_color(self):
-        color_code = colorchooser.askcolor(title="Choose Collection Missing Color")
-        if color_code and color_code[1]:
-            chosen = color_code[1]
-            self.collection_missing_color_var.set(chosen)
-            self.color_preview.configure(fg_color=chosen)
-            toasts.set_collection_missing_color(chosen)
+        percent = max(0.01, min(1.00, percent))
 
-    def _update_toasts_duration(self, *_):
-        val = self.toasts_duration_var.get().strip()
-        dur = int(val) if val else 5
-        set_setting("Application", "toasts_duration_seconds", dur)
-        toasts.set_toast_duration(dur)
+        if str(percent) != val:
+            self.top_right_target_area_percent_var.set(str(percent))
+            return
 
+        log_message("Top Right Target Area Percent", percent)
+        set_setting("Application", "top_right_target_area_percent", percent)
+
+    # -------------------------------
+    # PoE Ladder
+    # -------------------------------
     def _toggle_poeladder(self):
         enabled = self.enable_poeladder_var.get()
         set_setting("Application", "enable_poeladder", enabled)
         log_message("poeladder", enabled)
 
         fetch_btn_state = "normal" if enabled else "disabled"
-        if hasattr(self, "fetch_collection_btn"):
+
+        if self.fetch_collection_btn:
             self.fetch_collection_btn.configure(state=fetch_btn_state)
 
         if self.dynamic_data_league_cb:
-            cb_state = "normal" if enabled else "disabled"
-            self.dynamic_data_league_cb.configure(state=cb_state)
+            self.dynamic_data_league_cb.configure(state="normal" if enabled else "disabled")
 
         self.tree_manager.refresh_treeview(self.tracker)
-
-    def _toggle_hdr(self):
-        enabled = self.enable_hdr_filtering_var.get()
-        set_setting("Application", "is_hdr_filtering_enabled", enabled)
-        log_message("HDR", enabled)
-        c.IS_HDR_ENABLED = enabled
 
     def _fetch_poeladder(self):
         player = self.poe_player_var.get().strip()
 
-        # Validate PoE username
         if not re.match(r"^[A-Za-z0-9_]+#[0-9]{4}$", player):
             toasts.show_message(self.parent, "Invalid PoE profile! Must be in format 'player#1234'.")
             self.poe_entry.focus_set()
@@ -653,6 +688,7 @@ class UnifiedSettingsSection:
             (name for name, ident in self.league_display_mapping.items() if ident == saved_identifier),
             leagues[0] if leagues else ""
         )
+
         self.dynamic_data_league_var.set(selected_name)
         threading.Thread(target=self._threaded_on_league_change, daemon=True).start()
         self.tree_manager.refresh_treeview(self.tracker)
@@ -669,6 +705,7 @@ class UnifiedSettingsSection:
         player_ladders = curio_collection_fetch.PLAYER_LADDERS.get(player, {})
         self.league_display_mapping = {**player_ladders}
         ladder_identifier = self.league_display_mapping.get(league_name)
+
         if ladder_identifier:
             set_setting("Application", "poeladder_ggg_league", league_name)
             set_setting("Application", "poeladder_league_identifier", ladder_identifier)
@@ -677,10 +714,15 @@ class UnifiedSettingsSection:
             self.tracker.on_league_change()
             self.tree_manager.refresh_treeview(self.tracker)
 
+    # -------------------------------
+    # Records / Player
+    # -------------------------------
     def _update_dupe_slider(self):
         val = int(self.dupe_duration.get())
+
         if val == 0:
             return
+
         set_setting("Application", "time_last_dupe_check_seconds", val)
         self.dupe_label.configure(text=f"{val}s")
         self.tracker.set_duplicate_duration(val)
@@ -689,8 +731,8 @@ class UnifiedSettingsSection:
         val = self.data_league_var.get()
         if not val:
             return
-        set_setting("Application", "data_league", val)
 
+        set_setting("Application", "data_league", val)
         self.tracker.on_league_change()
         self.tree_manager.refresh_treeview(self.tracker)
 
@@ -698,21 +740,17 @@ class UnifiedSettingsSection:
         val = self.poe_player_var.get()
         if not val:
             return
+
         set_setting("User", "poe_user", val)
         self.tracker.poe_user = val
         self.tree_manager.total_frame.player_name.set(val)
 
 
 # -------------------------------
-# Helper functions
+# Helper Functions
 # -------------------------------
 def switch_mode(mode=c.DEFAULT_THEME_MODE):
     apply_theme(mode=mode)
-
-
-def add_separator(parent, row_index):
-    separator = CTkFrame(parent, height=2, fg_color="#a0a0a0")
-    separator.grid(row=row_index, column=0, columnspan=2, sticky="ew", pady=(10, 10))
 
 
 def show_settings_popup(parent, tracker, theme_manager, tree_manager):
