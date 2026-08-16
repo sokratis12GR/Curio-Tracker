@@ -1,16 +1,12 @@
-import json
-import urllib.parse
-from link_utils import generate_trade_url_from_values, open_url
-
 from PIL import Image
 from customtkinter import *
 from customtkinter import CTkImage
 
-import config
 import currency_utils
 from config import IMAGE_COL_WIDTH, ROW_HEIGHT
 from fonts import make_font
 from img_utils import get_icon
+from link_utils import generate_trade_url_from_values, open_url
 from ocr_utils import parse_item_name
 from renderer import render_item
 from tree_utils import pad_image
@@ -207,12 +203,23 @@ class ItemOverviewFrame:
             field_lbl.grid()
             value_lbl.grid()
 
-        # --- Trade link (Replicas + Experimental only) ---
+        # --- Trade link ---
         if trade_url:
             field_lbl, value_lbl = self.label_pairs["Trade"]
+
+            trade_text = (
+                "Search Enchantment"
+                if item_type in (
+                    "Enchant",
+                    "Armor Enchants",
+                    "Weapon Enchants",
+                )
+                else "Open Trade Search"
+            )
+
             value_lbl.configure(
                 font=make_font(12, underline=True),
-                text="Open Trade Search",
+                text=trade_text,
                 cursor="hand2"
             )
             value_lbl.unbind("<Button-1>")
