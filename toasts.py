@@ -15,10 +15,7 @@ from renderer import render_item, get_border_color
 from settings import get_setting, set_setting
 from tree_manager import TreeManager
 
-IMAGE_COL_WIDTH = int(get_setting("Application", "toast_image_width", 200))
-ROW_HEIGHT = int(get_setting("Application", "toast_row_height", 40))
-TOAST_FONT_SIZE = int(get_setting("Application", "toast_font_size", 11))
-TOAST_HEADLINE_FONT_SIZE = int(get_setting("Application", "toast_headline_font_size", 10))
+
 TOASTS = []
 TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
 TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
@@ -26,6 +23,10 @@ ARE_TOASTS_ENABLED = get_setting('Application', 'are_toasts_enabled', True)
 TOAST_POSITION = get_setting("Application", "toast_position", "top_right")
 TOAST_Y_OFFSET = int(get_setting("Application", "toast_y_offset", 80))
 TOAST_X_OFFSET = int(get_setting("Application", "toast_x_offset", 0))
+IMAGE_COL_WIDTH = int(get_setting("Application", "toast_image_width", 200))
+TOAST_IMAGE_HEIGHT = int(get_setting("Application", "toast_image_height", 40))
+TOAST_FONT_SIZE = int(get_setting("Application", "toast_font_size", 11))
+TOAST_HEADLINE_FONT_SIZE = int(get_setting("Application", "toast_headline_font_size", 10))
 COLLECTION_MISSING_COLOR = get_setting("Application", "collection_missing_color", "#00FF00")
 
 TOAST_FONT = None
@@ -112,10 +113,22 @@ def get_toast_duration_ms():
     return TOASTS_DURATION * 1000
 
 
-def create_toast(root, message, image=None, duration=None, is_missing=False, item=None,
-                 tree_manager: TreeManager = None, tracker=None, force_show=False, auto_close=True):
+def create_toast(
+    root,
+    message,
+    image=None,
+    duration=None,
+    is_missing=False,
+    item=None,
+    tree_manager: TreeManager = None,
+    tracker=None,
+    force_show=False,
+    auto_close=True,
+    headline=None,
+):
     if not ARE_TOASTS_ENABLED and not force_show:
         return None
+
     if duration is None:
         duration = get_toast_duration_ms()
 
@@ -135,22 +148,43 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
         padx=TOAST_PADDING,
         pady=TOAST_PADDING,
         highlightbackground=border_color,
-        highlightthickness=border_thickness
+        highlightthickness=border_thickness,
     )
     frame.pack()
 
     record_number = getattr(item, "record_number", None)
 
-    # Add image if provided
     if image:
         img_label = tk.Label(frame, image=image, bg="black")
         img_label.image = image
         img_label.pack(side="left", padx=(0, 5))
         toast.img_ref = image
 
-    # Add text
-    text_label = tk.Label(frame, text=message, bg="black", font=get_toast_font(), fg="white", anchor="w")
-    text_label.pack(side="left")
+    text_frame = tk.Frame(frame, bg="black")
+    text_frame.pack(side="left", anchor="center")
+
+    if headline:
+        headline_label = tk.Label(
+            text_frame,
+            text=headline,
+            bg="black",
+            fg="white",
+            font=get_toast_headline_font(),
+            anchor="center",
+            justify="center",
+        )
+        headline_label.pack(side="top", anchor="center")
+
+    text_label = tk.Label(
+        text_frame,
+        text=message,
+        bg="black",
+        font=get_toast_font(),
+        fg="white",
+        anchor="center",
+        justify="center",
+    )
+    text_label.pack(side="top", anchor="center")
 
     if item is not None:
         check_var = ctk.StringVar(value="False")
@@ -163,12 +197,11 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
                     root,
                     record_number,
                     item_text,
-                    updates={"Picked": check_var.get()}
+                    updates={"Picked": check_var.get()},
                 )
                 tree_manager.refresh_treeview(tracker=tracker)
 
             root.focus_force()
-            return
 
         pickup_checkbox = ctk.CTkCheckBox(
             frame,
@@ -178,7 +211,7 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
             variable=check_var,
             command=mark_picked,
             onvalue="True",
-            offvalue="False"
+            offvalue="False",
         )
         pickup_checkbox.pack(side="right", padx=(10, 0))
 
@@ -188,15 +221,15 @@ def create_toast(root, message, image=None, duration=None, is_missing=False, ite
     TOASTS.append(toast)
     reposition(root)
 
-    # Schedule close
     def close_toast():
         if toast in TOASTS:
             TOASTS.remove(toast)
+
         try:
             toast.destroy()
         except Exception as e:
             log_message(e)
-            pass
+
         reposition(root)
 
     if auto_close:
@@ -261,81 +294,114 @@ def show_custom(root, item, options: CustomToastOptions):
     tier = getattr(item, "tier", "")
     owned = getattr(item, "owned", False)
     type_ = getattr(item, "type", "")
-    record_number = getattr(item, "record_number", None)
     five_link_value = currency_utils.calculate_five_link_estimate_value(item)
     six_link_value = currency_utils.calculate_six_link_estimate_value(item)
 
     is_missing = not owned and utils.is_unique(type_)
 
-    added_owned_txt = "Missing\n" if (options.show_owned if options.show_owned is not None else is_missing) else ""
-    added_stack_size_txt = f" | Stack Size: {stack_size_txt}" if (
-        options.show_stack_size if options.show_stack_size is not None else bool(stack_size_txt)) else ""
-    added_tier_txt = f" | Tier: {tier}" if (options.show_tier if options.show_tier is not None else bool(tier)) else ""
-    added_estimated_value_txt = f"\nEstimated Value: {display_value}" if (
-        options.show_estimated_value if options.show_estimated_value is not None else bool(display_value)) else ""
-    added_5_link_value_txt = f"\n5-L: {five_link_value}" if five_link_value and (
-        options.show_estimated_value if options.show_estimated_value is not None else bool(display_value)) else ""
-    added_6_link_value_txt = f" | 6-L: {six_link_value}" if six_link_value and (
-        options.show_estimated_value if options.show_estimated_value is not None else bool(display_value)) else ""
+    added_owned_txt = (
+        "Missing\n"
+        if (
+            options.show_owned
+            if options.show_owned is not None
+            else is_missing
+        )
+        else ""
+    )
+
+    added_stack_size_txt = (
+        f" | Stack Size: {stack_size_txt}"
+        if (
+            options.show_stack_size
+            if options.show_stack_size is not None
+            else bool(stack_size_txt)
+        )
+        else ""
+    )
+
+    added_tier_txt = (
+        f" | Tier: {tier}"
+        if (
+            options.show_tier
+            if options.show_tier is not None
+            else bool(tier)
+        )
+        else ""
+    )
+
+    show_value = (
+        options.show_estimated_value
+        if options.show_estimated_value is not None
+        else bool(display_value)
+    )
+
+    added_estimated_value_txt = (
+        f"\nEstimated Value: {display_value}"
+        if display_value and show_value
+        else ""
+    )
+
+    added_5_link_value_txt = (
+        f"\n5-L: {five_link_value}"
+        if five_link_value and show_value
+        else ""
+    )
+
+    added_6_link_value_txt = (
+        f" | 6-L: {six_link_value}"
+        if six_link_value and show_value
+        else ""
+    )
 
     main_message = options.custom_message or (
-            added_owned_txt + item_text + added_stack_size_txt + added_tier_txt +
-            added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt
+        added_owned_txt
+        + item_text
+        + added_stack_size_txt
+        + added_tier_txt
+        + added_estimated_value_txt
+        + added_5_link_value_txt
+        + added_6_link_value_txt
     )
 
     tk_img = render_toast_image(item)
 
     border_color = options.border_color or (
-        COLLECTION_MISSING_COLOR if is_missing else "black")
-    border_thickness = options.border_thickness or (3 if is_missing else 0)
-    if options.is_highlight:
-        border_color = options.border_color or "#FFD700"  # gold
-        border_thickness = options.border_thickness or 3
+        COLLECTION_MISSING_COLOR if is_missing else "black"
+    )
+    border_thickness = (
+        options.border_thickness
+        if options.border_thickness is not None
+        else (3 if is_missing else 0)
+    )
 
-    toast = create_toast(root, "", image=tk_img, is_missing=False)
+    if options.is_highlight:
+        border_color = options.border_color or "#FFD700"
+        border_thickness = (
+            options.border_thickness
+            if options.border_thickness is not None
+            else 3
+        )
+
+    toast = create_toast(
+        root,
+        main_message,
+        image=tk_img,
+        is_missing=False,
+        headline=options.headline,
+    )
+
     if toast:
         try:
             frame = toast.winfo_children()[0]
-            frame.configure(highlightbackground=border_color, highlightthickness=border_thickness)
-
-            if hasattr(toast, "img_ref"):
-                img_label = frame.winfo_children()[0]
-            else:
-                img_label = tk.Label(frame, image=tk_img, bg="black")
-                img_label.image = tk_img
-                img_label.pack(side="left")
-                toast.img_ref = tk_img
-
-            text_frame = tk.Frame(frame, bg="black", height=ROW_HEIGHT)
-            text_frame.pack(side="left", anchor="w")
-
-            if options.headline:
-                headline_label = tk.Label(
-                    text_frame,
-                    text=options.headline,
-                    font=get_toast_headline_font(),
-                    bg="black",
-                    fg="white",
-                    anchor="w",
-                    justify="center"
-                )
-                headline_label.pack(side="top", anchor="center")
-
-            text_label = tk.Label(
-                text_frame,
-                text=main_message,
-                font=get_toast_font(),
-                bg="black",
-                fg="white",
-                anchor="w",
-                justify="left"
+            frame.configure(
+                highlightbackground=border_color,
+                highlightthickness=border_thickness,
             )
-            text_label.pack(side="top", anchor="w")
-
-        except Exception as e:
-            log_message(f"[WARN] Failed to apply custom content: {e}")
+        except (tk.TclError, IndexError) as e:
+            log_message(f"[WARN] Failed to apply custom border: {e}")
 
         reposition(root)
+
     return toast
 
 
@@ -428,7 +494,7 @@ def show_example(root):
     item = ExampleToastItem()
 
     message = (
-        "EXAMPLE TOAST PREVIEW | Missing\n"
+        "Missing\n"
         "Record: 12345\n"
         "Replica Bated Breath | Tier: 0\n"
         "Estimated Value: 100 Divines"
@@ -442,7 +508,8 @@ def show_example(root):
         image=tk_img,
         is_missing=True,
         force_show=True,
-        auto_close=False
+        auto_close=False,
+        headline="EXAMPLE TOAST PREVIEW - HEADLINE"
     )
 
     return EXAMPLE_TOAST
@@ -454,8 +521,9 @@ def render_toast_image(item):
     img = img.resize(
         (
             max(1, IMAGE_COL_WIDTH - 4),
-            max(1, ROW_HEIGHT)
-        )
+            max(1, TOAST_IMAGE_HEIGHT),
+        ),
+        Image.Resampling.LANCZOS,
     )
 
     return ImageTk.PhotoImage(img)
@@ -493,9 +561,9 @@ def get_example_image():
         resized = EXAMPLE_SOURCE_IMAGE.resize(
             (
                 max(1, IMAGE_COL_WIDTH - 4),
-                max(1, ROW_HEIGHT)
+                max(1, TOAST_IMAGE_HEIGHT),
             ),
-            Image.Resampling.LANCZOS
+            Image.Resampling.LANCZOS,
         )
 
         return ImageTk.PhotoImage(resized)
@@ -560,17 +628,16 @@ def set_toast_image_width(width: int, root=None):
     log_message(f"Toast image width set to: {IMAGE_COL_WIDTH}px")
 
 
-def set_toast_row_height(height: int, root=None):
-    global ROW_HEIGHT
+def set_toast_image_height(height: int, root=None):
+    global TOAST_IMAGE_HEIGHT
 
-    ROW_HEIGHT = int(height)
-    set_setting("Application", "toast_row_height", ROW_HEIGHT)
+    TOAST_IMAGE_HEIGHT = int(height)
+    set_setting("Application", "toast_image_height", TOAST_IMAGE_HEIGHT)
 
     if root is not None:
         refresh_example(root)
 
-    log_message(f"Toast row height set to: {ROW_HEIGHT}px")
-
+    log_message(f"Toast image height set to: {TOAST_IMAGE_HEIGHT}px")
 
 def set_toast_font_size(size: int, root=None):
     global TOAST_FONT_SIZE, TOAST_FONT
@@ -591,19 +658,12 @@ def set_toast_headline_font_size(size: int, root=None):
 
     TOAST_HEADLINE_FONT_SIZE = int(size)
     TOAST_HEADLINE_FONT = None
-
-    set_setting(
-        "Application",
-        "toast_headline_font_size",
-        TOAST_HEADLINE_FONT_SIZE
-    )
+    set_setting("Application", "toast_headline_font_size", TOAST_HEADLINE_FONT_SIZE)
 
     if root is not None:
         refresh_example(root)
 
-    log_message(
-        f"Toast headline font size set to: {TOAST_HEADLINE_FONT_SIZE}"
-    )
+    log_message(f"Toast headline font size set to: {TOAST_HEADLINE_FONT_SIZE}")
 
 
 def set_toast_duration(seconds: int):

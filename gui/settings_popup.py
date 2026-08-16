@@ -106,8 +106,8 @@ class UnifiedSettingsSection:
         self.toast_image_width_var = ctk.StringVar(
             value=str(get_setting("Application","toast_image_width",c.DEFAULT_TOAST_IMAGE_WIDTH))
         )
-        self.toast_row_height_var = ctk.StringVar(
-            value=str(get_setting("Application","toast_row_height",c.DEFAULT_TOAST_ROW_HEIGHT))
+        self.toast_image_height_var = ctk.StringVar(
+            value=str(get_setting("Application", "toast_image_height", c.DEFAULT_TOAST_IMAGE_HEIGHT))
         )
         self.toast_font_size_var = ctk.StringVar(
             value=str(get_setting("Application","toast_font_size",c.DEFAULT_TOAST_FONT_SIZE))
@@ -253,116 +253,57 @@ class UnifiedSettingsSection:
         toast_position_cb.grid(row=row, column=1, sticky="w")
         self.toasts_position_var.trace_add("write", self._update_toasts_position)
         row += 1
+
         ctk.CTkLabel(frame, text="Y Offset (px):").grid(row=row, column=0, sticky="w")
         offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_y_offset_var, width=self.width)
         offset_entry.grid(row=row, column=1, sticky="w")
         self.toasts_y_offset_var.trace_add("write", self._update_toasts_y_offset)
         row += 1
+
         ctk.CTkLabel(frame, text="X Offset (px):").grid(row=row, column=0, sticky="w")
         offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_x_offset_var, width=self.width)
         offset_entry.grid(row=row, column=1, sticky="w")
         self.toasts_x_offset_var.trace_add("write", self._update_toasts_x_offset)
         row += 1
+
         ctk.CTkLabel(frame, text="Layout Capture Area (% of screen):").grid(row=row, column=0, sticky="w")
         area_entry = ctk.CTkEntry(frame, textvariable=self.top_right_target_area_percent_var, width=self.width)
         area_entry.grid(row=row, column=1, sticky="w")
         self.top_right_target_area_percent_var.trace_add("write", self._update_top_right_target_area_percent)
         row += 1
+
         ctk.CTkLabel(frame, text="Duration (sec):").grid(row=row, column=0, sticky="w")
         duration_entry = ctk.CTkEntry(frame, textvariable=self.toasts_duration_var, width=self.width)
         duration_entry.grid(row=row, column=1, sticky="w")
         self.toasts_duration_var.trace_add("write", self._update_toasts_duration)
         row += 1
-        ctk.CTkLabel(
-            frame,
-            text="Toast Image Width (px):"
-        ).grid(row=row, column=0, sticky="w")
 
-        image_width_entry = ctk.CTkEntry(
-            frame,
-            textvariable=self.toast_image_width_var,
-            width=self.width
-        )
+        ctk.CTkLabel(frame, text="Toast Image Width (px):").grid(row=row, column=0, sticky="w")
+        image_width_entry = ctk.CTkEntry(frame, textvariable=self.toast_image_width_var, width=self.width)
         image_width_entry.grid(row=row, column=1, sticky="w")
-
-        image_width_entry.bind(
-            "<Return>",
-            lambda e: self._update_toast_image_width()
-        )
-        image_width_entry.bind(
-            "<FocusOut>",
-            lambda e: self._update_toast_image_width()
-        )
-
+        image_width_entry.bind("<Return>", lambda e: self._update_toast_image_width())
+        image_width_entry.bind("<FocusOut>", lambda e: self._update_toast_image_width())
         row += 1
 
-        ctk.CTkLabel(
-            frame,
-            text="Toast Row Height (px):"
-        ).grid(row=row, column=0, sticky="w")
-
-        row_height_entry = ctk.CTkEntry(
-            frame,
-            textvariable=self.toast_row_height_var,
-            width=self.width
-        )
-        row_height_entry.grid(row=row, column=1, sticky="w")
-
-        row_height_entry.bind(
-            "<Return>",
-            lambda e: self._update_toast_row_height()
-        )
-        row_height_entry.bind(
-            "<FocusOut>",
-            lambda e: self._update_toast_row_height()
-        )
-
+        ctk.CTkLabel(frame, text="Toast Image Height (px):").grid(row=row, column=0, sticky="w")
+        image_height_entry = ctk.CTkEntry(frame, textvariable=self.toast_image_height_var, width=self.width)
+        image_height_entry.grid(row=row, column=1, sticky="w")
+        image_height_entry.bind("<Return>", lambda e: self._update_toast_image_height())
+        image_height_entry.bind("<FocusOut>", lambda e: self._update_toast_image_height())
         row += 1
 
-        ctk.CTkLabel(
-            frame,
-            text="Toast Font Size:"
-        ).grid(row=row, column=0, sticky="w")
-
-        font_size_entry = ctk.CTkEntry(
-            frame,
-            textvariable=self.toast_font_size_var,
-            width=self.width
-        )
+        ctk.CTkLabel(frame, text="Toast Font Size:").grid(row=row, column=0, sticky="w")
+        font_size_entry = ctk.CTkEntry(frame, textvariable=self.toast_font_size_var, width=self.width)
         font_size_entry.grid(row=row, column=1, sticky="w")
-
-        font_size_entry.bind(
-            "<Return>",
-            lambda e: self._update_toast_font_size()
-        )
-        font_size_entry.bind(
-            "<FocusOut>",
-            lambda e: self._update_toast_font_size()
-        )
-
+        font_size_entry.bind("<Return>", lambda e: self._update_toast_font_size())
+        font_size_entry.bind("<FocusOut>", lambda e: self._update_toast_font_size())
         row += 1
 
-        ctk.CTkLabel(
-            frame,
-            text="Toast Headline Font Size:"
-        ).grid(row=row, column=0, sticky="w")
-
-        headline_font_size_entry = ctk.CTkEntry(
-            frame,
-            textvariable=self.toast_headline_font_size_var,
-            width=self.width
-        )
+        ctk.CTkLabel(frame, text="Toast Headline Font Size:").grid(row=row, column=0, sticky="w")
+        headline_font_size_entry = ctk.CTkEntry(frame, textvariable=self.toast_headline_font_size_var, width=self.width)
         headline_font_size_entry.grid(row=row, column=1, sticky="w")
-
-        headline_font_size_entry.bind(
-            "<Return>",
-            lambda e: self._update_toast_headline_font_size()
-        )
-        headline_font_size_entry.bind(
-            "<FocusOut>",
-            lambda e: self._update_toast_headline_font_size()
-        )
-
+        headline_font_size_entry.bind("<Return>", lambda e: self._update_toast_headline_font_size())
+        headline_font_size_entry.bind("<FocusOut>", lambda e: self._update_toast_headline_font_size())
         row += 1
 
         # ---- Collection Missing Color ----
@@ -528,29 +469,23 @@ class UnifiedSettingsSection:
         except ValueError:
             width = c.DEFAULT_TOAST_IMAGE_WIDTH
 
-        width = max(
-            c.TOAST_IMAGE_WIDTH_MIN,
-            min(c.TOAST_IMAGE_WIDTH_MAX, width)
-        )
+        width = max(c.TOAST_IMAGE_WIDTH_MIN, min(c.TOAST_IMAGE_WIDTH_MAX, width))
 
         self.toast_image_width_var.set(str(width))
         toasts.set_toast_image_width(width, self.parent)
 
-    def _update_toast_row_height(self, *_):
-        val = self.toast_row_height_var.get().strip()
+    def _update_toast_image_height(self, *_):
+        val = self.toast_image_height_var.get().strip()
 
         try:
             height = int(val)
         except ValueError:
-            height = c.DEFAULT_TOAST_ROW_HEIGHT
+            height = c.DEFAULT_TOAST_IMAGE_HEIGHT
 
-        height = max(
-            c.TOAST_ROW_HEIGHT_MIN,
-            min(c.TOAST_ROW_HEIGHT_MAX, height)
-        )
+        height = max(c.TOAST_IMAGE_HEIGHT_MIN, min(c.TOAST_IMAGE_HEIGHT_MAX, height))
 
-        self.toast_row_height_var.set(str(height))
-        toasts.set_toast_row_height(height, self.parent)
+        self.toast_image_height_var.set(str(height))
+        toasts.set_toast_image_height(height, self.parent)
 
     def _update_toast_font_size(self, *_):
         val = self.toast_font_size_var.get().strip()
@@ -560,10 +495,7 @@ class UnifiedSettingsSection:
         except ValueError:
             size = c.DEFAULT_TOAST_FONT_SIZE
 
-        size = max(
-            c.TOAST_FONT_SIZE_MIN,
-            min(c.TOAST_FONT_SIZE_MAX, size)
-        )
+        size = max(c.TOAST_FONT_SIZE_MIN, min(c.TOAST_FONT_SIZE_MAX, size))
 
         self.toast_font_size_var.set(str(size))
         toasts.set_toast_font_size(size, self.parent)
@@ -576,10 +508,7 @@ class UnifiedSettingsSection:
         except ValueError:
             size = c.DEFAULT_TOAST_HEADLINE_FONT_SIZE
 
-        size = max(
-            c.TOAST_HEADLINE_FONT_SIZE_MIN,
-            min(c.TOAST_HEADLINE_FONT_SIZE_MAX, size)
-        )
+        size = max(c.TOAST_HEADLINE_FONT_SIZE_MIN, min(c.TOAST_HEADLINE_FONT_SIZE_MAX, size))
 
         self.toast_headline_font_size_var.set(str(size))
         toasts.set_toast_headline_font_size(size, self.parent)
@@ -603,7 +532,7 @@ class UnifiedSettingsSection:
         default_area = c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT
         default_enabled = c.DEFAULT_TOAST_ENABLE
         default_image_width = c.DEFAULT_TOAST_IMAGE_WIDTH
-        default_row_height = c.DEFAULT_TOAST_ROW_HEIGHT
+        default_image_height = c.DEFAULT_TOAST_IMAGE_HEIGHT
         default_font_size = c.DEFAULT_TOAST_FONT_SIZE
         default_headline_font_size = c.DEFAULT_TOAST_HEADLINE_FONT_SIZE
 
@@ -615,7 +544,7 @@ class UnifiedSettingsSection:
         set_setting("Application", "toasts_duration_seconds", default_duration)
         set_setting("Application", "are_toasts_enabled", default_enabled)
         set_setting("Application", "toast_image_width", default_image_width)
-        set_setting("Application", "toast_row_height", default_row_height)
+        set_setting("Application", "toast_image_height", default_image_height)
         set_setting("Application", "toast_font_size", default_font_size)
         set_setting("Application","toast_headline_font_size",default_headline_font_size
                     )
@@ -627,7 +556,7 @@ class UnifiedSettingsSection:
         self.toasts_duration_var.set(str(default_duration))
         self.toasts_var.set(default_enabled)
         self.toast_image_width_var.set(str(default_image_width))
-        self.toast_row_height_var.set(str(default_row_height))
+        self.toast_image_height_var.set(str(default_image_height))
         self.toast_font_size_var.set(str(default_font_size))
         self.toast_headline_font_size_var.set(str(default_headline_font_size))
 
@@ -638,7 +567,7 @@ class UnifiedSettingsSection:
         toasts.set_toast_y_offset(default_y)
         toasts.set_toast_x_offset(default_x)
         toasts.set_toast_image_width(default_image_width)
-        toasts.set_toast_row_height(default_row_height)
+        toasts.set_toast_image_height(default_image_height)
         toasts.set_toast_font_size(default_font_size)
         toasts.set_toast_headline_font_size(default_headline_font_size)
 
