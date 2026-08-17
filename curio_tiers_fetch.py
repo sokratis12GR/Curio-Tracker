@@ -1,6 +1,7 @@
 import pandas as pd
 import requests
 
+import config
 from config import LEAGUE
 from load_utils import OUTPUT_TIERS_CSV, LOCK_FILE
 from logger import log_message
@@ -8,6 +9,8 @@ from shared_lock import is_recent_run, update_lock
 
 # === CONFIG ===
 MIN_SECONDS_BETWEEN_RUNS = 12 * 60 * 60
+LOCK_FILE_IDENTIFIER="poeladder_tiers"
+
 HEADERS = {"User-Agent": "fetch-poeladder-curios/1.0"}
 API_URL = "https://poeladder.com/api/v1/curio"
 
@@ -39,13 +42,29 @@ def fetch_curios():
 
 # === WRAPPER FUNCTION TO CALL ===
 def run_fetch_curios(force=False):
-    if not force and is_recent_run(OUTPUT_TIERS_CSV, MIN_SECONDS_BETWEEN_RUNS):
+    if not force and is_recent_run(
+            LOCK_FILE_IDENTIFIER,
+            MIN_SECONDS_BETWEEN_RUNS
+    ):
         log_message("[INFO] Last run <12 hours ago, skipping tiers fetch.")
         return
 
     curios = fetch_curios()
     if not curios:
         log_message("[WARN] No curios fetched.")
+
+        update_lock(
+            LOCK_FILE_IDENTIFIER,
+            status="error",
+            error="No curios fetched.",
+            resources={
+                "tiers": {
+                    "url": "https://poeladder.com/api/v1/curio",
+                    "file": config.tiers_fetch_file_name,
+                }
+            }
+        )
+
         return
 
     for entry in curios:
@@ -57,5 +76,14 @@ def run_fetch_curios(force=False):
     df.to_csv(OUTPUT_TIERS_CSV, index=False)
     log_message(f"[INFO] Saved curios CSV: {OUTPUT_TIERS_CSV} with {len(df)} rows")
 
-    update_lock(OUTPUT_TIERS_CSV)
-    log_message(f"[INFO] Lock file updated: {LOCK_FILE}")
+    update_lock(
+        LOCK_FILE_IDENTIFIER,
+        status="success",
+        resources={
+            "tiers": {
+                "url": "https://poeladder.com/api/v1/curio",
+                "file": config.tiers_fetch_file_name,
+            }
+        }
+    )
+    log_message(f"[INFO] Lock file updated: {LOCK_FILE_IDENTIFIER}")

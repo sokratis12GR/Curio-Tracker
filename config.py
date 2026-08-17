@@ -259,6 +259,14 @@ file_body_armors = "body_armors.txt"
 all_terms_url = "https://sokratis.space/curio_tracker/terms.json"
 experimental_items_url = "https://sokratis.space/curio_tracker/experimental_items.json"
 enchantments_trade_url = "https://sokratis.space/curio_tracker/enchantments_trade.json"
+
+site_cache_lock_file_name = "fetch/site_cache.lock"
+
+site_config_cache_file_name = "fetch/site_config.json"
+terms_cache_file_name = "fetch/terms.json"
+experimental_items_cache_file_name = "fetch/experimental_items.json"
+enchantments_trade_cache_file_name = "fetch/enchantments_trade.json"
+
 target_application = "Path of Exile"
 not_found_target_txt = "Path of Exile window not found."
 not_found_target_snippet_txt = "Path of Exile window not found. Exiting snippet."

@@ -5,10 +5,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import requests
 
+import config
 from config import APP_DISPLAY_NAME, CONTACT, DISCORD_USERNAME
 from load_utils import OUTPUT_COLLECTION_CSV, OUTPUT_LEAGUES_CSV
 from logger import log_message
 from ocr_utils import smart_title_case
+from shared_lock import is_recent_run, update_lock
 from version_utils import VERSION
 
 # === THREADING FLAGS ===
@@ -17,6 +19,9 @@ IS_FETCHING = False
 PLAYER_LADDERS = {}
 
 # === CONFIG ===
+COLLECTION_LOCK_DURATION = 1 * 60 * 60  # 1 hour
+LOCK_FILE_IDENTIFIER = "poeladder_collection"
+
 HEADERS = {
     "User-Agent": (
         f"{APP_DISPLAY_NAME}/{VERSION} "
@@ -142,21 +147,66 @@ def fetch_all_ladders(player: str):
     return all_curios
 
 
-def run_fetch_curios_threaded(player: str):
+def run_fetch_curios_threaded(player: str, force=False):
     global IS_FETCHING
+
+    if not force and is_recent_run(
+            LOCK_FILE_IDENTIFIER,
+            min_duration=COLLECTION_LOCK_DURATION
+    ):
+        log_message("[INFO] Using cached collection data (recent lock found).")
+        FETCH_DONE.set()
+        IS_FETCHING = False
+        return
+
     IS_FETCHING = True
     FETCH_DONE.clear()
     log_message(f"[INFO] Starting threaded fetch for player {player}...")
 
     try:
         all_curios = fetch_all_ladders(player)
+
         if not all_curios:
             log_message("[WARN] No curios fetched for any ladder.")
+
+            update_lock(
+                LOCK_FILE_IDENTIFIER,
+                status="error",
+                error="No curios fetched for any ladder.",
+                resources={
+                    "collection": {
+                        "url": "https://poeladder.com",
+                        "file": config.collection_fetch_file_name,
+                    },
+                    "leagues": {
+                        "url": "https://poeladder.com",
+                        "file": config.poeladder_leagues_fetch_file_name,
+                    },
+                }
+            )
+
             return
 
         df = pd.DataFrame(all_curios)
         df.to_csv(OUTPUT_COLLECTION_CSV, index=False)
         log_message(f"[INFO] Saved combined curios CSV: {OUTPUT_COLLECTION_CSV} with {len(df)} rows.")
+
+        update_lock(
+            LOCK_FILE_IDENTIFIER,
+            status="success",
+            resources={
+                "collection": {
+                    "url": "https://poeladder.com",
+                    "file": config.collection_fetch_file_name,
+                },
+                "leagues": {
+                    "url": "https://poeladder.com",
+                    "file": config.poeladder_leagues_fetch_file_name,
+                },
+            }
+        )
+        log_message(f"[INFO] Collection lock updated: {LOCK_FILE_IDENTIFIER}")
+
         if "owned" in df.columns:
             owned_series = df["owned"] == True
 
@@ -174,6 +224,24 @@ def run_fetch_curios_threaded(player: str):
         else:
             log_message("[WARN] 'owned' column not found in curios data.")
 
+    except Exception as e:
+        log_message(f"[ERROR] Collection fetch failed: {e}")
+
+        update_lock(
+            LOCK_FILE_IDENTIFIER,
+            status="error",
+            error=str(e),
+            resources={
+                "collection": {
+                    "url": "https://poeladder.com",
+                    "file": config.collection_fetch_file_name,
+                },
+                "leagues": {
+                    "url": "https://poeladder.com",
+                    "file": config.poeladder_leagues_fetch_file_name,
+                },
+            }
+        )
 
     finally:
         IS_FETCHING = False

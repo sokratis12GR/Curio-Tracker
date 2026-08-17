@@ -6,8 +6,9 @@ from statistics import median
 import pandas as pd
 import requests
 
+import config
 from config import LEAGUES_TO_FETCH, APP_DISPLAY_NAME, DISCORD_USERNAME, CONTACT
-from load_utils import get_datasets, OUTPUT_CURRENCY_CSV, LOCK_FILE
+from load_utils import get_datasets, OUTPUT_CURRENCY_CSV
 from logger import log_message
 from shared_lock import is_recent_run, update_lock
 from version_utils import VERSION
@@ -18,6 +19,7 @@ IS_FETCHING = False
 
 # === CONFIG ===
 MIN_SECONDS_BETWEEN_RUNS = 2 * 60 * 60  # 2 hours
+LOCK_FILE_IDENTIFIER ="poe_ninja_currency"
 
 HEADERS = {
     "User-Agent": (
@@ -338,7 +340,10 @@ def run_fetch(force=False):
     global IS_FETCHING
 
     # --- Skip if recent ---
-    if not force and is_recent_run(OUTPUT_CURRENCY_CSV):
+    if not force and is_recent_run(
+            LOCK_FILE_IDENTIFIER,
+            min_duration=MIN_SECONDS_BETWEEN_RUNS
+    ):
         log_message("[INFO] Using cached currency data (recent lock found).")
         FETCH_DONE.set()
         IS_FETCHING = False
@@ -367,14 +372,36 @@ def run_fetch(force=False):
 
         if not all_rows:
             log_message("[WARN] No data fetched for any league.")
+
+            update_lock(
+                LOCK_FILE_IDENTIFIER,
+                status="error",
+                error="No data fetched for any league.",
+                resources={
+                    "currency": {
+                        "url": "https://poe.ninja",
+                        "file": config.currency_fetch_file_name,
+                    }
+                }
+            )
+
             return
 
         df = pd.DataFrame(all_rows)
         df.to_csv(OUTPUT_CURRENCY_CSV, index=False, float_format="%.2f")
         log_message(f"[INFO] Saved combined CSV: {OUTPUT_CURRENCY_CSV}")
 
-        update_lock(OUTPUT_CURRENCY_CSV)
-        log_message(f"[INFO] Lock file updated: {LOCK_FILE}")
+        update_lock(
+            LOCK_FILE_IDENTIFIER,
+            status="success",
+            resources={
+                "currency": {
+                    "url": "https://poe.ninja",
+                    "file": config.currency_fetch_file_name,
+                }
+            }
+        )
+        log_message(f"[INFO] Lock updated: {LOCK_FILE_IDENTIFIER}")
 
         summary = df.groupby(["League", "Category"]).size().to_dict()
         log_message("[INFO] Summary of fetched items per league/category:")

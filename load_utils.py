@@ -1,13 +1,13 @@
 import csv
 import io
+import json
 import os
 import sys
-import json
 import urllib
-from pathlib import Path
 
 import config as c
 from ocr_utils import smart_title_case, format_currency_value
+from shared_lock import is_site_cache_valid, update_site_cache_lock
 
 _DATASETS = None
 
@@ -54,6 +54,7 @@ def load_csv(file_path, row_parser=None, skip_header=True, ensure_dir=False, as_
 
     return results
 
+
 def load_json(file_path, default=None, ensure_dir=False):
     if ensure_dir:
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -66,6 +67,7 @@ def load_json(file_path, default=None, ensure_dir=False):
             return json.load(f)
     except Exception:
         return default if default is not None else {}
+
 
 def load_csv_with_types(file_path) -> dict:
     def parser(row):
@@ -82,14 +84,114 @@ def load_body_armors(file_path) -> list:
     return [line.strip() for line in open(file_path, encoding="utf-8").readlines()]
 
 
-def load_experimental_csv(file_path) -> dict:
-    def parser(row):
-        item_name = smart_title_case(row[0].strip())
-        implicits = [line.strip() for line in row[1].splitlines() if line.strip()]
-        return item_name, implicits
+def save_json(file_path, data):
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-    rows = load_csv(file_path, row_parser=parser)
-    return {item_name: implicits for item_name, implicits in rows if item_name}
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def fetch_json_url(url, timeout=10):
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def refresh_site_cache():
+    resources = {
+        "terms": {
+            "url": c.all_terms_url,
+            "file": TERMS_CACHE_FILE,
+        },
+        "experimental": {
+            "url": c.experimental_items_url,
+            "file": EXPERIMENTAL_ITEMS_CACHE_FILE,
+        },
+        "enchantments_trade": {
+            "url": c.enchantments_trade_url,
+            "file": ENCHANTMENTS_TRADE_CACHE_FILE,
+        },
+    }
+
+    fetched = {}
+
+    for name, resource in resources.items():
+        try:
+            print(f"Fetching remote JSON from {resource['url']} ...")
+            fetched[name] = fetch_json_url(resource["url"])
+        except Exception as e:
+            print(f"Failed to refresh {name}: {e}")
+
+            update_site_cache_lock(
+                status="error",
+                error=f"{name}: {e}"
+            )
+
+            return False
+
+    for name, resource in resources.items():
+        save_json(resource["file"], fetched[name])
+
+    update_site_cache_lock(
+        status="success"
+    )
+
+    return True
+
+
+def ensure_site_cache():
+    cache_files_exist = (
+            os.path.exists(TERMS_CACHE_FILE)
+            and os.path.exists(EXPERIMENTAL_ITEMS_CACHE_FILE)
+            and os.path.exists(ENCHANTMENTS_TRADE_CACHE_FILE)
+    )
+
+    if is_site_cache_valid() and cache_files_exist:
+        return True
+
+    if refresh_site_cache():
+        return True
+
+    if cache_files_exist:
+        print("[WARN] Site refresh failed. Using stale local cache.")
+        return True
+
+    return False
+
+
+_REMOTE_EXPERIMENTAL_CACHE = None
+
+
+def load_remote_experimental(url=None):
+    global _REMOTE_EXPERIMENTAL_CACHE
+
+    if _REMOTE_EXPERIMENTAL_CACHE is not None:
+        return _REMOTE_EXPERIMENTAL_CACHE
+
+    ensure_site_cache()
+
+    data = load_json(EXPERIMENTAL_ITEMS_CACHE_FILE, default=[])
+
+    parsed = {}
+
+    for entry in data:
+        item_name = entry.get("Item", "").strip()
+        implicits = entry.get("ImplicitMod", [])
+
+        if not item_name:
+            continue
+
+        if isinstance(implicits, str):
+            implicits = [line.strip() for line in implicits.splitlines() if line.strip()]
+        elif isinstance(implicits, list):
+            implicits = [str(line).strip() for line in implicits if str(line).strip()]
+        else:
+            implicits = []
+
+        parsed[smart_title_case(item_name)] = implicits
+
+    _REMOTE_EXPERIMENTAL_CACHE = parsed
+    print(f"Successfully loaded cached experimental items ({len(parsed)} items).")
+    return parsed
 
 
 def load_currency_dataset(file_path: str) -> dict:
@@ -110,6 +212,29 @@ def load_currency_dataset(file_path: str) -> dict:
             dataset[league] = {}
         dataset[league][term] = {"chaos": chaos, "divine": divine, "five_link": five_l, "six_link": six_l}
     return dataset
+
+
+_REMOTE_ENCHANTMENTS_TRADE_CACHE = None
+
+def load_remote_enchantments_trade(url=c.enchantments_trade_url):
+    global _REMOTE_ENCHANTMENTS_TRADE_CACHE
+
+    if _REMOTE_ENCHANTMENTS_TRADE_CACHE is not None:
+        return _REMOTE_ENCHANTMENTS_TRADE_CACHE
+
+    ensure_site_cache()
+
+    data = load_json(ENCHANTMENTS_TRADE_CACHE_FILE, default={})
+
+    if not isinstance(data, dict):
+        print("Invalid cached enchantments_trade.json")
+        return {}
+
+    _REMOTE_ENCHANTMENTS_TRADE_CACHE = data
+
+    print(f"Successfully loaded {len(data)} cached enchantment trade mappings.")
+
+    return data
 
 
 def load_tiers_dataset(file_path: str, debugging=False) -> dict:
@@ -164,6 +289,7 @@ def load_collection_dataset(file_path: str, debugging: bool = False) -> dict:
     except Exception as e:
         return {}
 
+
 def load_csv_from_url(url, row_parser=None, skip_header=True):
     results = []
 
@@ -192,34 +318,31 @@ def load_csv_from_url(url, row_parser=None, skip_header=True):
         print(f"Failed to fetch remote CSV: {e}")
         return []
 
+
 _REMOTE_TERMS_CACHE = None
 
-def load_remote_terms(url="https://sokratis.space/curio_tracker/terms.json"):
+
+def load_remote_terms(url=c.all_terms_url):
     global _REMOTE_TERMS_CACHE
 
     if _REMOTE_TERMS_CACHE:
         return _REMOTE_TERMS_CACHE
 
-    try:
-        print(f"Fetching remote JSON from {url} ...")
-        with urllib.request.urlopen(url) as response:
-            data = json.loads(response.read().decode("utf-8"))
+    ensure_site_cache()
 
-        parsed = {}
-        for entry in data:
-            name = entry.get("Name", "").strip()
-            type_name = entry.get("Type", "").strip()
-            if name:
-                parsed[smart_title_case(name)] = type_name
+    data = load_json(TERMS_CACHE_FILE, default=[])
 
-        _REMOTE_TERMS_CACHE = parsed
-        print(f"Successfully loaded remote JSON ({len(parsed)} terms).")
-        return parsed
+    parsed = {}
+    for entry in data:
+        name = entry.get("Name", "").strip()
+        type_name = entry.get("Type", "").strip()
+        if name:
+            parsed[smart_title_case(name)] = type_name
 
-    except Exception as e:
-        print(f"Failed to fetch remote JSON: {e}")
-        print("No internal fallback — returning empty dataset.")
-        return {}
+    _REMOTE_TERMS_CACHE = parsed
+    print(f"Successfully loaded cached JSON ({len(parsed)} terms).")
+    return parsed
+
 
 LOG_FILE = get_data_path(c.logs_file_name)
 SETTINGS_PATH = get_data_path(c.settings_file_name)
@@ -228,8 +351,10 @@ OUTPUT_CURRENCY_CSV = get_data_path(c.currency_fetch_file_name)
 OUTPUT_TIERS_CSV = get_data_path(c.tiers_fetch_file_name)
 OUTPUT_COLLECTION_CSV = get_data_path(c.collection_fetch_file_name)
 OUTPUT_LEAGUES_CSV = get_data_path(c.poeladder_leagues_fetch_file_name)
-INTERNAL_EXPERIMENTAL_CSV = get_resource_path(c.file_experimental_items)
 INTERNAL_BODY_ARMORS_TXT = get_resource_path(c.file_body_armors)
+TERMS_CACHE_FILE = get_data_path(c.terms_cache_file_name)
+EXPERIMENTAL_ITEMS_CACHE_FILE = get_data_path(c.experimental_items_cache_file_name)
+ENCHANTMENTS_TRADE_CACHE_FILE = get_data_path(c.enchantments_trade_cache_file_name)
 
 
 def get_datasets(load_external=True, force_reload=False):
@@ -237,8 +362,9 @@ def get_datasets(load_external=True, force_reload=False):
     if _DATASETS is None or force_reload:
         _DATASETS = {
             "terms": load_remote_terms(),
-            "experimental": load_experimental_csv(INTERNAL_EXPERIMENTAL_CSV),
+            "experimental": load_remote_experimental(),
             "body_armors": load_body_armors(INTERNAL_BODY_ARMORS_TXT),
+            "enchantments_trade": load_remote_enchantments_trade(),
             "currency": {},
             "tiers": {},
             "collection": {}
