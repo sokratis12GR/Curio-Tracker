@@ -22,7 +22,7 @@ class TreeToggles:
     def _create_widgets(self):
         # Columns button
         self.columns_btn = CTkButton(self.frame, text="Columns", command=self.open_menu_popup)
-        self.columns_btn.grid(row=0, column=0, padx=0)
+        self.columns_btn.grid(row=0, column=0, sticky="we", padx=10, pady=5)
 
     def open_menu_popup(self):
         if self.menu_popup and self.menu_popup.winfo_exists():

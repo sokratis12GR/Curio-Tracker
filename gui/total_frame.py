@@ -18,7 +18,7 @@ def _add_kofi_button(frame):
     try:
         icon_path = load_utils.get_resource_path("assets/kofi1.png")
         img = Image.open(icon_path)
-        kofi_img = CTkImage(light_image=img, dark_image=img, size=(90, 36))
+        kofi_img = CTkImage(light_image=img, dark_image=img, size=(120, 30))
 
         CTkButton(
             frame,
@@ -28,12 +28,12 @@ def _add_kofi_button(frame):
             fg_color="transparent",
             hover_color=("gray75", "gray30"),
             cursor="hand2",
-            width=90,
+            width=120,
             height=30,
         ).grid(row=0, column=5, padx=(0, 0), sticky="e")
     except Exception as e:
         print(f"Could not load Ko-fi image: {e}")
-        CTkButton(frame, text="Support me on Ko-fi", command=open_kofi, width=100).grid(row=0, column=5, padx=(0, 0), sticky="e")
+        CTkButton(frame, text="Support me on Ko-fi", command=open_kofi, width=120).grid(row=0, column=5, padx=(0, 0), sticky="e")
 
 
 class TotalFrame:
