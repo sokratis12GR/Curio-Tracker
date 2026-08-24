@@ -39,7 +39,7 @@ Each capture has a toast in the top right as a notification which shows the capt
 
 When capturing a Curio, a toast in the top-right of the screen shows the captured item(s), value, rarity and ownership status.
 
-<img width="1918" height="1079" alt="image" src="https://github.com/user-attachments/assets/9eebfd73-c9bf-45f5-b3f3-8d0f2205de9b" />
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/526b818a-6734-4c2f-9dcf-2851bf292d17" />
 
 
 ## Sorting
