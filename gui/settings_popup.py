@@ -4,6 +4,7 @@ import webbrowser
 from tkinter import colorchooser
 
 import customtkinter as ctk
+from PIL import Image, ImageGrab, ImageTk
 
 import config as c
 import curio_collection_fetch
@@ -14,6 +15,7 @@ from logger import log_message
 from settings import get_setting, set_setting
 from themes import apply_theme
 from tree_manager import TreeManager
+from win_utils import center_window_on_parent, get_poe_bbox
 
 
 # -------------------------------
@@ -24,6 +26,7 @@ class CollapsibleSection(ctk.CTkFrame):
         super().__init__(parent, fg_color="transparent")
         self.title = title
         self.expanded = expanded
+        self.settings_window = None
 
         self.header = ctk.CTkButton(self, text="", anchor="w", height=34, command=self.toggle)
         self.header.pack(fill="x", pady=(3, 0))
@@ -63,8 +66,7 @@ class SettingsPopup:
         self.popup.title("Application Settings")
         self.popup.geometry("470x540")
         self.popup.resizable(False, False)
-        self.popup.grab_set()
-        self.popup.focus_force()
+        self.popup.transient(parent.winfo_toplevel())
         self.popup.protocol("WM_DELETE_WINDOW", self.close)
 
         self.scroll_frame = ctk.CTkScrollableFrame(
@@ -81,15 +83,395 @@ class SettingsPopup:
         bottom_frame.pack(fill="x", pady=(5, 10))
         ctk.CTkButton(bottom_frame, text="Close", command=self.close, width=100).pack(pady=5)
 
-        self.popup.update_idletasks()
-        w, h = self.popup.winfo_width(), self.popup.winfo_height()
-        x = (self.popup.winfo_screenwidth() // 2) - (w // 2)
-        y = (self.popup.winfo_screenheight() // 2) - (h // 2)
-        self.popup.geometry(f"{w}x{h}+{x}+{y}")
+        center_window_on_parent(
+            self.popup,
+            parent
+        )
+
+        self.popup.grab_set()
+        self.popup.focus_force()
 
     def close(self):
         toasts.hide_example()
         self.popup.destroy()
+
+
+class OCRRegionEditor:
+    PREVIEW_MAX_WIDTH = 900
+    PREVIEW_MAX_HEIGHT = 600
+
+    def __init__(self, parent, owner):
+        self.parent = parent
+        self.owner = owner
+
+        self.window = ctk.CTkToplevel(parent)
+        self.window.title("Configure OCR Region")
+        self.window.resizable(False, False)
+        self.window.grab_set()
+        self.window.transient(parent.winfo_toplevel())
+
+        self.drag_start_x = None
+        self.drag_start_y = None
+
+        self.rect_id = None
+
+        self.rect_coords = None
+
+        self.preview_image = None
+        self.tk_image = None
+
+        self.preview_width = 0
+        self.preview_height = 0
+
+        self._capture_preview()
+        self._build_ui()
+        self._draw_saved_region()
+
+        center_window_on_parent(
+            self.window,
+            self.parent
+        )
+
+        self.window.grab_set()
+        self.window.focus_force()
+
+    def _capture_preview(self):
+        bbox = get_poe_bbox()
+
+        if not bbox:
+            raise RuntimeError("Could not locate Path of Exile window.")
+
+        screenshot = ImageGrab.grab(bbox=bbox)
+
+        original_width, original_height = screenshot.size
+
+        scale = min(
+            self.PREVIEW_MAX_WIDTH / original_width,
+            self.PREVIEW_MAX_HEIGHT / original_height,
+            1.0
+        )
+
+        self.preview_width = int(original_width * scale)
+        self.preview_height = int(original_height * scale)
+
+        self.preview_image = screenshot.resize(
+            (self.preview_width, self.preview_height),
+            Image.Resampling.LANCZOS
+        )
+
+        self.tk_image = ImageTk.PhotoImage(self.preview_image)
+
+    def _build_ui(self):
+        container = ctk.CTkFrame(
+            self.window,
+            fg_color="transparent"
+        )
+        container.pack(
+            fill="both",
+            expand=True,
+            padx=10,
+            pady=10
+        )
+
+        ctk.CTkLabel(
+            container,
+            text="Drag over the area that should be processed by OCR."
+        ).pack(anchor="w", pady=(0, 8))
+
+        self.canvas = ctk.CTkCanvas(
+            container,
+            width=self.preview_width,
+            height=self.preview_height,
+            highlightthickness=0,
+            cursor="cross"
+        )
+        self.canvas.pack()
+
+        self.canvas.create_image(
+            0,
+            0,
+            anchor="nw",
+            image=self.tk_image
+        )
+
+        self.canvas.bind(
+            "<Button-1>",
+            self._on_mouse_down
+        )
+
+        self.canvas.bind(
+            "<B1-Motion>",
+            self._on_mouse_drag
+        )
+
+        self.canvas.bind(
+            "<ButtonRelease-1>",
+            self._on_mouse_up
+        )
+
+        self.info_label = ctk.CTkLabel(
+            container,
+            text=""
+        )
+        self.info_label.pack(
+            anchor="w",
+            pady=(8, 5)
+        )
+
+        buttons = ctk.CTkFrame(
+            container,
+            fg_color="transparent"
+        )
+        buttons.pack(fill="x", pady=(5, 0))
+
+        ctk.CTkButton(
+            buttons,
+            text="Reset",
+            width=100,
+            command=self._reset
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            buttons,
+            text="Cancel",
+            width=100,
+            command=self.window.destroy
+        ).pack(side="right")
+
+        ctk.CTkButton(
+            buttons,
+            text="Save",
+            width=100,
+            command=self._save
+        ).pack(side="right", padx=(0, 8))
+
+    def _draw_saved_region(self):
+        left = self.owner.ocr_region_left_var.get()
+        top = self.owner.ocr_region_top_var.get()
+        right = self.owner.ocr_region_right_var.get()
+        bottom = self.owner.ocr_region_bottom_var.get()
+
+        x1 = left * self.preview_width
+        y1 = top * self.preview_height
+        x2 = right * self.preview_width
+        y2 = bottom * self.preview_height
+
+        self._set_rectangle(x1, y1, x2, y2)
+
+    def _on_mouse_down(self, event):
+        self.drag_start_x = self._clamp(
+            event.x,
+            0,
+            self.preview_width
+        )
+
+        self.drag_start_y = self._clamp(
+            event.y,
+            0,
+            self.preview_height
+        )
+
+        self._set_rectangle(
+            self.drag_start_x,
+            self.drag_start_y,
+            self.drag_start_x,
+            self.drag_start_y
+        )
+
+    def _on_mouse_drag(self, event):
+        if self.drag_start_x is None:
+            return
+
+        x = self._clamp(
+            event.x,
+            0,
+            self.preview_width
+        )
+
+        y = self._clamp(
+            event.y,
+            0,
+            self.preview_height
+        )
+
+        self._set_rectangle(
+            self.drag_start_x,
+            self.drag_start_y,
+            x,
+            y
+        )
+
+    def _on_mouse_up(self, event):
+        if self.drag_start_x is None:
+            return
+
+        x = self._clamp(
+            event.x,
+            0,
+            self.preview_width
+        )
+
+        y = self._clamp(
+            event.y,
+            0,
+            self.preview_height
+        )
+
+        self._set_rectangle(
+            self.drag_start_x,
+            self.drag_start_y,
+            x,
+            y
+        )
+
+        self.drag_start_x = None
+        self.drag_start_y = None
+
+    def _set_rectangle(self, x1, y1, x2, y2):
+        x1, x2 = sorted((x1, x2))
+        y1, y2 = sorted((y1, y2))
+
+        x1 = self._clamp(x1, 0, self.preview_width)
+        x2 = self._clamp(x2, 0, self.preview_width)
+        y1 = self._clamp(y1, 0, self.preview_height)
+        y2 = self._clamp(y2, 0, self.preview_height)
+
+        # Keep our own authoritative copy.
+        self.rect_coords = (x1, y1, x2, y2)
+
+        if self.rect_id is None:
+            self.rect_id = self.canvas.create_rectangle(
+                x1,
+                y1,
+                x2,
+                y2,
+                outline="red",
+                width=3
+            )
+        else:
+            self.canvas.coords(
+                self.rect_id,
+                x1,
+                y1,
+                x2,
+                y2
+            )
+
+        self._update_info()
+
+    def _update_info(self):
+        if self.rect_coords is None:
+            return
+
+        x1, y1, x2, y2 = self.rect_coords
+
+        width = max(0, x2 - x1)
+        height = max(0, y2 - y1)
+
+        total_area = self.preview_width * self.preview_height
+        selected_area = width * height
+
+        if total_area <= 0:
+            percent = 0.0
+        else:
+            percent = (selected_area / total_area) * 100
+
+        excluded = 100 - percent
+
+        region_width_pct = (
+            (width / self.preview_width) * 100
+            if self.preview_width > 0
+            else 0.0
+        )
+
+        region_height_pct = (
+            (height / self.preview_height) * 100
+            if self.preview_height > 0
+            else 0.0
+        )
+
+        self.info_label.configure(
+            text=(
+                f"OCR area: {percent:.1f}%   |   "
+                f"Width: {region_width_pct:.1f}%   |   "
+                f"Height: {region_height_pct:.1f}%   |   "
+                f"Excluded: {excluded:.1f}%"
+            )
+        )
+
+    def _reset(self):
+        left, top, right, bottom = c.OCR_REGION_PRESETS["Recommended"]
+
+        self._set_rectangle(
+            left * self.preview_width,
+            top * self.preview_height,
+            right * self.preview_width,
+            bottom * self.preview_height
+        )
+
+    def _save(self):
+        if self.rect_coords is None:
+            return
+
+        x1, y1, x2, y2 = self.rect_coords
+
+        # Prevent accidentally saving an unusably tiny region.
+        if x2 - x1 < 20 or y2 - y1 < 20:
+            self.parent.bell()
+            return
+
+        if self.preview_width <= 0 or self.preview_height <= 0:
+            return
+
+        left = x1 / self.preview_width
+        top = y1 / self.preview_height
+        right = x2 / self.preview_width
+        bottom = y2 / self.preview_height
+
+        left = self._clamp(left, 0.0, 1.0)
+        top = self._clamp(top, 0.0, 1.0)
+        right = self._clamp(right, 0.0, 1.0)
+        bottom = self._clamp(bottom, 0.0, 1.0)
+
+        set_setting("Application", "ocr_region_left", left)
+        set_setting("Application", "ocr_region_top", top)
+        set_setting("Application", "ocr_region_right", right)
+        set_setting("Application", "ocr_region_bottom", bottom)
+
+        self.owner.ocr_region_left_var.set(left)
+        self.owner.ocr_region_top_var.set(top)
+        self.owner.ocr_region_right_var.set(right)
+        self.owner.ocr_region_bottom_var.set(bottom)
+
+        set_setting(
+            "Application",
+            "ocr_region_preset",
+            "Custom"
+        )
+
+        self.owner.ocr_region_preset_var.set("Custom")
+
+        if self.owner.ocr_region_label:
+            self.owner.ocr_region_label.configure(
+                text=self.owner._get_ocr_region_description()
+            )
+
+        log_message(
+            "OCR Region",
+            (
+                f"{left:.4f}, {top:.4f}, "
+                f"{right:.4f}, {bottom:.4f}"
+            )
+        )
+
+        self.window.destroy()
+
+    @staticmethod
+    def _clamp(value, minimum, maximum):
+        return max(
+            minimum,
+            min(maximum, value)
+        )
 
 
 # -------------------------------
@@ -118,16 +500,28 @@ class UnifiedSettingsSection:
         self.poeladder_leagues = list(self.leagues_dict.keys())
 
         self.theme_selector_var = ctk.StringVar(value=get_setting("Application", "theme_mode", c.DEFAULT_THEME_MODE))
+
+        self.top_right_target_area_percent_var = ctk.StringVar(
+            value=str(get_setting("Application", "top_right_target_area_percent", c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT))
+        )
+        self.ocr_region_left_var = ctk.DoubleVar(
+            value=get_setting("Application", "ocr_region_left", c.DEFAULT_OCR_REGION_LEFT))
+        self.ocr_region_top_var = ctk.DoubleVar(
+            value=get_setting("Application", "ocr_region_top", c.DEFAULT_OCR_REGION_TOP))
+        self.ocr_region_right_var = ctk.DoubleVar(
+            value=get_setting("Application", "ocr_region_right", c.DEFAULT_OCR_REGION_RIGHT))
+
+        self.ocr_region_bottom_var = ctk.DoubleVar(
+            value=get_setting("Application", "ocr_region_bottom", c.DEFAULT_OCR_REGION_BOTTOM))
+
+        self.ocr_region_label = None
+
         self.toasts_position_var = ctk.StringVar(
             value=get_setting("Application", "toast_position", c.DEFAULT_TOAST_POSITION))
         self.toasts_y_offset_var = ctk.StringVar(
             value=str(get_setting("Application", "toast_y_offset", c.DEFAULT_TOAST_Y_OFFSET)))
         self.toasts_x_offset_var = ctk.StringVar(
             value=str(get_setting("Application", "toast_x_offset", c.DEFAULT_TOAST_X_OFFSET)))
-        self.top_right_target_area_percent_var = ctk.StringVar(
-            value=str(get_setting("Application", "top_right_target_area_percent", c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT))
-        )
-
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
         self.toast_image_width_var = ctk.StringVar(
@@ -166,6 +560,14 @@ class UnifiedSettingsSection:
         )
 
     def build(self, frame):
+        self.settings_window = frame.winfo_toplevel()
+
+        general = CollapsibleSection(
+            frame,
+            "General",
+            expanded=True
+        )
+
         general = CollapsibleSection(frame, "General", expanded=True)
         general.pack(fill="x", pady=2)
         self._build_general(general.content)
@@ -196,10 +598,13 @@ class UnifiedSettingsSection:
     def _build_general(self, frame):
         row = 0
 
-        ctk.CTkLabel(frame, text="Theme (requires restart):").grid(row=row, column=0, sticky="w")
-        theme_cb = ctk.CTkComboBox(frame, variable=self.theme_selector_var, values=c.theme_modes, width=self.width)
+        ctk.CTkLabel(frame, text="Theme:").grid(row=row, column=0, sticky="w")
+
+        theme_cb = ctk.CTkComboBox(frame, variable=self.theme_selector_var, values=c.theme_modes, width=self.width,
+                                   state="readonly", command=self._update_application_theme)
+
         theme_cb.grid(row=row, column=1, sticky="w")
-        self.theme_selector_var.trace_add("write", self._update_application_theme)
+
         row += 1
 
         ctk.CTkLabel(frame, text="Font Family:").grid(row=row, column=0, sticky="w")
@@ -278,6 +683,81 @@ class UnifiedSettingsSection:
         area_entry = ctk.CTkEntry(frame, textvariable=self.top_right_target_area_percent_var, width=self.width)
         area_entry.grid(row=row, column=1, sticky="w")
         self.top_right_target_area_percent_var.trace_add("write", self._update_top_right_target_area_percent)
+
+        row += 1
+
+        ctk.CTkLabel(
+            frame,
+            text="OCR Capture Region:"
+        ).grid(
+            row=row,
+            column=0,
+            sticky="w",
+            pady=(10, 0)
+        )
+
+        self.ocr_region_label = ctk.CTkLabel(
+            frame,
+            text=self._get_ocr_region_description()
+        )
+        self.ocr_region_label.grid(
+            row=row,
+            column=1,
+            sticky="w",
+            pady=(10, 0)
+        )
+
+        row += 1
+
+        ctk.CTkLabel(
+            frame,
+            text="OCR Region Preset:"
+        ).grid(
+            row=row,
+            column=0,
+            sticky="w",
+            pady=(10, 0)
+        )
+
+        self.ocr_region_preset_var = ctk.StringVar(
+            value=get_setting(
+                "Application",
+                "ocr_region_preset",
+                c.DEFAULT_OCR_REGION_PRESET
+            )
+        )
+
+        preset_cb = ctk.CTkComboBox(
+            frame,
+            variable=self.ocr_region_preset_var,
+            values=list(c.OCR_REGION_PRESETS.keys()),
+            width=self.width,
+            state="readonly",
+            command=self._apply_ocr_region_preset
+        )
+
+        preset_cb.grid(
+            row=row,
+            column=1,
+            sticky="w",
+            pady=(10, 0)
+        )
+
+        row += 1
+
+        configure_btn = ctk.CTkButton(
+            frame,
+            text="Configure OCR Region",
+            width=self.long_width,
+            command=self._open_ocr_region_editor
+        )
+        configure_btn.grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            sticky="w",
+            pady=(8, 0)
+        )
 
     # -------------------------------
     # Toasts
@@ -409,14 +889,81 @@ class UnifiedSettingsSection:
     # -------------------------------
     # Application Handlers
     # -------------------------------
-    def _update_application_theme(self, *_):
-        val = self.theme_selector_var.get()
+    def _update_application_theme(self, val):
         if not val:
             return
 
-        log_message("Theme Selector", val)
-        set_setting("Application", "theme_mode", val)
-        switch_mode(val)
+        log_message(
+            "Theme Selector",
+            val
+        )
+
+        set_setting(
+            "Application",
+            "theme_mode",
+            val
+        )
+
+        settings_window = self.settings_window
+
+        if not settings_window:
+            return
+
+        settings_window.after(
+            100,
+            lambda: self._apply_theme_safely(val)
+        )
+
+    def _apply_theme_safely(self, val):
+        settings_window = self.settings_window
+
+        if not settings_window:
+            return
+
+        try:
+            if not settings_window.winfo_exists():
+                return
+        except Exception:
+            return
+
+        try:
+            settings_window.grab_release()
+        except Exception:
+            pass
+
+        apply_theme(val)
+
+        settings_window.after(
+            100,
+            self._restore_settings_window
+        )
+
+    def _restore_settings_window(self):
+        settings_window = self.settings_window
+
+        if not settings_window:
+            return
+
+        try:
+            if not settings_window.winfo_exists():
+                return
+
+            settings_window.deiconify()
+            settings_window.lift()
+
+            center_window_on_parent(
+                settings_window,
+                self.parent
+            )
+
+            settings_window.grab_set()
+            settings_window.focus_force()
+
+        except Exception as error:
+            log_message(
+                "Theme Switch",
+                f"Failed to restore settings window: {error}"
+            )
 
     def _update_application_font(self, *_):
         new_family = self.font_selector_var.get()
@@ -647,6 +1194,53 @@ class UnifiedSettingsSection:
 
         log_message("Top Right Target Area Percent", percent)
         set_setting("Application", "top_right_target_area_percent", percent)
+
+    def _get_ocr_region_description(self):
+        left = self.ocr_region_left_var.get()
+        top = self.ocr_region_top_var.get()
+        right = self.ocr_region_right_var.get()
+        bottom = self.ocr_region_bottom_var.get()
+
+        area = (right - left) * (bottom - top)
+        area = max(0.0, min(1.0, area))
+
+        return f"{area * 100:.1f}% of game window"
+
+    def _open_ocr_region_editor(self):
+        OCRRegionEditor(
+            parent=self.parent,
+            owner=self
+        )
+
+    def _apply_ocr_region_preset(self, preset_name):
+        region = c.OCR_REGION_PRESETS.get(preset_name)
+
+        if region is None:
+            return
+
+        left, top, right, bottom = region
+
+        self.ocr_region_left_var.set(left)
+        self.ocr_region_top_var.set(top)
+        self.ocr_region_right_var.set(right)
+        self.ocr_region_bottom_var.set(bottom)
+
+        set_setting("Application", "ocr_region_preset", preset_name)
+        set_setting("Application", "ocr_region_left", left)
+        set_setting("Application", "ocr_region_top", top)
+        set_setting("Application", "ocr_region_right", right)
+        set_setting("Application", "ocr_region_bottom", bottom)
+
+        if self.ocr_region_label:
+            self.ocr_region_label.configure(
+                text=self._get_ocr_region_description()
+            )
+
+        log_message(
+            "OCR Region Preset",
+            f"{preset_name}: {left:.3f}, {top:.3f}, "
+            f"{right:.3f}, {bottom:.3f}"
+        )
 
     # -------------------------------
     # PoE Ladder

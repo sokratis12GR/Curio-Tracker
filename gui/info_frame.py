@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 import curio_keybinds
+from win_utils import center_window_on_parent
 
 
 class InfoPanelPopup:
@@ -11,45 +12,192 @@ class InfoPanelPopup:
     def show(self):
         popup = ctk.CTkToplevel(self.parent)
         popup.title(self.title)
-        popup.minsize(300, 400)
+        popup.geometry("720x520")
         popup.resizable(False, False)
-        popup.grab_set()
-        popup.focus_force()
+        popup.transient(self.parent.winfo_toplevel())
 
         frame = ctk.CTkFrame(popup)
-        frame.pack(padx=20, pady=20, fill="both", expand=True)
+        frame.pack(
+            padx=20,
+            pady=20,
+            fill="both",
+            expand=True
+        )
 
-        texts = {
-            "capture": lambda: f"Press {curio_keybinds.get_display_hotkey('capture')} to capture all curios on screen (no duplicates).",
-            "snippet": lambda: f"Press {curio_keybinds.get_display_hotkey('snippet')} to snippet a region (allows duplicates).",
-            "layout": lambda: f"Press {curio_keybinds.get_display_hotkey('layout_capture')} to set current layout.",
-            "exit": lambda: f"Press {curio_keybinds.get_display_hotkey('exit')} to exit the script.",
-            "duplicate_latest": lambda: f"Press {curio_keybinds.get_display_hotkey('duplicate_latest')} to duplicate the latest saved entry.",
-            "delete_latest": lambda: f"Press {curio_keybinds.get_display_hotkey('delete_latest')} to delete the latest saved entry (must be loaded in the tool)",
-            "show_highest_value": lambda: f"Press {curio_keybinds.get_display_hotkey('show_highest_value')} to show the highest value entry from current wing",
-            "cycle_bp_enchantment": lambda: f"Press {curio_keybinds.get_display_hotkey('cycle_bp_enchantment')} to cycle through the enchantment type on the blueprint"
-        }
+        # -------------------------------
+        # Title
+        # -------------------------------
+        ctk.CTkLabel(
+            frame,
+            text="Hotkey Reference",
+            font=("Segoe UI", 16, "bold")
+        ).grid(
+            row=0,
+            column=0,
+            columnspan=3,
+            sticky="w",
+            padx=10,
+            pady=(5, 15)
+        )
 
-        # Wrap text labels properly
-        for key, get_text in texts.items():
-            lbl = ctk.CTkLabel(
+        # -------------------------------
+        # Column setup
+        # -------------------------------
+        frame.grid_columnconfigure(0, weight=0)
+        frame.grid_columnconfigure(1, weight=0)
+        frame.grid_columnconfigure(2, weight=1)
+
+        # -------------------------------
+        # Header
+        # -------------------------------
+        headers = (
+            "Action",
+            "Hotkey",
+            "Description"
+        )
+
+        for col, text in enumerate(headers):
+            label = ctk.CTkLabel(
                 frame,
-                text=get_text(),
-                wraplength=240,
-                justify="left",
+                text=text,
+                font=("Segoe UI", 11, "bold"),
                 anchor="w"
             )
-            lbl.pack(anchor="w", pady=5)
 
+            label.grid(
+                row=1,
+                column=col,
+                sticky="ew",
+                padx=8,
+                pady=(5, 8)
+            )
 
-        # OK button
-        ctk.CTkButton(frame, text="OK", command=popup.destroy, width=100).pack(pady=(10, 0))
+        # -------------------------------
+        # Hotkey rows
+        # -------------------------------
+        rows = [
+            (
+                "Capture",
+                "capture",
+                "Capture all curios currently visible on screen. "
+                "Duplicate entries are ignored."
+            ),
+            (
+                "Snippet",
+                "snippet",
+                "Select and capture a specific screen region. "
+                "Duplicate entries are allowed."
+            ),
+            (
+                "Set Layout",
+                "layout_capture",
+                "Capture and set the current blueprint layout."
+            ),
+            (
+                "Exit",
+                "exit",
+                "Exit the application."
+            ),
+            (
+                "Duplicate Latest",
+                "duplicate_latest",
+                "Duplicate the latest saved entry."
+            ),
+            (
+                "Delete Latest",
+                "delete_latest",
+                "Delete the latest saved entry. "
+                "The entry must currently be loaded in the tool."
+            ),
+            (
+                "Highest Value",
+                "show_highest_value",
+                "Show the highest-value entry from the current wing."
+            ),
+            (
+                "Cycle Enchantment",
+                "cycle_bp_enchantment",
+                "Cycle through the blueprint enchantment types."
+            ),
+        ]
 
-        # Center popup
-        popup.update_idletasks()
-        w, h = popup.winfo_width(), popup.winfo_height()
-        x = (popup.winfo_screenwidth() // 2) - (w // 2)
-        y = (popup.winfo_screenheight() // 2) - (h // 2)
-        popup.geometry(f"{w}x{h}+{x}+{y}")
+        for row_index, (
+            action,
+            hotkey_name,
+            description
+        ) in enumerate(rows, start=2):
 
+            # Action
+            ctk.CTkLabel(
+                frame,
+                text=action,
+                anchor="w",
+                font=("Segoe UI", 10, "bold")
+            ).grid(
+                row=row_index,
+                column=0,
+                sticky="nw",
+                padx=8,
+                pady=6
+            )
+
+            # Hotkey
+            hotkey = curio_keybinds.get_display_hotkey(
+                hotkey_name
+            )
+
+            hotkey_label = ctk.CTkLabel(
+                frame,
+                text=hotkey,
+                anchor="center",
+                corner_radius=6,
+                fg_color=("gray85", "gray25"),
+                width=120
+            )
+
+            hotkey_label.grid(
+                row=row_index,
+                column=1,
+                sticky="n",
+                padx=8,
+                pady=6
+            )
+
+            # Description
+            ctk.CTkLabel(
+                frame,
+                text=description,
+                anchor="w",
+                justify="left",
+                wraplength=390
+            ).grid(
+                row=row_index,
+                column=2,
+                sticky="nw",
+                padx=8,
+                pady=6
+            )
+
+        # -------------------------------
+        # Close
+        # -------------------------------
+        ctk.CTkButton(
+            frame,
+            text="OK",
+            command=popup.destroy,
+            width=120
+        ).grid(
+            row=len(rows) + 2,
+            column=0,
+            columnspan=3,
+            pady=(18, 5)
+        )
+
+        center_window_on_parent(
+            popup,
+            self.parent
+        )
+
+        popup.grab_set()
+        popup.focus_force()
         popup.wait_window()

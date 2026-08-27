@@ -1,6 +1,4 @@
-import shutil
 import threading
-from pathlib import Path
 from sys import platform
 
 import customtkinter
@@ -15,6 +13,7 @@ from img_utils import preload_all_icons
 from logger import log_message
 from update_checker import check_for_updates
 from version_utils import get_version
+from win_utils import center_window_on_parent
 
 _original_destroy = customtkinter.CTkButton.destroy
 
@@ -36,6 +35,7 @@ from load_utils import get_resource_path
 # Lazy globals
 _GLOBAL_ICON = None
 _GLOBAL_ICO = None
+
 
 def _ensure_icons(widget):
     global _GLOBAL_ICON, _GLOBAL_ICO
@@ -106,28 +106,40 @@ from tree_manager import TreeManager
 
 
 def main():
+    theme_mode = get_setting(
+        "Application",
+        "theme_mode",
+        "DARK"
+    )
+
+    theme_manager = CTkThemes(
+        default_mode=theme_mode
+    )
+
+    apply_theme(theme_mode)
+
     root = CTk()
+
     init_font_var(root)
     root.withdraw()
-
 
     loading = CTkToplevel(root)
     loading.title("Loading...")
     loading.geometry("300x120")
     loading.resizable(False, False)
 
-    CTkLabel(loading, text="Initializing, please wait...", font=make_font(11)).pack(pady=20)
-    progress = CTkProgressBar(loading, mode='indeterminate')
+    CTkLabel(
+        loading,
+        text="Initializing, please wait...",
+        font=make_font(11)
+    ).pack(pady=20)
+
+    progress = CTkProgressBar(
+        loading,
+        mode="indeterminate"
+    )
     progress.pack(fill="x", padx=20)
     progress.start()
-
-    # Center the popup
-    loading.update_idletasks()
-    w = loading.winfo_width()
-    h = loading.winfo_height()
-    x = (loading.winfo_screenwidth() // 2) - (w // 2)
-    y = (loading.winfo_screenheight() // 2) - (h // 2)
-    loading.geometry(f"{w}x{h}+{x}+{y}")
 
     def initialize_app():
         try:
@@ -149,11 +161,14 @@ def main():
     def finish_loading():
         progress.stop()
         loading.destroy()
+
         root.deiconify()
-        theme_mode = get_setting('Application', 'theme_mode', "DARK")
-        theme_manager = CTkThemes()
-        apply_theme(theme_mode)
-        start_main_app(root, theme_mode, theme_manager)
+
+        start_main_app(
+            root,
+            theme_mode,
+            theme_manager
+        )
 
     threading.Thread(target=initialize_app, daemon=True).start()
     root.mainloop()
@@ -253,6 +268,7 @@ def start_main_app(root, theme_mode, theme_manager):
     # root.after(5000, lambda: check_for_updates(root))
 
     root.mainloop()
+
 
 UPDATE_INTERVAL_MS = 30 * 60 * 1000  # 30 minutes in milliseconds
 

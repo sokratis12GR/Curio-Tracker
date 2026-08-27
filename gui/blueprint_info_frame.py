@@ -3,6 +3,7 @@ import customtkinter as ctk
 import config
 from config import layout_keywords, BP_ENCHANTMENT_OPTIONS
 from settings import set_setting
+from win_utils import center_window_on_parent
 
 
 class BlueprintInfoPopup:
@@ -21,8 +22,8 @@ class BlueprintInfoPopup:
         popup.title(self.title)
         popup.minsize(300, 350)
         popup.resizable(False, False)
-        popup.grab_set()
-        popup.focus_force()
+
+        popup.transient(self.parent.winfo_toplevel())
 
         frame = ctk.CTkFrame(popup)
         frame.pack(padx=20, pady=20, fill="both", expand=True)
@@ -64,12 +65,14 @@ class BlueprintInfoPopup:
         ctk.CTkButton(frame, text="Refresh", width=100, command=self.refresh_info).pack(pady=(10, 5))
         ctk.CTkButton(frame, text="OK", width=100, command=popup.destroy).pack(pady=(0, 0))
 
-        # Center popup
-        popup.update_idletasks()
-        w, h = popup.winfo_width(), popup.winfo_height()
-        x = (popup.winfo_screenwidth() // 2) - (w // 2)
-        y = (popup.winfo_screenheight() // 2) - (h // 2)
-        popup.geometry(f"{w}x{h}+{x}+{y}")
+        # Center popup on main application
+        center_window_on_parent(
+            popup,
+            self.parent
+        )
+
+        popup.grab_set()
+        popup.focus_force()
 
         # Initialize dropdowns from tracker
         self.refresh_info()

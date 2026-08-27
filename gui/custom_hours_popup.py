@@ -1,5 +1,7 @@
 from customtkinter import *
 
+from win_utils import center_window_on_parent
+
 
 class CustomHoursPopup:
     def __init__(self, parent, initial_hours=1, callback=None):
@@ -10,11 +12,11 @@ class CustomHoursPopup:
         self.popup.title("Custom Hours Filter")
         self.popup.geometry("250x200")
         self.popup.resizable(False, False)
-        self.popup.grab_set()
+
+        self.popup.transient(self.parent.winfo_toplevel())
 
         self.popup.protocol("WM_DELETE_WINDOW", self._close)
         self.popup.bind("<Escape>", lambda e: self._close())
-        self.popup.focus_force()
 
         # Container frame
         frame = CTkFrame(self.popup)
@@ -35,12 +37,14 @@ class CustomHoursPopup:
         btn = CTkButton(frame, text="Apply", command=self._apply)
         btn.pack(pady=10)
 
-        # Center popup
-        self.popup.update_idletasks()
-        w, h = self.popup.winfo_width(), self.popup.winfo_height()
-        x = (self.popup.winfo_screenwidth() // 2) - (w // 2)
-        y = (self.popup.winfo_screenheight() // 2) - (h // 2)
-        self.popup.geometry(f"{w}x{h}+{x}+{y}")
+        # Center popup on main application
+        center_window_on_parent(
+            self.popup,
+            self.parent
+        )
+
+        self.popup.grab_set()
+        self.popup.focus_force()
 
     def _apply(self):
         try:

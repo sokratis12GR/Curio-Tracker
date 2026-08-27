@@ -61,7 +61,6 @@ class TotalFrame:
             self.frame,
             textvariable=self.player_name,
             font=make_font(12, "bold"),
-            text_color="#ffffff"
         )
         self.player_label.grid(row=0, column=0, padx=(10, 10))
 
@@ -90,7 +89,6 @@ class TotalFrame:
             self.frame,
             text="|",
             font=make_font(12, "bold"),
-            text_color="#ffffff"
         )
         self.separator.grid(row=0, column=3, padx=5)
 

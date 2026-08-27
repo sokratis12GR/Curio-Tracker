@@ -32,15 +32,25 @@ for root, _, files in os.walk(assets_dir):
         dest_dir = os.path.join("assets", rel_path)
         datas.append((src_file, dest_dir))
 
-# ---- Add all files from /ctk_themes ----
-themes_dir = os.path.abspath("ctk_themes")
-for root, _, files in os.walk(themes_dir):
-    for f in files:
-        src_file = os.path.join(root, f)
-        rel_path = os.path.relpath(root, themes_dir)
-        # The destination path inside the exe
-        dest_dir = os.path.join("ctk_themes", rel_path)
-        datas.append((src_file, dest_dir))
+# ---- Add custom CTk theme ----
+theme_file = os.path.abspath(
+    os.path.join(
+        "ctk_themes",
+        "heist_theme.json"
+    )
+)
+
+if not os.path.isfile(theme_file):
+    raise FileNotFoundError(
+        f"CustomTkinter theme not found: {theme_file}"
+    )
+
+datas.append(
+    (
+        theme_file,
+        "ctk_themes"
+    )
+)
 
 ctk_path = os.path.dirname(customtkinter.__file__)
 datas.append((ctk_path, "customtkinter"))

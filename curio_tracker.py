@@ -13,7 +13,6 @@ from typing import List, Dict
 import cv2
 import numpy as np
 import pyautogui
-import pygetwindow as gw
 import pyperclip
 import pytesseract
 from PIL import ImageGrab
@@ -31,6 +30,7 @@ from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
 from settings import get_setting, set_setting
+from win_utils import get_poe_bbox
 
 datasets = get_datasets(force_reload=True)
 saved_mode = get_setting("Application", "export_mode", default="CSV").upper()
@@ -83,6 +83,7 @@ OCR_COLOR_RANGES = tuple(
         (c.enchant_l_hsv, c.enchant_u_hsv),
     )
 )
+
 
 def populate_recent_terms(within_seconds: int = None, max_items: int = None):
     global recent_terms
@@ -217,6 +218,7 @@ for term in all_terms:
         enchant_parts
     ))
 
+
 def build_enchant_type_lookup(term_types):
     lookup = defaultdict(set)
     for raw_term, type_name in term_types.items():
@@ -228,13 +230,26 @@ def build_enchant_type_lookup(term_types):
 enchant_type_lookup = build_enchant_type_lookup(term_types)
 
 
-def get_poe_bbox():
-    windows = [w for w in gw.getWindowsWithTitle(c.target_application) if w.visible]
-    if not windows:
-        log_message(c.not_found_target_txt)
-        return None
-    win = windows[0]
-    return win.left, win.top, win.left + win.width, win.top + win.height
+def get_ocr_bbox(poe_bbox):
+    left, top, right, bottom = poe_bbox
+
+    width = right - left
+    height = bottom - top
+
+    region_left = float(get_setting("Application", "ocr_region_left", c.DEFAULT_OCR_REGION_LEFT))
+
+    region_top = float(get_setting("Application", "ocr_region_top", c.DEFAULT_OCR_REGION_TOP))
+
+    region_right = float(get_setting("Application", "ocr_region_right", c.DEFAULT_OCR_REGION_RIGHT))
+
+    region_bottom = float(get_setting("Application", "ocr_region_bottom", c.DEFAULT_OCR_REGION_BOTTOM))
+
+    return (
+        left + int(width * region_left),
+        top + int(height * region_top),
+        left + int(width * region_right),
+        top + int(height * region_bottom)
+    )
 
 
 #############################################################################
@@ -251,23 +266,66 @@ def get_poe_bbox():
 #        str: The OCR'd text in smart title case.                           #
 #############################################################################
 def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
+    t0 = time.perf_counter()
+
     if apply_filter:
         if c.IS_HDR_ENABLED:
             image_np = hdr_remove_shine(image_np)
-            if c.DEBUGGING:
-                cv2.imwrite("hdr_fixed.png", cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+
+            if c.OCR_DEBUGGING:
+                cv2.imwrite(
+                    "hdr_fixed.png",
+                    cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+                )
+
+        t1 = time.perf_counter()
 
         image_np_filtered = filter_item_text(image_np)
-        if c.DEBUGGING:
-            cv2.imwrite("filtered.png", cv2.cvtColor(image_np_filtered, cv2.COLOR_RGB2BGR))
+
+        t2 = time.perf_counter()
+
+        if c.OCR_DEBUGGING:
+            cv2.imwrite(
+                "filtered.png",
+                cv2.cvtColor(image_np_filtered, cv2.COLOR_RGB2BGR)
+            )
     else:
         image_np_filtered = image_np
+        t1 = t0
+        t2 = t0
 
     if scale != 1:
         image_np_filtered = cv2.resize(
             image_np_filtered,
-            (int(image_np_filtered.shape[1]) * scale, int(image_np_filtered.shape[0]) * scale),
+            (
+                int(image_np_filtered.shape[1]) * scale,
+                int(image_np_filtered.shape[0]) * scale
+            ),
             interpolation=cv2.INTER_LANCZOS4
+        )
+
+    t3 = time.perf_counter()
+
+    if c.DEBUGGING:
+        h, w = image_np_filtered.shape[:2]
+
+        gray = cv2.cvtColor(
+            image_np_filtered,
+            cv2.COLOR_RGB2GRAY
+        )
+
+        nonzero = cv2.countNonZero(gray)
+        total_pixels = w * h
+        density = (nonzero / total_pixels * 100) if total_pixels else 0
+
+        log_message(
+            f"[OCR INPUT] "
+            f"size={w}x{h} | "
+            f"pixels={total_pixels:,} | "
+            f"nonzero={nonzero:,} | "
+            f"density={density:.2f}% | "
+            f"psm={psm} | "
+            f"scale={scale}"
         )
 
     text = pytesseract.image_to_string(
@@ -276,16 +334,48 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
         lang=lang
     )
 
+    t4 = time.perf_counter()
+
     if c.DEBUGGING:
-        print("Filtered image stats:", image_np_filtered.min(), image_np_filtered.max())
+        lines = text.splitlines()
+
+        log_message(
+            f"[OCR RESULT] "
+            f"chars={len(text)} | "
+            f"lines={len(lines)} | "
+            f"nonempty_lines={sum(bool(line.strip()) for line in lines)}"
+        )
+
+    formatted_text = utils.smart_title_case(text)
+
+    t5 = time.perf_counter()
+
+    if c.DEBUGGING:
+        log_message(
+            f"[OCR PERF] "
+            f"HDR={(t1 - t0) * 1000:.1f}ms | "
+            f"filter={(t2 - t1) * 1000:.1f}ms | "
+            f"resize={(t3 - t2) * 1000:.1f}ms | "
+            f"tesseract={(t4 - t3) * 1000:.1f}ms | "
+            f"title_case={(t5 - t4) * 1000:.1f}ms | "
+            f"total={(t5 - t0) * 1000:.1f}ms"
+        )
+
+    if c.DEBUGGING:
+        log_message(
+            "Filtered image stats:",
+            image_np_filtered.min(),
+            image_np_filtered.max()
+        )
+
         if c.OCR_DEBUGGING:
             cv2.namedWindow("Filtered Mask", cv2.WINDOW_NORMAL)
             cv2.imshow("Filtered Mask", image_np_filtered)
-            cv2.moveWindow("Filtered Mask", 100, 100)  # Put window at x=100, y=100 on screen
+            cv2.moveWindow("Filtered Mask", 100, 100)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
-    return utils.smart_title_case(text), image_np
+    return formatted_text, image_np
 
 
 #############################################################################
@@ -332,9 +422,9 @@ def hdr_remove_shine(image_np):
     )
 
     gray = clahe.apply(gray)
-    if c.DEBUGGING:
+    if c.OCR_DEBUGGING:
         cv2.imwrite("shine_mask.png", mask.astype(np.uint8) * 255)
-        print(
+        log_message(
             "VAL:",
             val.min(),
             val.max(),
@@ -352,27 +442,69 @@ def hdr_remove_shine(image_np):
 # which is afterwards extracted as text                     #
 #############################################################
 def filter_item_text(image_np, fullscreen=False):
-    img_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    t0 = time.perf_counter()
 
-    # Create combined mask
+    img_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+    t1 = time.perf_counter()
+
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    t2 = time.perf_counter()
+
     combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+
+    mask_start = time.perf_counter()
+
     for lo, hi in OCR_COLOR_RANGES:
         current_mask = cv2.inRange(hsv, lo, hi)
         cv2.bitwise_or(combined_mask, current_mask, dst=combined_mask)
 
-    # Morphological operations
-    kernel = np.ones((1, 1), np.uint8)
-    combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
+    mask_end = time.perf_counter()
 
-    # Debugging overlay
-    if c.DEBUGGING:
-        contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        debug_image = cv2.bitwise_and(img_bgr, img_bgr, mask=combined_mask)
+    kernel = np.ones((1, 1), np.uint8)
+    combined_mask = cv2.morphologyEx(
+        combined_mask,
+        cv2.MORPH_CLOSE,
+        kernel
+    )
+
+    t3 = time.perf_counter()
+
+    if c.OCR_DEBUGGING:
+        contours, _ = cv2.findContours(
+            combined_mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+        debug_image = cv2.bitwise_and(
+            img_bgr,
+            img_bgr,
+            mask=combined_mask
+        )
         cv2.drawContours(debug_image, contours, -1, (0, 0, 255), 1)
         cv2.imwrite("ocr_debug_highlighted.png", debug_image)
 
-    return cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2RGB)
+    t4 = time.perf_counter()
+
+    result = cv2.cvtColor(
+        combined_mask,
+        cv2.COLOR_GRAY2RGB
+    )
+
+    t5 = time.perf_counter()
+
+    if c.DEBUGGING:
+        log_message(
+            f"[FILTER PERF] "
+            f"rgb_to_bgr={(t1 - t0) * 1000:.1f}ms | "
+            f"bgr_to_hsv={(t2 - t1) * 1000:.1f}ms | "
+            f"color_masks={(mask_end - mask_start) * 1000:.1f}ms | "
+            f"morph={(t3 - mask_end) * 1000:.1f}ms | "
+            f"ocr_debug={(t4 - t3) * 1000:.1f}ms | "
+            f"gray_to_rgb={(t5 - t4) * 1000:.1f}ms | "
+            f"total={(t5 - t0) * 1000:.1f}ms"
+        )
+
+    return result
 
 
 ####################################################################
@@ -430,7 +562,8 @@ def is_term_match(normalized_term, normalized_lines, enchant_parts=None) -> bool
                         if (part1 in line and part2 in normalized_lines[i + j]) or (
                                 part2 in line and part1 in normalized_lines[i + j]):
                             if c.DEBUGGING:
-                                print(f"[EnchantCombo] Found combo '{part1}' & '{part2}' at lines {i} and {i + j}")
+                                log_message(
+                                    f"[EnchantCombo] Found combo '{part1}' & '{part2}' at lines {i} and {i + j}")
                             return True
         return False
 
@@ -632,12 +765,12 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
             stack_size = f"{ratio[0]}"
             stack_sizes[term_title] = stack_size
             if c.DEBUGGING:
-                print(f"Ratio for {term_title}: {ratio[0]}/{ratio[1]}")
+                log_message(f"Ratio for {term_title}: {ratio[0]}/{ratio[1]}")
         else:
             stack_size = 1
             stack_sizes[term_title] = stack_size
             if c.DEBUGGING:
-                print("[Currency Ratio] None found.")
+                log_message("[Currency Ratio] None found.")
 
         stack_size_txt = (
             c.stack_size_found.format(stack_size)
@@ -661,7 +794,7 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
                 lambda m: colored(m.group(1), "green", attrs=["bold"]),
                 highlighted
             )
-        print(highlighted)
+        log_message(highlighted)
 
     if results:
         log_message(c.matches_found, results)
@@ -677,8 +810,24 @@ def write_entry(root, text, timestamp, allow_dupes=False) -> None:
     global stack_sizes, parsed_items, data_mgr
     parsed_items = []
 
+    t0 = time.perf_counter()
+
     matched_terms = get_matched_terms(text, allow_dupes)
+
+    t1 = time.perf_counter()
+
     process_text(root, text, allow_dupes, matched_terms)
+
+    t2 = time.perf_counter()
+
+    if c.DEBUGGING:
+        log_message(
+            f"[MATCH PERF] "
+            f"get_matched_terms={(t1 - t0) * 1000:.1f}ms | "
+            f"process_text={(t2 - t1) * 1000:.1f}ms | "
+            f"total={(t2 - t0) * 1000:.1f}ms | "
+            f"matches={len(matched_terms)}"
+        )
 
     if not matched_terms:
         return
@@ -830,7 +979,7 @@ def parse_items_from_rows(rows):
 
     for row_idx, row in enumerate(rows):
         if debug:
-            print(f"[DEBUG] Processing row {row_idx}: {row}")
+            log_message(f"[DEBUG] Processing row {row_idx}: {row}")
 
         # Grab common metadata from CSV headers
         record_number = row.get(c.csv_record_header)
@@ -893,8 +1042,8 @@ def parse_items_from_rows(rows):
             parsed_items.append(item)
 
             if debug:
-                print(f"[DEBUG] Added item: {item.itemName.lines[0]}, "
-                      f"duplicate={duplicate}, rarity={item.itemRarity}")
+                log_message(f"[DEBUG] Added item: {item.itemName.lines[0]}, "
+                            f"duplicate={duplicate}, rarity={item.itemRarity}")
 
     return parsed_items
 
@@ -939,15 +1088,56 @@ def load_recent_parsed_items(_data_mgr: BaseDataManager, within_seconds=120, max
 #####################################################
 def capture_once(root):
     validate_attempt(c.capturing_prompt)
+
+    total_start = time.perf_counter()
+
+    bbox_start = time.perf_counter()
     bbox = get_poe_bbox()
+    bbox_end = time.perf_counter()
+
     if not bbox:
         return
 
-    screenshot_np = np.array(ImageGrab.grab(bbox=bbox))
+    grab_start = time.perf_counter()
+
+    bbox = get_ocr_bbox(bbox)
+
+    screenshot_np = np.array(
+        ImageGrab.grab(bbox=bbox)
+    )
+
+    grab_end = time.perf_counter()
+
+    ocr_start = time.perf_counter()
+
     full_text, filtered = ocr_from_image(screenshot_np)
 
+    ocr_end = time.perf_counter()
+
+    write_start = time.perf_counter()
+
     os.makedirs(c.saves_dir, exist_ok=True)
-    write_entry(root, full_text, utils.now_timestamp(), allow_dupes=False)
+
+    write_entry(
+        root,
+        full_text,
+        utils.now_timestamp(),
+        allow_dupes=False
+    )
+
+    write_end = time.perf_counter()
+
+    total_end = time.perf_counter()
+
+    if c.DEBUGGING:
+        log_message(
+            f"[CAPTURE PERF] "
+            f"bbox={(bbox_end - bbox_start) * 1000:.1f}ms | "
+            f"grab={(grab_end - grab_start) * 1000:.1f}ms | "
+            f"ocr={(ocr_end - ocr_start) * 1000:.1f}ms | "
+            f"write={(write_end - write_start) * 1000:.1f}ms | "
+            f"total={(total_end - total_start) * 1000:.1f}ms"
+        )
 
 
 def capture_snippet(root, on_done):
@@ -1064,7 +1254,7 @@ def capture_layout(root):
     # Run OCR on the cropped region
     text = utils.smart_title_case(pytesseract.image_to_string(cropped, config=r'--oem 3 --psm 6'))
     if c.DEBUGGING:
-        print("OCR Text:\n", text)
+        log_message("OCR Text:\n", text)
         if c.OCR_DEBUGGING:
             cropped.show()
 

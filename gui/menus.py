@@ -1,7 +1,6 @@
 import customtkinter as ctk
 
 import config
-from csv_to_json import csv_to_nested_json
 from gui import keybinds_popup
 from gui.about_popup import CustomAboutPopup
 from gui.data_tools_popup import show_data_tools_popup
@@ -24,8 +23,6 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager: TreeMana
             show_settings_popup(tabview, tracker, theme_manager, tree_manager)
         elif choice == "Data Tools":
             show_data_tools_popup(tabview, tree_manager)
-        elif choice == "Export to JSON":
-            csv_to_nested_json(config.data_file_base + ".csv")
         elif choice == "Exit":
             tabview.winfo_toplevel().destroy()
 
@@ -33,7 +30,6 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager: TreeMana
 
     file_menu_items = ["Keybinds", "About", "Settings",
                        "Data Tools",
-                       "Export to JSON",
                        "Exit"]
 
     menu_dropdown = ctk.CTkOptionMenu(

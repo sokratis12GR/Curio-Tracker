@@ -1,12 +1,16 @@
 import csv
 import shutil
+import subprocess
 from datetime import datetime
-from tkinter import messagebox
+from pathlib import Path
 
 from customtkinter import *
 
 import config
 from csv_manager import CSVManager
+from csv_to_json import csv_to_nested_json
+from gui.ctksimplebox import CTkMessageBox
+from win_utils import center_window_on_parent
 
 
 class DataToolsPopup:
@@ -16,15 +20,23 @@ class DataToolsPopup:
 
         self.popup = CTkToplevel(parent)
         self.popup.title("Data Tools")
-        self.popup.geometry("450x260")
+        self.popup.geometry("450x390")
         self.popup.resizable(False, False)
         self.popup.transient(parent.winfo_toplevel())
-        self.popup.grab_set()
+        self.msgbox = CTkMessageBox(self.popup)
 
         self.data_file = config.data_file_base + ".csv"
+        self.last_export_path = None
 
         self._setup_ui()
-        self._center_popup()
+
+        center_window_on_parent(
+            self.popup,
+            self.parent
+        )
+
+        self.popup.grab_set()
+        self.popup.focus_force()
 
     def _setup_ui(self):
         self.popup.grid_columnconfigure(0, weight=1)
@@ -52,17 +64,45 @@ class DataToolsPopup:
 
         save_btn = CTkButton(
             self.popup,
-            text="Save External Data",
-            command=self.save_external_file
+            text="Export to CSV",
+            command=self.export_to_csv
         )
         save_btn.grid(row=3, column=0, sticky="ew", padx=20, pady=5)
+
+        export_json_btn = CTkButton(
+            self.popup,
+            text="Export to JSON",
+            command=self.export_to_json
+        )
+        export_json_btn.grid(row=4, column=0, sticky="ew", padx=20, pady=5)
+
+        self.export_status = CTkLabel(
+            self.popup,
+            text="",
+            anchor="w",
+            justify="left",
+            wraplength=410
+        )
+        self.export_status.grid(
+            row=5,
+            column=0,
+            sticky="ew",
+            padx=20,
+            pady=(5, 0)
+        )
+
+        self.show_location_btn = CTkButton(
+            self.popup,
+            text="Show Location",
+            command=self.show_export_location
+        )
 
         close_btn = CTkButton(
             self.popup,
             text="Close",
             command=self.popup.destroy
         )
-        close_btn.grid(row=4, column=0, sticky="ew", padx=20, pady=(20, 10))
+        close_btn.grid(row=7, column=0, sticky="ew", padx=20, pady=(20, 10))
 
     def merge_external_file(self):
         external_file = filedialog.askopenfilename(
@@ -118,10 +158,9 @@ class DataToolsPopup:
                     "A backup will be created before any changes are made."
                 )
 
-                upgrade = messagebox.askyesno(
+                upgrade = self.msgbox.askyesno(
                     "Upgrade CSV Structure",
                     message,
-                    parent=self.popup
                 )
 
                 if not upgrade:
@@ -168,7 +207,7 @@ class DataToolsPopup:
                     "combined structure."
                 )
 
-            messagebox.showinfo(
+            self.msgbox.showinfo(
                 "Merge Complete",
                 f"Added {len(external_rows)} external rows.\n\n"
                 f"Total rows: {len(merged_rows)}\n"
@@ -176,28 +215,26 @@ class DataToolsPopup:
                 f"{upgrade_text}\n\n"
                 f"Record numbers and required columns were recalculated.\n\n"
                 f"Please restart the application for all changes to function properly.",
-                parent=self.popup
             )
 
         except Exception as error:
-            messagebox.showerror(
+            self.msgbox.showerror(
                 "Merge Failed",
                 str(error),
-                parent=self.popup
             )
 
-    def save_external_file(self):
-        if not os.path.exists(self.data_file):
-            messagebox.showerror(
-                "File Not Found",
-                f"Could not find:\n{self.data_file}",
-                parent=self.popup
+    def export_to_csv(self):
+        source_file = Path(self.data_file)
+
+        if not source_file.exists():
+            self._set_export_result(
+                error=f"Could not find:\n{source_file}"
             )
             return
 
         save_path = filedialog.asksaveasfilename(
             parent=self.popup,
-            title="Save External Data",
+            title="Export to CSV",
             defaultextension=".csv",
             initialfile="matches_external.csv",
             filetypes=[("CSV Files", "*.csv")]
@@ -207,19 +244,19 @@ class DataToolsPopup:
             return
 
         try:
-            shutil.copy2(self.data_file, save_path)
+            shutil.copy2(
+                source_file,
+                save_path
+            )
 
-            messagebox.showinfo(
-                "File Saved",
-                f"External data saved to:\n{save_path}",
-                parent=self.popup
+            self._set_export_result(
+                path=save_path,
+                export_type="CSV"
             )
 
         except Exception as error:
-            messagebox.showerror(
-                "Save Failed",
-                str(error),
-                parent=self.popup
+            self._set_export_result(
+                error=error
             )
 
     def _read_csv(self, file_path):
@@ -314,15 +351,114 @@ class DataToolsPopup:
         data_manager = reload_data_manager()
         self.tree_manager.switch_data_manager(data_manager)
 
-    def _center_popup(self):
-        self.popup.update_idletasks()
+    def _set_export_result(self, path=None, export_type=None, error=None):
+        if error is not None:
+            self.last_export_path = None
 
-        parent = self.parent.winfo_toplevel()
+            self.export_status.configure(
+                text=f"Export failed: {error}"
+            )
 
-        x = parent.winfo_x() + (parent.winfo_width() // 2) - (self.popup.winfo_width() // 2)
-        y = parent.winfo_y() + (parent.winfo_height() // 2) - (self.popup.winfo_height() // 2)
+            self.show_location_btn.grid_remove()
 
-        self.popup.geometry(f"+{x}+{y}")
+            self.msgbox.showerror(
+                "Export Failed",
+                str(error)
+            )
+            return
+
+        path = Path(path)
+        self.last_export_path = path
+
+        self.export_status.configure(
+            text=(
+                f"{export_type} export complete.\n"
+                f"{path}"
+            )
+        )
+
+        self.show_location_btn.grid(
+            row=6,
+            column=0,
+            sticky="ew",
+            padx=20,
+            pady=(8, 0)
+        )
+
+        self.msgbox.showinfo(
+            "Export Complete",
+            f"{export_type} export completed successfully.\n\n"
+            f"Location:\n{path}"
+        )
+
+    def export_to_json(self):
+        csv_file = Path(
+            config.data_file_base + ".csv"
+        )
+
+        if not csv_file.exists():
+            self._set_export_result(
+                error=f"Could not find:\n{csv_file}"
+            )
+            return
+
+        json_file = csv_file.with_suffix(".json")
+
+        try:
+            csv_to_nested_json(
+                csv_file,
+                json_file
+            )
+
+            self._set_export_result(
+                path=json_file,
+                export_type="JSON"
+            )
+
+        except Exception as error:
+            self._set_export_result(
+                error=error
+            )
+
+    def show_export_location(self):
+        if not self.last_export_path:
+            return
+
+        path = Path(self.last_export_path)
+
+        if not path.exists():
+            self.msgbox.showerror(
+                "File Not Found",
+                f"The exported file could not be found:\n{path}"
+            )
+            return
+
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen([
+                    "explorer",
+                    "/select,",
+                    str(path)
+                ])
+
+            elif sys.platform == "darwin":
+                subprocess.Popen([
+                    "open",
+                    "-R",
+                    str(path)
+                ])
+
+            else:
+                subprocess.Popen([
+                    "xdg-open",
+                    str(path.parent)
+                ])
+
+        except Exception as error:
+            self.msgbox.showerror(
+                "Open Location Failed",
+                str(error)
+            )
 
 
 def show_data_tools_popup(parent, tree_manager):

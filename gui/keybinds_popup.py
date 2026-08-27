@@ -4,6 +4,7 @@ from customtkinter import CTkLabel, CTkToplevel, CTkButton, CTkFrame
 
 import curio_keybinds
 from fonts import make_font
+from win_utils import center_window_on_parent
 
 
 class KeybindsPopup:
@@ -16,7 +17,7 @@ class KeybindsPopup:
         self.popup.title("Keybind Settings")
         self.popup.geometry("300x440")
         self.popup.resizable(False, False)
-        self.popup.grab_set()  # make modal
+        self.popup.transient(parent.winfo_toplevel())
 
         # ---- Main frame with padding ----
         frame = CTkFrame(self.popup)
@@ -38,6 +39,13 @@ class KeybindsPopup:
 
         # ---- Reset & Close buttons ----
         self._create_reset_and_close(frame, start_row=len(curio_keybinds.keybinds) + 2)
+        center_window_on_parent(
+            self.popup,
+            self.parent
+        )
+
+        self.popup.focus_force()
+
 
     def _create_buttons(self, frame, start_row=0):
         for i, (label_text, default_value, hotkey_name) in enumerate(curio_keybinds.keybinds):

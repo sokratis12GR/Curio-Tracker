@@ -1,9 +1,6 @@
 import csv
 import json
 from pathlib import Path
-from tkinter import messagebox
-
-from customtkinter import CTk
 
 from json_utils import rows_to_nested_json
 
@@ -22,13 +19,5 @@ def csv_to_nested_json(csv_file_path, json_file_path=None):
 
     with open(json_file_path, "w", encoding="utf-8") as f:
         json.dump(nested, f, ensure_ascii=False, indent=2)
-
-    root = CTk()
-    root.withdraw()
-    messagebox.showinfo(
-        "Operation Complete",
-        f"CSV has been successfully converted to JSON:\n{json_file_path}"
-    )
-    root.destroy()
 
     return nested

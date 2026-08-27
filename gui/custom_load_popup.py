@@ -4,6 +4,7 @@ from customtkinter import CTkInputDialog
 
 from gui.ctksimplebox import CTkMessageBox
 from tree_manager import TreeManager
+from win_utils import center_window_on_parent
 
 
 class CustomLoader:
@@ -23,11 +24,17 @@ class CustomLoader:
 
     def run(self):
         try:
-            max_items = CTkInputDialog(
+            dialog = CTkInputDialog(
                 text="Enter the number of entries to load:",
                 title="Load Entries"
+            )
 
-            ).get_input()
+            center_window_on_parent(
+                dialog,
+                self.root
+            )
+
+            max_items = dialog.get_input()
 
             if max_items is None:
                 return  # user cancelled

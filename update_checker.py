@@ -9,7 +9,9 @@ import customtkinter as ctk
 import requests
 
 from fonts import make_font
+from markdown_utils import render_markdown_to_textbox
 from version_utils import VERSION
+from win_utils import center_window_on_parent
 
 
 def version_tuple(v: str):
@@ -33,7 +35,8 @@ def check_for_updates(root, show_uptodate_popup=False, blocking=False):
                 root.after(0, lambda: show_update_popup(
                     root,
                     latest,
-                    data.get("html_url", "")
+                    data.get("html_url", ""),
+                    data.get("body", "")
                 ))
             else:
                 if show_uptodate_popup:
@@ -44,7 +47,7 @@ def check_for_updates(root, show_uptodate_popup=False, blocking=False):
                 root.after(0, lambda: show_up_to_date_popup(root, None, error=True))
 
     if blocking:
-        worker()   # run immediately (no thread)
+        worker()  # run immediately (no thread)
     else:
         threading.Thread(target=worker, daemon=True).start()
 
@@ -53,9 +56,7 @@ def show_up_to_date_popup(root, latest_version=None, error=False):
     popup = ctk.CTkToplevel(root)
     popup.title("Update Check")
     popup.resizable(False, False)
-    popup.transient(root)
-    popup.grab_set()
-    popup.focus_force()
+    popup.transient(root.winfo_toplevel())
 
     frame = ctk.CTkFrame(popup)
     frame.pack(padx=20, pady=20)
@@ -79,11 +80,14 @@ def show_up_to_date_popup(root, latest_version=None, error=False):
         width=120
     ).pack()
 
-    popup.update_idletasks()
-    w, h = popup.winfo_width(), popup.winfo_height()
-    x = (popup.winfo_screenwidth() // 2) - (w // 2)
-    y = (popup.winfo_screenheight() // 2) - (h // 2)
-    popup.geometry(f"{w}x{h}+{x}+{y}")
+    center_window_on_parent(
+        popup,
+        root
+    )
+
+    popup.grab_set()
+    popup.focus_force()
+
 
 def deploy_updater():
     from load_utils import get_resource_path
@@ -97,22 +101,32 @@ def deploy_updater():
     return target
 
 
-def show_update_popup(root, latest_version, release_url):
+def show_update_popup(root, latest_version, release_url, changelog=""):
     popup = ctk.CTkToplevel(root)
     popup.title("Update Available")
     popup.resizable(False, False)
-    popup.transient(root)
-    popup.minsize(280, 240)
-    popup.grab_set()
-    popup.focus_force()
+    popup.transient(root.winfo_toplevel())
+    popup.minsize(500, 560)
+
     print("Showing update popup for version:", latest_version)
 
     frm = ctk.CTkFrame(popup)
     frm.pack(padx=20, pady=20, fill="both", expand=True)
 
-    ctk.CTkLabel(frm, text="Update Available", font=make_font(14, "bold")).pack(pady=(0, 5))
-    ctk.CTkLabel(frm, text=f"Your version: {VERSION}", font=make_font(11)).pack()
-    ctk.CTkLabel(frm, text=f"Latest version: {latest_version}", font=make_font(11, "bold")).pack(pady=(0, 10))
+    ctk.CTkLabel(frm, text="Update Available", font=make_font(14, "bold")).pack(pady=(0, 2))
+    ctk.CTkLabel(frm, text=f"Your version: {VERSION}", font=make_font(10)).pack()
+    ctk.CTkLabel(frm, text=f"Latest version: {latest_version}", font=make_font(10, "bold")).pack(pady=(0, 8))
+
+    ctk.CTkLabel(frm, text="What's New", font=make_font(12, "bold"), anchor="w").pack(fill="x", pady=(4, 4))
+
+    changelog_box = ctk.CTkTextbox(frm, width=440, height=220, wrap="word")
+
+    changelog_box.pack(fill="x", pady=(0, 10))
+
+    render_markdown_to_textbox(
+        changelog_box,
+        changelog
+    )
 
     def update_now():
         try:
@@ -123,11 +137,13 @@ def show_update_popup(root, latest_version, release_url):
         except Exception as e:
             print(f"Failed to launch updater: {e}")
 
+    BUTTON_WIDTH = 180
+
     ctk.CTkButton(
         frm,
         text="Update Now",
         command=update_now,
-        width=180,
+        width=BUTTON_WIDTH,
     ).pack(pady=(5, 5))
 
     def open_github():
@@ -147,7 +163,7 @@ def show_update_popup(root, latest_version, release_url):
             text="Download from GitHub",
             compound="left",
             command=open_github,
-            width=180,
+            width=BUTTON_WIDTH,
         ).pack(pady=(0, 5))
 
     except Exception:
@@ -155,20 +171,21 @@ def show_update_popup(root, latest_version, release_url):
             frm,
             text="Download from GitHub",
             command=open_github,
-            width=180,
+            width=BUTTON_WIDTH,
         ).pack(pady=(0, 5))
 
     ctk.CTkButton(
         frm,
         text="Later",
         command=popup.destroy,
-        width=120,
+        width=BUTTON_WIDTH,
     ).pack(pady=(10, 0))
 
-    popup.update_idletasks()
-    w, h = popup.winfo_width(), popup.winfo_height()
-    x = (popup.winfo_screenwidth() // 2) - (w // 2)
-    y = (popup.winfo_screenheight() // 2) - (h // 2)
-    popup.geometry(f"{w}x{h}+{x}+{y}")
+    center_window_on_parent(
+        popup,
+        root
+    )
 
+    popup.grab_set()
+    popup.focus_force()
     popup.wait_window()

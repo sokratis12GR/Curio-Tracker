@@ -44,7 +44,7 @@ LEAGUE = remote_config.get("data_league")
 
 DEFAULT_SETTINGS = {
     'User': {
-        'poe_user': 'sokratis12GR#6608',
+        'poe_user': 'player#0001',
     },
     'Hotkeys': {
         'capture_key': 'f2',
@@ -132,7 +132,7 @@ LEAGUES_TO_FETCH = [
 ENABLE_POELADDER = False
 
 poe_league = remote_config.get("poe_league")
-poe_user = "sokratis12GR#6608"
+poe_user = "player#0001"
 
 # Default values of blueprint layouts
 default_bp_lvl = "83"
@@ -195,6 +195,25 @@ MIN_DUPE_DURATION = 30
 MAX_DUPE_DURATION = 240
 TOP_RIGHT_CUT_WIDTH = 170
 TOP_RIGHT_CUT_HEIGHT = 100
+
+DEFAULT_OCR_REGION_PRESET = "Recommended"
+
+OCR_REGION_PRESETS = {
+    "Recommended": (0.00, 0.09, 1.00, 0.80),
+    "Full Window": (0.00, 0.00, 1.00, 1.00),
+    "Performance": (0.05, 0.12, 0.95, 0.78),
+    "Custom": None,
+}
+
+DEFAULT_OCR_REGION_LEFT = 0.00
+DEFAULT_OCR_REGION_TOP = 0.09
+DEFAULT_OCR_REGION_RIGHT = 1.00
+DEFAULT_OCR_REGION_BOTTOM = 0.80
+
+# DEFAULT_OCR_REGION_LEFT = 0.0
+# DEFAULT_OCR_REGION_TOP = 0.0
+# DEFAULT_OCR_REGION_RIGHT = 1.0
+# DEFAULT_OCR_REGION_BOTTOM = 1.0
 
 IMAGE_COL_WIDTH = 265
 ROW_HEIGHT = 40
@@ -287,7 +306,10 @@ exiting_prompt = "👋 Exiting."
 time_column_index = 16  # 17th column of the .csv file contains the time var
 
 # HSV thresholds (Hue, Saturation, Value) split to lower and upper values
-CHAOS_COLOR = "#d6b85a"
+CHAOS_COLOR = (
+    "#8A6500",
+    "#d6b85a",
+)
 available_fonts = ["Segoe UI", "Roboto", "Arial", "Calibri", "Comic Sans MS"]
 
 VALID_TOAST_POSITIONS = {

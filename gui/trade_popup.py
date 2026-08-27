@@ -10,6 +10,7 @@ from customtkinter import CTkImage
 
 from config import LEAGUE
 from img_utils import get_icon
+from win_utils import center_window_on_parent
 
 TRADE_URL_BASE = "https://www.pathofexile.com/trade/search"
 
@@ -156,11 +157,14 @@ class QuickTradePopup:
     EXPANDED_HEIGHT = 640
 
     def __init__(self, parent):
+        self.parent = parent
 
         self.popup = ctk.CTkToplevel(parent)
         self.popup.title("Quick Trade")
         self.popup.geometry(f"500x{self.EXPANDED_HEIGHT}")
-        self.popup.grab_set()
+        self.popup.resizable(False, False)
+
+        self.popup.transient(parent.winfo_toplevel())
 
         self.main = ctk.CTkScrollableFrame(self.popup)
         self.main.pack(fill="both", expand=True, padx=8, pady=8)
@@ -174,9 +178,20 @@ class QuickTradePopup:
         )
 
         self.icons = {}
-        threading.Thread(target=self._wait_and_load_icons, daemon=True).start()
+        threading.Thread(
+            target=self._wait_and_load_icons,
+            daemon=True
+        ).start()
 
         self._build()
+
+        center_window_on_parent(
+            self.popup,
+            self.parent
+        )
+
+        self.popup.grab_set()
+        self.popup.focus_force()
 
     # ---------------- ICON SAFE LOAD ----------------
 

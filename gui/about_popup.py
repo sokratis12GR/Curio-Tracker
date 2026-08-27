@@ -8,6 +8,7 @@ import customtkinter as ctk
 import load_utils
 from fonts import make_font
 from version_utils import VERSION
+from win_utils import center_window_on_parent
 
 
 def _add_kofi_button(frame):
@@ -77,9 +78,7 @@ class CustomAboutPopup:
         self.popup.resizable(False, False)
         self.popup.protocol("WM_DELETE_WINDOW", self._close)
         self.popup.bind("<Escape>", lambda e: self._close())
-        self.popup.transient(self.parent)
-        self.popup.grab_set()
-        self.popup.focus_force()
+        self.popup.transient(self.parent.winfo_toplevel())
         self.popup.minsize(430, 530)
         self.popup.attributes("-topmost", True)
 
@@ -212,22 +211,13 @@ class CustomAboutPopup:
         ).pack(pady=(18, 5))
 
         # --- Center popup ---
-        self.popup.update_idletasks()
-
-        w = self.popup.winfo_width()
-        h = self.popup.winfo_height()
-
-        x = (
-            self.popup.winfo_screenwidth() // 2
-        ) - (w // 2)
-
-        y = (
-            self.popup.winfo_screenheight() // 2
-        ) - (h // 2)
-
-        self.popup.geometry(
-            f"{w}x{h}+{x}+{y}"
+        center_window_on_parent(
+            self.popup,
+            self.parent
         )
+
+        self.popup.grab_set()
+        self.popup.focus_force()
 
     def _open_folder(self, path):
         try:

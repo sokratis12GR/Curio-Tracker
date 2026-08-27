@@ -9,6 +9,7 @@ from PIL import Image, ImageTk
 import config
 import ocr_utils as utils
 from img_utils import get_icon
+from win_utils import center_window_on_parent
 
 
 class CollectionPopup:
@@ -41,13 +42,17 @@ class CollectionPopup:
         self._image_refs = [self.placeholder]
 
         # Sort state
-        self._sort_column = "#0"
+        self._sort_column = "Tier"
         self._sort_ascending = True
 
     def show(self):
         popup = ctk.CTkToplevel(self.parent)
         popup.title(self.title)
+
+        popup.geometry("850x600")
         popup.minsize(750, 400)
+        popup.resizable(False, False)
+        popup.transient(self.parent.winfo_toplevel())
 
         main_frame = ctk.CTkFrame(popup)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -122,6 +127,13 @@ class CollectionPopup:
         # Build the collection immediately from already-loaded terms.json.
         self.load_items()
 
+        self.all_items.sort(
+            key=lambda x: (
+                not bool(x["tier"]),
+                str(x["tier"]).lower()
+            )
+        )
+
         # Names appear immediately.
         self.refresh_tree()
 
@@ -135,14 +147,11 @@ class CollectionPopup:
             daemon=True
         ).start()
 
-        # Center popup
-        popup.update_idletasks()
-
-        w, h = popup.winfo_width(), popup.winfo_height()
-        x = (popup.winfo_screenwidth() // 2) - (w // 2)
-        y = (popup.winfo_screenheight() // 2) - (h // 2)
-
-        popup.geometry(f"{w}x{h}+{x}+{y}")
+        # Center popup on main application
+        center_window_on_parent(
+            popup,
+            self.parent
+        )
 
         popup.grab_set()
         popup.focus_force()
