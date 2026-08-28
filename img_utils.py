@@ -1,11 +1,11 @@
 import tempfile
-from pathlib import Path
 import threading
+from pathlib import Path
+
 import requests
 from PIL import Image, ImageTk
-from customtkinter import CTkImage
 
-from load_utils import get_datasets
+from load_utils import get_datasets, get_resource_path
 
 # Temp folder for caching icons
 ICON_CACHE_DIR = Path(tempfile.gettempdir()) / "curio_icons"
@@ -14,6 +14,7 @@ ICON_CACHE_DIR.mkdir(exist_ok=True)
 # In-memory cache of PhotoImage objects
 _img_refs = {}
 _lock = threading.Lock()
+
 
 def get_icon(name: str, url: str, size=(24, 24), placeholder=None, parent=None, return_pil=False):
     global _img_refs
@@ -46,6 +47,7 @@ def get_icon(name: str, url: str, size=(24, 24), placeholder=None, parent=None, 
     except Exception:
         return placeholder
 
+
 def preload_all_icons(parent=None, size=(24, 24), placeholder=None):
     datasets = get_datasets(load_external=False)
     tiers = datasets.get("tiers", {})
@@ -68,3 +70,38 @@ def preload_all_icons(parent=None, size=(24, 24), placeholder=None):
     # Wait for all threads to finish
     for t in threads:
         t.join()
+
+
+def get_local_image(relative_path, mode="RGB"):
+    path = get_resource_path(relative_path)
+
+    print(
+        f"[IMG] Loading local image: {path}"
+    )
+
+    if not Path(path).exists():
+        print(
+            f"[IMG] Local image not found: {path}"
+        )
+        return None
+
+    try:
+        with Image.open(path) as source_image:
+            if mode:
+                image = source_image.convert(mode)
+            else:
+                image = source_image.copy()
+
+        print(
+            f"[IMG] Loaded local image: "
+            f"{path} ({image.width}x{image.height})"
+        )
+
+        return image
+
+    except Exception as error:
+        print(
+            f"[IMG] Failed to load local image "
+            f"{path}: {error}"
+        )
+        return None

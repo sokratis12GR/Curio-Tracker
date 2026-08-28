@@ -1,14 +1,16 @@
 import threading
 from collections import Counter
-from link_utils import generate_trade_url_from_values, open_url
+from tkinter import ttk
 
 import customtkinter as ctk
-from tkinter import ttk
 from PIL import Image, ImageTk
 
 import config
 import ocr_utils as utils
+from fonts import make_font
 from img_utils import get_icon
+from link_utils import generate_trade_url_from_values, open_url
+from settings import get_setting
 from win_utils import center_window_on_parent
 
 
@@ -26,6 +28,14 @@ class CollectionPopup:
         self.all_items = []
 
         self._row_item_map = {}
+
+        self.theme_mode = str(
+            get_setting("Application", "theme_mode", "DARK")
+        ).upper()
+
+        self.tree_bg = None
+        self.tree_alt_bg = None
+        self.tree_fg = None
 
         placeholder_pil = Image.new(
             "RGBA",
@@ -70,11 +80,26 @@ class CollectionPopup:
 
         columns = ("Type", "Tier", "Found", "Owned", "Wiki", "Trade")
 
+        self._apply_tree_theme()
+
         self.tree = ttk.Treeview(
             main_frame,
             columns=columns,
             show="tree headings",
-            height=20
+            height=20,
+            style="Collection.Treeview"
+        )
+
+        self.tree.tag_configure(
+            "even",
+            background=self.tree_bg,
+            foreground=self.tree_fg
+        )
+
+        self.tree.tag_configure(
+            "odd",
+            background=self.tree_alt_bg,
+            foreground=self.tree_fg
         )
 
         self.tree.bind("<Double-1>", self.open_link)
@@ -111,18 +136,7 @@ class CollectionPopup:
         self.tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        style = ttk.Style()
-        style.theme_use("default")
-        style.configure(
-            "Vertical.TScrollbar",
-            troughcolor="#2f3136",
-            background="#5865f2",
-            arrowcolor="#dcddde",
-            bordercolor="#2f3136",
-            relief="flat"
-        )
-
-        scrollbar.configure(style="Vertical.TScrollbar")
+        scrollbar.configure(style="Collection.Vertical.TScrollbar")
 
         # Build the collection immediately from already-loaded terms.json.
         self.load_items()
@@ -156,6 +170,93 @@ class CollectionPopup:
         popup.grab_set()
         popup.focus_force()
         popup.wait_window()
+
+    def _apply_tree_theme(self):
+        style = ttk.Style()
+        style.theme_use("default")
+
+        if self.theme_mode == "DARK":
+            bg = "#2f3136"
+            alt_bg = "#383c42"
+            fg = "#dcddde"
+            sel_bg = "#5865f2"
+            sel_fg = "#ffffff"
+
+            heading_bg = "#40444b"
+            heading_fg = "#dcddde"
+
+            border_color = "#40444b"
+
+            scrollbar_bg = "#5865f2"
+            scrollbar_trough = "#2f3136"
+            scrollbar_arrow = "#dcddde"
+
+        else:
+            bg = "#ffffff"
+            alt_bg = "#f0f1f3"
+            fg = "#202124"
+            sel_bg = "#0078d7"
+            sel_fg = "#ffffff"
+
+            heading_bg = "#f5f5f5"
+            heading_fg = "#202124"
+
+            border_color = "#d6d6d6"
+
+            scrollbar_bg = "#c7c7c7"
+            scrollbar_trough = "#f0f0f0"
+            scrollbar_arrow = "#404040"
+
+        self.tree_bg = bg
+        self.tree_alt_bg = alt_bg
+        self.tree_fg = fg
+
+        style.configure(
+            "Collection.Treeview",
+            background=bg,
+            fieldbackground=bg,
+            foreground=fg,
+            rowheight=32,
+            font=make_font(10),
+            borderwidth=1,
+            relief="solid"
+        )
+
+        style.map(
+            "Collection.Treeview",
+            background=[("selected", sel_bg)],
+            foreground=[("selected", sel_fg)]
+        )
+
+        style.configure(
+            "Collection.Treeview.Heading",
+            background=heading_bg,
+            foreground=heading_fg,
+            font=make_font(10, "bold"),
+            borderwidth=1,
+            relief="solid"
+        )
+
+        style.map(
+            "Collection.Treeview.Heading",
+            background=[
+                ("active", heading_bg),
+                ("pressed", heading_bg)
+            ],
+            foreground=[
+                ("active", heading_fg),
+                ("pressed", heading_fg)
+            ]
+        )
+
+        style.configure(
+            "Collection.Vertical.TScrollbar",
+            troughcolor=scrollbar_trough,
+            background=scrollbar_bg,
+            arrowcolor=scrollbar_arrow,
+            bordercolor=border_color,
+            relief="flat"
+        )
 
     def on_hover(self, event):
         col = self.tree.identify_column(event.x)
@@ -369,7 +470,7 @@ class CollectionPopup:
         for i, item in enumerate(rows):
             img = item.get("_tk_img") or self.placeholder
 
-            bg_color = "#2f3136" if i % 2 == 0 else "#383c42"
+            row_tag = "even" if i % 2 == 0 else "odd"
 
             wiki_text = "Open" if item.get("wiki") else ""
             trade_text = "Open" if item.get("trade_url") else ""
@@ -387,16 +488,10 @@ class CollectionPopup:
                     wiki_text,
                     trade_text
                 ),
-                tags=(f"row{i}",)
+                tags=(row_tag,)
             )
 
             self._row_item_map[row_id] = item
-
-            self.tree.tag_configure(
-                f"row{i}",
-                background=bg_color,
-                foreground="#dcddde"
-            )
 
     def filter_items(self):
         query = self.search_var.get().lower().strip()
@@ -511,7 +606,6 @@ class CollectionPopup:
         except Exception as e:
             if config.DEBUGGING:
                 print(f"[Collection] Failed to calculate found counts: {e}")
-
 
     def _apply_found_counts(self, counts):
         if not hasattr(self, "tree"):

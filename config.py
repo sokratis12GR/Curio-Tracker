@@ -40,7 +40,10 @@ def fetch_external_config(url="https://sokratis.space/curio_tracker/config.json"
 remote_config = fetch_external_config()
 
 # -------------------- Default Settings --------------------
-LEAGUE = remote_config.get("data_league")
+LEAGUE = (
+    remote_config.get("data_league")
+    or "Standard"
+)
 
 DEFAULT_SETTINGS = {
     'User': {
@@ -62,7 +65,7 @@ DEFAULT_SETTINGS = {
     },
     'Application': {
         'time_last_dupe_check_seconds': '60',
-        'data_league': f'{LEAGUE}'
+        'data_league': LEAGUE
     }
 }
 

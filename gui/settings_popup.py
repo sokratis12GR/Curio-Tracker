@@ -10,12 +10,63 @@ import config as c
 import curio_collection_fetch
 import toasts
 from fonts import update_all_fonts, make_font, init_font_var
+from img_utils import get_local_image
 from load_utils import get_datasets
 from logger import log_message
 from settings import get_setting, set_setting
 from themes import apply_theme
 from tree_manager import TreeManager
 from win_utils import center_window_on_parent, get_poe_bbox
+
+
+def _safe_combo_values(values, fallback=None):
+    cleaned = []
+
+    if values is not None:
+        try:
+            iterable = list(values)
+        except (TypeError, ValueError):
+            iterable = []
+
+        for value in iterable:
+            if value is None:
+                continue
+
+            text = str(value).strip()
+
+            if not text:
+                continue
+
+            if text not in cleaned:
+                cleaned.append(text)
+
+    if not cleaned and fallback is not None:
+        fallback_text = str(fallback).strip()
+
+        if fallback_text:
+            cleaned.append(fallback_text)
+
+    return cleaned
+
+
+def _safe_float_setting(section, key, default, minimum=0.0, maximum=1.0):
+    value = get_setting(
+        section,
+        key,
+        default
+    )
+
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        value = float(default)
+
+    value = max(
+        minimum,
+        min(maximum, value)
+    )
+
+    return value
 
 
 # -------------------------------
@@ -104,17 +155,12 @@ class OCRRegionEditor:
         self.parent = parent
         self.owner = owner
 
-        self.window = ctk.CTkToplevel(parent)
-        self.window.title("Configure OCR Region")
-        self.window.resizable(False, False)
-        self.window.grab_set()
-        self.window.transient(parent.winfo_toplevel())
+        self.window = None
 
         self.drag_start_x = None
         self.drag_start_y = None
 
         self.rect_id = None
-
         self.rect_coords = None
 
         self.preview_image = None
@@ -123,25 +169,97 @@ class OCRRegionEditor:
         self.preview_width = 0
         self.preview_height = 0
 
+        self.using_example_image = False
+
         self._capture_preview()
+
+        self.window = ctk.CTkToplevel(parent)
+        self.window.title("Configure OCR Region")
+        self.window.resizable(False, False)
+
+        self.window.transient(parent)
+
+        self.window.protocol(
+            "WM_DELETE_WINDOW",
+            self._close
+        )
+
         self._build_ui()
         self._draw_saved_region()
 
+        self.window.update_idletasks()
+
         center_window_on_parent(
             self.window,
-            self.parent
+            parent
         )
 
+        self.window.lift()
         self.window.grab_set()
         self.window.focus_force()
+
+    def _close(self):
+        try:
+            if self.window:
+                self.window.grab_release()
+        except Exception:
+            pass
+
+        try:
+            if self.window:
+                self.window.destroy()
+        except Exception:
+            pass
+
+        try:
+            if self.parent and self.parent.winfo_exists():
+                self.parent.deiconify()
+                self.parent.lift()
+                self.parent.grab_set()
+                self.parent.focus_force()
+        except Exception:
+            pass
 
     def _capture_preview(self):
         bbox = get_poe_bbox()
 
-        if not bbox:
-            raise RuntimeError("Could not locate Path of Exile window.")
+        if c.DEBUGGING:
+            log_message(
+                "OCR Region",
+                f"PoE bbox returned: {bbox!r}"
+            )
 
-        screenshot = ImageGrab.grab(bbox=bbox)
+        if not bbox:
+            log_message(
+                "OCR Region",
+                "Path of Exile window not found. Using example image."
+            )
+
+            screenshot = get_local_image(
+                "assets/ocr_example.jpeg"
+            )
+
+            if screenshot is None:
+                raise RuntimeError(
+                    "Could not locate Path of Exile window and "
+                    "the example OCR image could not be loaded."
+                )
+
+            self.using_example_image = True
+
+        else:
+            self.using_example_image = False
+
+            left, top, right, bottom = bbox
+
+            screenshot = ImageGrab.grab(
+                bbox=(
+                    int(left),
+                    int(top),
+                    int(right),
+                    int(bottom)
+                )
+            )
 
         original_width, original_height = screenshot.size
 
@@ -151,17 +269,37 @@ class OCRRegionEditor:
             1.0
         )
 
-        self.preview_width = int(original_width * scale)
-        self.preview_height = int(original_height * scale)
+        self.preview_width = int(
+            original_width * scale
+        )
+
+        self.preview_height = int(
+            original_height * scale
+        )
 
         self.preview_image = screenshot.resize(
-            (self.preview_width, self.preview_height),
+            (
+                self.preview_width,
+                self.preview_height
+            ),
             Image.Resampling.LANCZOS
         )
 
-        self.tk_image = ImageTk.PhotoImage(self.preview_image)
+        if c.DEBUGGING:
+            log_message(
+                "OCR Region",
+                (
+                    f"Using {'example' if self.using_example_image else 'live'} image | "
+                    f"preview={self.preview_width}x{self.preview_height}"
+                )
+            )
 
     def _build_ui(self):
+        self.tk_image = ImageTk.PhotoImage(
+            self.preview_image,
+            master=self.window
+        )
+
         container = ctk.CTkFrame(
             self.window,
             fg_color="transparent"
@@ -173,10 +311,23 @@ class OCRRegionEditor:
             pady=10
         )
 
+        instruction_text = (
+            "Drag over the area that should be processed by OCR."
+        )
+
+        if self.using_example_image:
+            instruction_text += (
+                "\nPath of Exile was not detected, so an example image is being used."
+            )
+
         ctk.CTkLabel(
             container,
-            text="Drag over the area that should be processed by OCR."
-        ).pack(anchor="w", pady=(0, 8))
+            text=instruction_text,
+            justify="left"
+        ).pack(
+            anchor="w",
+            pady=(0, 8)
+        )
 
         self.canvas = ctk.CTkCanvas(
             container,
@@ -235,7 +386,7 @@ class OCRRegionEditor:
             buttons,
             text="Cancel",
             width=100,
-            command=self.window.destroy
+            command=self._close
         ).pack(side="right")
 
         ctk.CTkButton(
@@ -464,7 +615,7 @@ class OCRRegionEditor:
             )
         )
 
-        self.window.destroy()
+        self._close()
 
     @staticmethod
     def _clamp(value, minimum, maximum):
@@ -497,7 +648,9 @@ class UnifiedSettingsSection:
 
         self.datasets = get_datasets()
         self.leagues_dict = self.datasets.get("leagues", {})
-        self.poeladder_leagues = list(self.leagues_dict.keys())
+        self.poeladder_leagues = _safe_combo_values(
+            self.leagues_dict.keys()
+        )
 
         self.theme_selector_var = ctk.StringVar(value=get_setting("Application", "theme_mode", c.DEFAULT_THEME_MODE))
 
@@ -505,14 +658,36 @@ class UnifiedSettingsSection:
             value=str(get_setting("Application", "top_right_target_area_percent", c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT))
         )
         self.ocr_region_left_var = ctk.DoubleVar(
-            value=get_setting("Application", "ocr_region_left", c.DEFAULT_OCR_REGION_LEFT))
+            value=_safe_float_setting(
+                "Application",
+                "ocr_region_left",
+                c.DEFAULT_OCR_REGION_LEFT
+            )
+        )
+
         self.ocr_region_top_var = ctk.DoubleVar(
-            value=get_setting("Application", "ocr_region_top", c.DEFAULT_OCR_REGION_TOP))
+            value=_safe_float_setting(
+                "Application",
+                "ocr_region_top",
+                c.DEFAULT_OCR_REGION_TOP
+            )
+        )
+
         self.ocr_region_right_var = ctk.DoubleVar(
-            value=get_setting("Application", "ocr_region_right", c.DEFAULT_OCR_REGION_RIGHT))
+            value=_safe_float_setting(
+                "Application",
+                "ocr_region_right",
+                c.DEFAULT_OCR_REGION_RIGHT
+            )
+        )
 
         self.ocr_region_bottom_var = ctk.DoubleVar(
-            value=get_setting("Application", "ocr_region_bottom", c.DEFAULT_OCR_REGION_BOTTOM))
+            value=_safe_float_setting(
+                "Application",
+                "ocr_region_bottom",
+                c.DEFAULT_OCR_REGION_BOTTOM
+            )
+        )
 
         self.ocr_region_label = None
 
@@ -543,7 +718,44 @@ class UnifiedSettingsSection:
         self.enable_poeladder_var = ctk.BooleanVar(
             value=get_setting("Application", "enable_poeladder", c.ENABLE_POELADDER)
         )
-        self.data_league_var = ctk.StringVar(value=get_setting("Application", "data_league", c.LEAGUE))
+        self.data_league_values = _safe_combo_values(
+            c.LEAGUES_TO_FETCH,
+            fallback="Standard"
+        )
+
+        saved_data_league = get_setting(
+            "Application",
+            "data_league",
+            c.LEAGUE
+        )
+
+        if saved_data_league is None:
+            saved_data_league = ""
+
+        saved_data_league = str(saved_data_league).strip()
+
+        if saved_data_league not in self.data_league_values:
+            saved_data_league = self.data_league_values[0]
+
+            set_setting(
+                "Application",
+                "data_league",
+                saved_data_league
+            )
+
+        if c.DEBUGGING:
+            log_message(
+                "Settings",
+                (
+                    f"Raw LEAGUES_TO_FETCH={c.LEAGUES_TO_FETCH!r} | "
+                    f"Sanitized={self.data_league_values!r} | "
+                    f"Selected={saved_data_league!r}"
+                )
+            )
+
+        self.data_league_var = ctk.StringVar(
+            value=saved_data_league
+        )
         self.poe_player_var = ctk.StringVar(value=get_setting("User", "poe_user", ""))
 
         self.enable_hdr_filtering_var = ctk.BooleanVar(
@@ -562,35 +774,75 @@ class UnifiedSettingsSection:
     def build(self, frame):
         self.settings_window = frame.winfo_toplevel()
 
-        general = CollapsibleSection(
-            frame,
-            "General",
-            expanded=True
-        )
+        sections = [
+            ("General", True, self._build_general),
+            ("Player & League", True, self._build_player),
+            ("PoE Ladder", False, self._build_poeladder),
+            ("Capture / OCR", False, self._build_capture),
+            ("Toasts (Notifications)", False, self._build_toasts),
+            ("Records & Duplicate Check", False, self._build_records),
+        ]
 
-        general = CollapsibleSection(frame, "General", expanded=True)
-        general.pack(fill="x", pady=2)
-        self._build_general(general.content)
+        for title, expanded, builder in sections:
+            section = CollapsibleSection(
+                frame,
+                title,
+                expanded=expanded
+            )
 
-        player = CollapsibleSection(frame, "Player & League", expanded=True)
-        player.pack(fill="x", pady=2)
-        self._build_player(player.content)
+            section.pack(
+                fill="x",
+                pady=2
+            )
 
-        poeladder = CollapsibleSection(frame, "PoE Ladder", expanded=False)
-        poeladder.pack(fill="x", pady=2)
-        self._build_poeladder(poeladder.content)
+            try:
+                if c.DEBUGGING:
+                    log_message(
+                        "Settings",
+                        f"Building section: {title}"
+                    )
 
-        capture = CollapsibleSection(frame, "Capture / OCR", expanded=False)
-        capture.pack(fill="x", pady=2)
-        self._build_capture(capture.content)
+                builder(section.content)
 
-        toast_section = CollapsibleSection(frame, "Toasts (Notifications)", expanded=False)
-        toast_section.pack(fill="x", pady=2)
-        self._build_toasts(toast_section.content)
+                if c.DEBUGGING:
+                    log_message(
+                        "Settings",
+                        f"Built section successfully: {title}"
+                    )
 
-        records = CollapsibleSection(frame, "Records & Duplicate Check", expanded=False)
-        records.pack(fill="x", pady=2)
-        self._build_records(records.content)
+            except Exception as error:
+                import traceback
+
+                log_message(
+                    "Settings",
+                    (
+                        f"Failed to build section {title}: {error}\n"
+                        f"{traceback.format_exc()}"
+                    )
+                )
+
+                if not section.expanded:
+                    section.expanded = True
+
+                    section.content.pack(
+                        fill="x",
+                        padx=8,
+                        pady=(5, 8)
+                    )
+
+                    section._update_header()
+
+                ctk.CTkLabel(
+                    section.content,
+                    text=(
+                        "This section could not be loaded.\n"
+                        "See the application log for details."
+                    ),
+                    justify="left"
+                ).pack(
+                    anchor="w",
+                    pady=5
+                )
 
     # -------------------------------
     # General
@@ -634,10 +886,48 @@ class UnifiedSettingsSection:
         self.poe_player_var.trace_add("write", self._update_tracker_poe_player)
         row += 1
 
-        ctk.CTkLabel(frame, text="(poe.ninja) Data League:").grid(row=row, column=0, sticky="w")
-        league_cb = ctk.CTkComboBox(frame, variable=self.data_league_var, values=c.LEAGUES_TO_FETCH, width=self.width)
-        league_cb.grid(row=row, column=1, sticky="w")
-        self.data_league_var.trace_add("write", self._on_data_league_change)
+        ctk.CTkLabel(
+            frame,
+            text="(poe.ninja) Data League:"
+        ).grid(
+            row=row,
+            column=0,
+            sticky="w"
+        )
+
+        if c.DEBUGGING:
+            log_message(
+                "Settings",
+                (
+                    "Creating data league ComboBox | "
+                    f"values={self.data_league_values!r} | "
+                    f"selected={self.data_league_var.get()!r}"
+                )
+            )
+
+        league_cb = ctk.CTkComboBox(
+            frame,
+            variable=self.data_league_var,
+            values=self.data_league_values,
+            width=self.width
+        )
+
+        league_cb.grid(
+            row=row,
+            column=1,
+            sticky="w"
+        )
+
+        self.data_league_var.trace_add(
+            "write",
+            self._on_data_league_change
+        )
+
+        if c.DEBUGGING:
+            log_message(
+                "Settings",
+                "Data league ComboBox created successfully"
+            )
 
     # -------------------------------
     # PoE Ladder
@@ -657,10 +947,15 @@ class UnifiedSettingsSection:
 
         ctk.CTkLabel(frame, text="Collection League:").grid(row=row, column=0, sticky="w")
 
+        poeladder_values = self.poeladder_leagues
+
+        if not poeladder_values:
+            poeladder_values = [""]
+
         self.dynamic_data_league_cb = ctk.CTkComboBox(
             frame,
             variable=self.dynamic_data_league_var,
-            values=self.poeladder_leagues,
+            values=poeladder_values,
             width=self.width,
             state="normal" if self.enable_poeladder_var.get() else "disabled"
         )
@@ -825,11 +1120,11 @@ class UnifiedSettingsSection:
 
         ctk.CTkLabel(frame, text="Collection Missing Color:").grid(row=row, column=0, sticky="w")
 
-        self.color_preview = ctk.CTkFrame(frame, width=60, height=25, fg_color=self.collection_missing_color_var.get())
+        self.color_preview = ctk.CTkFrame(frame, width=60, height=30, fg_color=self.collection_missing_color_var.get())
         self.color_preview.grid(row=row, column=1, sticky="w", padx=(0, 10))
 
-        pick_btn = ctk.CTkButton(frame, text="Pick", width=60, command=self._pick_collection_color)
-        pick_btn.grid(row=row, column=1, sticky="e")
+        pick_btn = ctk.CTkButton(frame, text="Pick", width=int(self.width/1.4), command=self._pick_collection_color)
+        pick_btn.grid(row=row, column=1, sticky="w", padx=(60, 0))
         row += 1
 
         self.example_toast_btn = ctk.CTkButton(frame, text="SHOW EXAMPLE",
@@ -1207,10 +1502,45 @@ class UnifiedSettingsSection:
         return f"{area * 100:.1f}% of game window"
 
     def _open_ocr_region_editor(self):
-        OCRRegionEditor(
-            parent=self.parent,
-            owner=self
-        )
+        settings_window = self.settings_window
+
+        if not settings_window:
+            return
+
+        try:
+            if not settings_window.winfo_exists():
+                return
+        except Exception:
+            return
+
+        try:
+            settings_window.grab_release()
+        except Exception:
+            pass
+
+        try:
+            OCRRegionEditor(
+                parent=settings_window,
+                owner=self
+            )
+
+        except Exception as error:
+            import traceback
+
+            log_message(
+                "OCR Region",
+                (
+                    f"Failed to open OCR region editor: {error}\n"
+                    f"{traceback.format_exc()}"
+                )
+            )
+
+            try:
+                settings_window.grab_set()
+                settings_window.lift()
+                settings_window.focus_force()
+            except Exception:
+                pass
 
     def _apply_ocr_region_preset(self, preset_name):
         region = c.OCR_REGION_PRESETS.get(preset_name)
@@ -1322,13 +1652,29 @@ class UnifiedSettingsSection:
         self.tracker.set_duplicate_duration(val)
 
     def _on_data_league_change(self, *_):
-        val = self.data_league_var.get()
+        val = self.data_league_var.get().strip()
+
         if not val:
             return
 
-        set_setting("Application", "data_league", val)
+        if val not in self.data_league_values:
+            log_message(
+                "Settings",
+                f"Ignoring invalid data league selection: {val!r}"
+            )
+            return
+
+        set_setting(
+            "Application",
+            "data_league",
+            val
+        )
+
         self.tracker.on_league_change()
-        self.tree_manager.refresh_treeview(self.tracker)
+
+        self.tree_manager.refresh_treeview(
+            self.tracker
+        )
 
     def _update_tracker_poe_player(self, *_):
         val = self.poe_player_var.get()
