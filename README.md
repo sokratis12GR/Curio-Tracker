@@ -79,7 +79,8 @@ Your data is processed locally in your browser.
 
 ## Light Mode
 
-<img width="1197" height="750" alt="image" src="https://github.com/user-attachments/assets/2b80fead-4a1b-4dfb-8687-dea81e8a2866" />
+<img width="1197" height="749" alt="image" src="https://github.com/user-attachments/assets/2fadbf15-7ec3-4c1a-9235-e460126ebdc7" />
+
 
 # Extras
 
