@@ -33,7 +33,8 @@ Each capture has a toast in the top right as a notification which shows the capt
 
 ### Example Usage
 
-<img width="1195" height="751" alt="image" src="https://github.com/user-attachments/assets/510b933c-d900-4d9c-98c5-8f90dfef6329" />
+<img width="1228" height="747" alt="image" src="https://github.com/user-attachments/assets/9db19ce3-d416-4964-bd73-7f622c6e5d51" />
+
 
 ## Toasts
 
@@ -44,7 +45,7 @@ When capturing a Curio, a toast in the top-right of the screen shows the capture
 
 ## Sorting
 
-<img width="1190" height="743" alt="image" src="https://github.com/user-attachments/assets/b6c5171d-5dda-4a49-8416-8aa7c9e2c22f" />
+<img width="1226" height="748" alt="image" src="https://github.com/user-attachments/assets/ef35807f-aba0-4aef-8b5e-e324345a003b" />
 
 
 ## Saved Data
