@@ -54,11 +54,13 @@ Captured data is saved in the `./saved/` folder as either `matches.csv` or `mat
 
 Both formats can also be loaded directly into Curio Stats for further analysis.
 
-<img width="1069" height="966" alt="image" src="https://github.com/user-attachments/assets/74bd3890-abbe-4ab1-a7d6-f64bf5c63640" />
+<img width="1756" height="954" alt="image" src="https://github.com/user-attachments/assets/429c6e12-115a-431e-ad53-8f9b8e475677" />
+
 
 Example `matches.csv` output:
 
-<img width="1685" height="741" alt="image" src="https://github.com/user-attachments/assets/5daa892a-a293-4281-bebc-f58e04c68420" />
+<img width="1769" height="781" alt="image" src="https://github.com/user-attachments/assets/f70803b8-e8d8-4b6e-9efb-d0897081e4db" />
+
 
 ## Curio Stats
 
