@@ -4,7 +4,9 @@ title: "[Bug] "
 labels:
 
 - bug
-  body:
+  assignees: []
+
+body:
 
 - type: markdown
   attributes:
@@ -75,11 +77,11 @@ labels:
 - type: input
   id: version
   attributes:
-    label: Curio Tracker version
-    description: Enter the Curio Tracker version shown in the app or release you installed.
-    placeholder: "e.g. 0.2.15.0"
+  label: Curio Tracker version
+  description: Enter the Curio Tracker version shown in the app or release you installed.
+  placeholder: "e.g. 0.2.15.0"
   validations:
-    required: true
+  required: true
 
 - type: dropdown
   id: windows-version
@@ -166,21 +168,21 @@ labels:
 - type: dropdown
   id: blueprint-area
   attributes:
-    label: Blueprint area
-    description: If applicable, which Blueprint area was being scanned?
-    options:
-      - Bunker
-      - Records Office
-      - Mansion
-      - Smuggler's Den
-      - Underbelly
-      - Laboratory
-      - Prohibited Library
-      - Repository
-      - Tunnels
-      - Not applicable
+  label: Blueprint area
+  description: If applicable, which Blueprint area was being scanned?
+  options:
+  - Bunker
+  - Records Office
+  - Mansion
+  - Smuggler's Den
+  - Underbelly
+  - Laboratory
+  - Prohibited Library
+  - Repository
+  - Tunnels
+  - Not applicable
   validations:
-    required: false
+  required: false
 
 - type: dropdown
   id: reward-type
