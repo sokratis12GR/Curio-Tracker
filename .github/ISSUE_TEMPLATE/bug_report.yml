@@ -2,9 +2,8 @@ name: Bug report
 description: Report a problem with Curio Tracker
 title: "[Bug] "
 labels:
-
-- bug
-  assignees: []
+  - bug
+assignees: []
 
 body:
 
