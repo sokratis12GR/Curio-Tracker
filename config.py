@@ -349,6 +349,29 @@ DEFAULT_TOAST_HEADLINE_FONT_SIZE = 10
 TOAST_HEADLINE_FONT_SIZE_MIN = 8
 TOAST_HEADLINE_FONT_SIZE_MAX = 60
 
+TOAST_SIZE_PRESETS = {
+    "Standard": {
+        "image_width": DEFAULT_TOAST_IMAGE_WIDTH,
+        "image_height": DEFAULT_TOAST_IMAGE_HEIGHT,
+        "font_size": DEFAULT_TOAST_FONT_SIZE,
+        "headline_font_size": DEFAULT_TOAST_HEADLINE_FONT_SIZE,
+    },
+    "Large": {
+        "image_width": int(DEFAULT_TOAST_IMAGE_WIDTH * 1.35),
+        "image_height": int(DEFAULT_TOAST_IMAGE_HEIGHT * 1.35),
+        "font_size": int(DEFAULT_TOAST_FONT_SIZE * 1.35),
+        "headline_font_size": int(DEFAULT_TOAST_HEADLINE_FONT_SIZE * 1.35),
+    },
+    "Massive": {
+        "image_width": int(DEFAULT_TOAST_IMAGE_WIDTH * 1.7),
+        "image_height": int(DEFAULT_TOAST_IMAGE_HEIGHT * 1.7),
+        "font_size": int(DEFAULT_TOAST_FONT_SIZE * 1.7),
+        "headline_font_size": int(DEFAULT_TOAST_HEADLINE_FONT_SIZE * 1.7),
+    },
+}
+
+DEFAULT_TOAST_SIZE_PRESET = "Standard"
+
 ### HDR START
 
 # Enchant (HDR shifted gray/beige)

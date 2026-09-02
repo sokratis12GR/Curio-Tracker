@@ -37,12 +37,20 @@ class ActionsFrame:
         # term -> type
         self.term_types = curio_tracker.term_types
 
+        self.item_placeholder = "i.e. Abyssus"
+        self._showing_item_placeholder = False
+
         self._updating_term = False
 
         self._create_widgets()
         self._populate_types()
 
         self.selected_term.trace_add("write", self._on_term_typed)
+
+    def _term_sort_key(self, term):
+        lower = term.lower()
+
+        return (lower)
 
     def _create_widgets(self):
 
@@ -58,9 +66,14 @@ class ActionsFrame:
 
         self.type_combo.grid(row=0, column=1, padx=(0, 5), pady=5)
 
-        self.item_combo = CTkComboBox(self.frame, variable=self.selected_term, values=[], width=400)
+        self.item_combo = CTkComboBox(self.frame, variable=self.selected_term, values=[], width=400,
+                                      command=self._on_item_selected)
 
         self.item_combo.grid(row=0, column=2, sticky="ew", padx=5, pady=5)
+
+        self.item_combo.bind("<FocusIn>", self._on_item_focus_in)
+
+        self.item_combo.bind("<FocusOut>", self._on_item_focus_out)
 
         # Press Enter while typing to insert.
         self.item_combo.bind("<Return>", lambda event: self._insert_item())
@@ -87,18 +100,72 @@ class ActionsFrame:
             self._set_term("")
             return
 
-        first_type = types[0]
+        default_type = "Replica" if "Replica" in types else types[0]
 
-        self.selected_type.set(first_type)
+        self.selected_type.set(default_type)
 
-        self._populate_terms(first_type)
+        self._populate_terms(
+            default_type,
+            select_first=False
+        )
+
+        self._show_item_placeholder()
+
+    def _show_item_placeholder(self):
+        if self.selected_term.get().strip():
+            return
+
+        self._showing_item_placeholder = True
+        self._set_term(self.item_placeholder)
+
+        self.item_combo.configure(
+            text_color="gray"
+        )
+
+    def _hide_item_placeholder(self):
+        if not self._showing_item_placeholder:
+            return
+
+        self._showing_item_placeholder = False
+        self._set_term("")
+
+        self.item_combo.configure(
+            text_color=("black", "white")
+        )
+
+    def _on_item_focus_in(self, _event=None):
+        self._hide_item_placeholder()
+
+    def _on_item_focus_out(self, _event=None):
+        if not self.selected_term.get().strip():
+            self._show_item_placeholder()
+
+    def _on_item_selected(self, selected_term):
+        if not selected_term:
+            return
+
+        self._showing_item_placeholder = False
+
+        self.item_combo.configure(
+            text_color=("black", "white")
+        )
+
+        self._set_term(selected_term)
+
+        actual_type = self.term_types.get(selected_term)
+
+        if actual_type:
+            self.selected_type.set(actual_type)
 
     def _get_terms_for_type(self, item_type):
         return sorted(
-            term
-            for term, term_type
-            in self.term_types.items()
-            if term_type == item_type
+            (
+                term
+                for term, term_type
+                in self.term_types.items()
+                if term_type == item_type
+            ),
+            key=self._term_sort_key
         )
 
     def _populate_terms(self, item_type, select_first=True):
@@ -125,10 +192,16 @@ class ActionsFrame:
             self._updating_term = False
 
     def _on_type_changed(self, selected_type):
-        self._populate_terms(selected_type, select_first=True)
+        self._populate_terms(
+            selected_type,
+            select_first=False
+        )
+
+        self._set_term("")
+        self._show_item_placeholder()
 
     def _on_term_typed(self, *_args):
-        if self._updating_term:
+        if self._updating_term or self._showing_item_placeholder:
             return
 
         typed = self.selected_term.get()
@@ -195,9 +268,9 @@ class ActionsFrame:
                 self.selected_type.set(actual_type)
 
     def _insert_item(self):
-        term = (self.selected_term.get().strip())
+        term = self.selected_term.get().strip()
 
-        if not term:
+        if not term or self._showing_item_placeholder or term == self.item_placeholder:
             log_message("[WARN] Manual insert attempted without selecting an item.")
             return
 

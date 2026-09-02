@@ -1,5 +1,6 @@
+import json
+import math
 import re
-import threading
 import webbrowser
 from tkinter import colorchooser
 
@@ -47,6 +48,26 @@ def _safe_combo_values(values, fallback=None):
             cleaned.append(fallback_text)
 
     return cleaned
+
+
+def _safe_json_dict_setting(section, key):
+    value = get_setting(section, key, {})
+
+    if isinstance(value, dict):
+        return value
+
+    if not value:
+        return {}
+
+    try:
+        parsed = json.loads(value)
+
+        if isinstance(parsed, dict):
+            return parsed
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+
+    return {}
 
 
 def _safe_float_setting(section, key, default, minimum=0.0, maximum=1.0):
@@ -144,6 +165,12 @@ class SettingsPopup:
 
     def close(self):
         toasts.hide_example()
+
+        try:
+            self.app_section._hide_top_right_capture_area()
+        except Exception:
+            pass
+
         self.popup.destroy()
 
 
@@ -657,6 +684,9 @@ class UnifiedSettingsSection:
         self.top_right_target_area_percent_var = ctk.StringVar(
             value=str(get_setting("Application", "top_right_target_area_percent", c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT))
         )
+
+        self.top_right_target_capture_preview_window = None
+
         self.ocr_region_left_var = ctk.DoubleVar(
             value=_safe_float_setting(
                 "Application",
@@ -699,6 +729,19 @@ class UnifiedSettingsSection:
             value=str(get_setting("Application", "toast_x_offset", c.DEFAULT_TOAST_X_OFFSET)))
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
+
+        saved_toast_size_preset = str(
+            get_setting("Application", "toast_size_preset", c.DEFAULT_TOAST_SIZE_PRESET) or "").strip()
+
+        valid_toast_presets = [*c.TOAST_SIZE_PRESETS.keys(), "Custom"]
+
+        if saved_toast_size_preset not in valid_toast_presets:
+            saved_toast_size_preset = "Custom"
+
+        self.toast_size_preset_var = ctk.StringVar(value=saved_toast_size_preset)
+
+        self.toast_custom_size_frame = None
+
         self.toast_image_width_var = ctk.StringVar(
             value=str(get_setting("Application", "toast_image_width", c.DEFAULT_TOAST_IMAGE_WIDTH))
         )
@@ -753,23 +796,62 @@ class UnifiedSettingsSection:
                 )
             )
 
-        self.data_league_var = ctk.StringVar(
-            value=saved_data_league
-        )
+        self.data_league_var = ctk.StringVar(value=saved_data_league)
+
         self.poe_player_var = ctk.StringVar(value=get_setting("User", "poe_user", ""))
 
         self.enable_hdr_filtering_var = ctk.BooleanVar(
-            value=get_setting("Application", "is_hdr_filtering_enabled", c.IS_HDR_ENABLED)
-        )
+            value=get_setting("Application", "is_hdr_filtering_enabled", c.IS_HDR_ENABLED))
 
         self.dupe_duration = ctk.IntVar(value=get_setting("Application", "time_last_dupe_check_seconds", 60))
+
         self.font_selector_var = ctk.StringVar(value=get_setting("Application", "font_family", "Segoe UI"))
+
         self.collection_missing_color_var = ctk.StringVar(
-            value=get_setting("Application", "collection_missing_color", "#FF0000")
-        )
-        self.dynamic_data_league_var = ctk.StringVar(
-            value=get_setting("Application", "poeladder_ggg_league", c.FIXED_LADDER_IDENTIFIER)
-        )
+            value=get_setting("Application", "collection_missing_color", "#FF0000"))
+
+        current_profile = self.poe_player_var.get().strip()
+
+        self.poeladder_cached_profile = str(get_setting("Application", "poeladder_cached_profile", "") or "").strip()
+
+        self.league_display_mapping = _safe_json_dict_setting("Application", "poeladder_league_mapping")
+
+        in_memory_mapping = {}
+
+        if current_profile:
+            in_memory_mapping = dict(curio_collection_fetch.PLAYER_LADDERS.get(current_profile, {}))
+
+        if in_memory_mapping:
+            self.league_display_mapping = in_memory_mapping
+            self.poeladder_cached_profile = current_profile
+
+            set_setting("Application", "poeladder_cached_profile", current_profile)
+
+            set_setting("Application", "poeladder_league_mapping", json.dumps(self.league_display_mapping))
+
+        elif self.poeladder_cached_profile != current_profile:
+            self.league_display_mapping = {}
+
+        saved_collection_league = str(get_setting("Application", "poeladder_collection_league", "") or "").strip()
+        if not saved_collection_league:
+            saved_collection_league = str(get_setting("Application", "poeladder_ggg_league", "") or "").strip()
+
+        saved_collection_identifier = str(get_setting("Application", "poeladder_league_identifier", "") or "").strip()
+
+        if not saved_collection_league and saved_collection_identifier:
+            saved_collection_league = next((name for name, identifier in self.league_display_mapping.items() if
+                                            identifier == saved_collection_identifier), "")
+
+        if self.league_display_mapping:
+            self.poeladder_leagues = _safe_combo_values(self.league_display_mapping.keys())
+
+        if saved_collection_league and self.league_display_mapping and saved_collection_league not in self.league_display_mapping:
+            saved_collection_league = ""
+
+        if not saved_collection_league:
+            saved_collection_league = (self.poeladder_leagues[0] if self.poeladder_leagues else "")
+
+        self.dynamic_data_league_var = ctk.StringVar(value=saved_collection_league)
 
     def build(self, frame):
         self.settings_window = frame.winfo_toplevel()
@@ -777,7 +859,6 @@ class UnifiedSettingsSection:
         sections = [
             ("General", True, self._build_general),
             ("Player & League", True, self._build_player),
-            ("PoE Ladder", False, self._build_poeladder),
             ("Capture / OCR", False, self._build_capture),
             ("Toasts (Notifications)", False, self._build_toasts),
             ("Records & Duplicate Check", False, self._build_records),
@@ -879,94 +960,79 @@ class UnifiedSettingsSection:
         row = 0
 
         ctk.CTkLabel(frame, text="PoE Profile (player#1234):").grid(row=row, column=0, sticky="w")
+
         self.poe_entry = ctk.CTkEntry(frame, textvariable=self.poe_player_var, width=self.width)
+
         self.poe_entry.grid(row=row, column=1, sticky="w")
+
         self.poe_entry.configure(validate="key",
                                  validatecommand=(self.poe_entry.register(self._validate_poe_live), "%P"))
+
         self.poe_player_var.trace_add("write", self._update_tracker_poe_player)
+
         row += 1
 
-        ctk.CTkLabel(
-            frame,
-            text="(poe.ninja) Data League:"
-        ).grid(
-            row=row,
-            column=0,
-            sticky="w"
-        )
+        # --------------------------------
+        # poe.ninja league
+        # --------------------------------
+        ctk.CTkLabel(frame, text="Pricing League:").grid(row=row, column=0, sticky="w", pady=(6, 0))
 
-        if c.DEBUGGING:
-            log_message(
-                "Settings",
-                (
-                    "Creating data league ComboBox | "
-                    f"values={self.data_league_values!r} | "
-                    f"selected={self.data_league_var.get()!r}"
-                )
-            )
+        league_cb = ctk.CTkComboBox(frame, variable=self.data_league_var, values=self.data_league_values,
+                                    width=self.width, state="readonly")
 
-        league_cb = ctk.CTkComboBox(
-            frame,
-            variable=self.data_league_var,
-            values=self.data_league_values,
-            width=self.width
-        )
+        league_cb.grid(row=row, column=1, sticky="w", pady=(6, 0))
 
-        league_cb.grid(
-            row=row,
-            column=1,
-            sticky="w"
-        )
+        self.data_league_var.trace_add("write", self._on_data_league_change)
 
-        self.data_league_var.trace_add(
-            "write",
-            self._on_data_league_change
-        )
+        row += 1
 
-        if c.DEBUGGING:
-            log_message(
-                "Settings",
-                "Data league ComboBox created successfully"
-            )
+        ctk.CTkLabel(frame, text="PoE Ladder Collection", font=make_font(12, "bold")
+                     ).grid(row=row, column=0, sticky="w", pady=(5, 3))
 
-    # -------------------------------
-    # PoE Ladder
-    # -------------------------------
-    def _build_poeladder(self, frame):
-        row = 0
-
-        self.poeladder_label = ctk.CTkLabel(frame, text="How to setup", font=make_font(9, "bold", underline=True),
+        self.poeladder_label = ctk.CTkLabel(frame, text="How to setup", font=make_font(11, "bold", underline=True),
                                             cursor="hand2")
-        self.poeladder_label.grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        self.poeladder_label.grid(row=row, column=1, sticky="w")
+
         self.poeladder_label.bind("<Button-1>", self.open_poeladder_link)
+
         row += 1
 
-        ctk.CTkCheckBox(frame, text="Enable Integration", variable=self.enable_poeladder_var,
-                        command=self._toggle_poeladder).grid(row=row, column=0, columnspan=2, sticky="w")
+        already_fetched = (bool(
+            self.poe_player_var.get().strip()) and self.poeladder_cached_profile == self.poe_player_var.get().strip() and bool(
+            self.league_display_mapping))
+
+        fetch_enabled = (self.enable_poeladder_var.get() and not already_fetched)
+
+        self.fetch_collection_btn = ctk.CTkButton(frame, text=(
+            "Collection Fetched" if already_fetched else "Fetch Collection"),
+                                                  state=("normal" if fetch_enabled else "disabled"),
+                                                  command=self._fetch_poeladder, width=self.long_width)
+
+        self.fetch_collection_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
         row += 1
 
-        ctk.CTkLabel(frame, text="Collection League:").grid(row=row, column=0, sticky="w")
+        ctk.CTkCheckBox(frame, text="Enable PoELadder | Collection", variable=self.enable_poeladder_var,
+                        command=self._toggle_poeladder).grid(row=row, column=0, sticky="w", pady=(8, 0))
 
-        poeladder_values = self.poeladder_leagues
+        poeladder_values = _safe_combo_values(
+            self.league_display_mapping.keys() if self.league_display_mapping else self.poeladder_leagues)
 
         if not poeladder_values:
             poeladder_values = [""]
 
-        self.dynamic_data_league_cb = ctk.CTkComboBox(
-            frame,
-            variable=self.dynamic_data_league_var,
-            values=poeladder_values,
-            width=self.width,
-            state="normal" if self.enable_poeladder_var.get() else "disabled"
-        )
-        self.dynamic_data_league_cb.grid(row=row, column=1, sticky="w")
-        self.dynamic_data_league_var.trace_add("write", self._on_dynamic_league_change)
-        row += 1
+        selected = self.dynamic_data_league_var.get().strip()
 
-        fetch_btn_state = "normal" if self.enable_poeladder_var.get() else "disabled"
-        self.fetch_collection_btn = ctk.CTkButton(frame, text="Fetch Collection", state=fetch_btn_state,
-                                                  command=self._fetch_poeladder, width=self.long_width)
-        self.fetch_collection_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        if selected and selected not in poeladder_values:
+            poeladder_values.insert(0, selected)
+
+        self.dynamic_data_league_cb = ctk.CTkComboBox(frame, variable=self.dynamic_data_league_var,
+                                                      values=poeladder_values, width=self.width, state=(
+                "readonly" if self.enable_poeladder_var.get() else "disabled"))
+
+        self.dynamic_data_league_cb.grid(row=row, column=1, sticky="w", pady=(8, 0))
+
+        self.dynamic_data_league_var.trace_add("write", self._on_dynamic_league_change)
 
     # -------------------------------
     # Capture / OCR
@@ -974,44 +1040,57 @@ class UnifiedSettingsSection:
     def _build_capture(self, frame):
         row = 0
 
-        ctk.CTkLabel(frame, text="Layout Capture Area (% of screen):").grid(row=row, column=0, sticky="w")
-        area_entry = ctk.CTkEntry(frame, textvariable=self.top_right_target_area_percent_var, width=self.width)
-        area_entry.grid(row=row, column=1, sticky="w")
-        self.top_right_target_area_percent_var.trace_add("write", self._update_top_right_target_area_percent)
+        def section_title(text, pady=(0, 5)):
+            nonlocal row
 
-        row += 1
+            ctk.CTkLabel(
+                frame,
+                text=text,
+                font=make_font(12, "bold")
+            ).grid(
+                row=row,
+                column=0,
+                columnspan=2,
+                sticky="w",
+                pady=pady
+            )
 
-        ctk.CTkLabel(
-            frame,
-            text="OCR Capture Region:"
-        ).grid(
-            row=row,
-            column=0,
-            sticky="w",
-            pady=(10, 0)
-        )
+            row += 1
+
+        def field_label(text, pady=(0, 0)):
+            ctk.CTkLabel(
+                frame,
+                text=text
+            ).grid(
+                row=row,
+                column=0,
+                sticky="w",
+                pady=pady
+            )
+
+        # --------------------------------------------------
+        # OCR region
+        # --------------------------------------------------
+        section_title("OCR Capture Region")
+
+        field_label("Capture Area:")
 
         self.ocr_region_label = ctk.CTkLabel(
             frame,
             text=self._get_ocr_region_description()
         )
+
         self.ocr_region_label.grid(
             row=row,
             column=1,
-            sticky="w",
-            pady=(10, 0)
+            sticky="w"
         )
 
         row += 1
 
-        ctk.CTkLabel(
-            frame,
-            text="OCR Region Preset:"
-        ).grid(
-            row=row,
-            column=0,
-            sticky="w",
-            pady=(10, 0)
+        field_label(
+            "Preset:",
+            pady=(6, 0)
         )
 
         self.ocr_region_preset_var = ctk.StringVar(
@@ -1022,31 +1101,70 @@ class UnifiedSettingsSection:
             )
         )
 
-        preset_cb = ctk.CTkComboBox(
+        ctk.CTkComboBox(
             frame,
             variable=self.ocr_region_preset_var,
             values=list(c.OCR_REGION_PRESETS.keys()),
             width=self.width,
             state="readonly",
             command=self._apply_ocr_region_preset
-        )
-
-        preset_cb.grid(
+        ).grid(
             row=row,
             column=1,
             sticky="w",
-            pady=(10, 0)
+            pady=(6, 0)
         )
 
         row += 1
 
-        configure_btn = ctk.CTkButton(
+        ctk.CTkButton(
             frame,
             text="Configure OCR Region",
             width=self.long_width,
             command=self._open_ocr_region_editor
+        ).grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            sticky="w",
+            pady=(8, 0)
         )
-        configure_btn.grid(
+
+        row += 1
+
+        # --------------------------------------------------
+        # Layout capture
+        # --------------------------------------------------
+        section_title(
+            "Layout Capture",
+            pady=(14, 5)
+        )
+
+        field_label("Top Right Area %:")
+
+        ctk.CTkEntry(
+            frame,
+            textvariable=self.top_right_target_area_percent_var,
+            width=self.width
+        ).grid(
+            row=row,
+            column=1,
+            sticky="w"
+        )
+
+        self.top_right_target_area_percent_var.trace_add(
+            "write",
+            self._update_top_right_target_area_percent
+        )
+
+        row += 1
+
+        ctk.CTkButton(
+            frame,
+            text="Visualise Capture Area",
+            width=self.long_width,
+            command=self._visualise_top_right_capture_area
+        ).grid(
             row=row,
             column=0,
             columnspan=2,
@@ -1060,81 +1178,170 @@ class UnifiedSettingsSection:
     def _build_toasts(self, frame):
         row = 0
 
+        # ==================================================
+        # Placement & Timing
+        # ==================================================
+        ctk.CTkLabel(frame, text="Placement & Timing", font=make_font(12, "bold")).grid(row=row, column=0, columnspan=2,
+                                                                                        sticky="w", pady=(0, 5))
+
+        row += 1
+
         ctk.CTkCheckBox(frame, text="Enable Toasts", variable=self.toasts_var, command=self._toggle_toasts).grid(
-            row=row, column=0, columnspan=2, sticky="w"
-        )
+            row=row, column=0, columnspan=2, sticky="w")
+
         row += 1
 
         ctk.CTkLabel(frame, text="Position:").grid(row=row, column=0, sticky="w")
-        toast_position_cb = ctk.CTkComboBox(frame, variable=self.toasts_position_var,
-                                            values=c.VALID_TOAST_POSITIONS, width=self.width)
+
+        toast_position_cb = ctk.CTkComboBox(frame, variable=self.toasts_position_var, values=c.VALID_TOAST_POSITIONS,
+                                            width=self.width, state="readonly")
+
         toast_position_cb.grid(row=row, column=1, sticky="w")
+
         self.toasts_position_var.trace_add("write", self._update_toasts_position)
+
         row += 1
 
         ctk.CTkLabel(frame, text="Y Offset (px):").grid(row=row, column=0, sticky="w")
+
         y_offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_y_offset_var, width=self.width)
+
         y_offset_entry.grid(row=row, column=1, sticky="w")
+
         self.toasts_y_offset_var.trace_add("write", self._update_toasts_y_offset)
+
         row += 1
 
         ctk.CTkLabel(frame, text="X Offset (px):").grid(row=row, column=0, sticky="w")
+
         x_offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_x_offset_var, width=self.width)
+
         x_offset_entry.grid(row=row, column=1, sticky="w")
+
         self.toasts_x_offset_var.trace_add("write", self._update_toasts_x_offset)
+
         row += 1
 
-        ctk.CTkLabel(frame, text="Duration (sec):").grid(row=row, column=0, sticky="w")
+        ctk.CTkLabel(frame, text="Duration (sec):").grid(row=row, column=0, sticky="w", pady=(4, 0))
+
         duration_entry = ctk.CTkEntry(frame, textvariable=self.toasts_duration_var, width=self.width)
-        duration_entry.grid(row=row, column=1, sticky="w")
+
+        duration_entry.grid(row=row, column=1, sticky="w", pady=(4, 0))
+
         self.toasts_duration_var.trace_add("write", self._update_toasts_duration)
+
         row += 1
 
-        ctk.CTkLabel(frame, text="Toast Image Width (px):").grid(row=row, column=0, sticky="w")
-        image_width_entry = ctk.CTkEntry(frame, textvariable=self.toast_image_width_var, width=self.width)
-        image_width_entry.grid(row=row, column=1, sticky="w")
+        # ==================================================
+        # Size & Fonts
+        # ==================================================
+        ctk.CTkLabel(frame, text="Size & Fonts", font=make_font(12, "bold")).grid(row=row, column=0, columnspan=2,
+                                                                                  sticky="w", pady=(14, 5))
+
+        row += 1
+
+        ctk.CTkLabel(frame, text="Toast Size:").grid(row=row, column=0, sticky="w")
+
+        toast_size_cb = ctk.CTkComboBox(frame, variable=self.toast_size_preset_var,
+                                        values=[*c.TOAST_SIZE_PRESETS.keys(), "Custom"], width=self.width,
+                                        state="readonly", command=self._apply_toast_size_preset)
+
+        toast_size_cb.grid(row=row, column=1, sticky="w")
+
+        row += 1
+
+        # --------------------------------------------------
+        # Custom-only size controls
+        # --------------------------------------------------
+        self.toast_custom_size_frame = ctk.CTkFrame(frame, fg_color="transparent")
+
+        self.toast_custom_size_frame.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+
+        custom_row = 0
+
+        ctk.CTkLabel(self.toast_custom_size_frame, text="Toast Image Width (px):").grid(row=custom_row, column=0,
+                                                                                        sticky="w")
+
+        image_width_entry = ctk.CTkEntry(self.toast_custom_size_frame, textvariable=self.toast_image_width_var,
+                                         width=self.width)
+
+        image_width_entry.grid(row=custom_row, column=1, sticky="w")
+
         image_width_entry.bind("<Return>", lambda e: self._update_toast_image_width())
+
         image_width_entry.bind("<FocusOut>", lambda e: self._update_toast_image_width())
-        row += 1
 
-        ctk.CTkLabel(frame, text="Toast Image Height (px):").grid(row=row, column=0, sticky="w")
-        image_height_entry = ctk.CTkEntry(frame, textvariable=self.toast_image_height_var, width=self.width)
-        image_height_entry.grid(row=row, column=1, sticky="w")
+        custom_row += 1
+
+        ctk.CTkLabel(self.toast_custom_size_frame, text="Toast Image Height (px):").grid(row=custom_row, column=0,
+                                                                                         sticky="w")
+
+        image_height_entry = ctk.CTkEntry(self.toast_custom_size_frame, textvariable=self.toast_image_height_var,
+                                          width=self.width)
+
+        image_height_entry.grid(row=custom_row, column=1, sticky="w")
+
         image_height_entry.bind("<Return>", lambda e: self._update_toast_image_height())
+
         image_height_entry.bind("<FocusOut>", lambda e: self._update_toast_image_height())
-        row += 1
 
-        ctk.CTkLabel(frame, text="Toast Font Size:").grid(row=row, column=0, sticky="w")
-        font_size_entry = ctk.CTkEntry(frame, textvariable=self.toast_font_size_var, width=self.width)
-        font_size_entry.grid(row=row, column=1, sticky="w")
+        custom_row += 1
+
+        ctk.CTkLabel(self.toast_custom_size_frame, text="Toast Font Size:").grid(row=custom_row, column=0, sticky="w")
+
+        font_size_entry = ctk.CTkEntry(self.toast_custom_size_frame, textvariable=self.toast_font_size_var,
+                                       width=self.width)
+
+        font_size_entry.grid(row=custom_row, column=1, sticky="w")
+
         font_size_entry.bind("<Return>", lambda e: self._update_toast_font_size())
+
         font_size_entry.bind("<FocusOut>", lambda e: self._update_toast_font_size())
-        row += 1
 
-        ctk.CTkLabel(frame, text="Toast Headline Font Size:").grid(row=row, column=0, sticky="w")
-        headline_font_size_entry = ctk.CTkEntry(frame, textvariable=self.toast_headline_font_size_var, width=self.width)
-        headline_font_size_entry.grid(row=row, column=1, sticky="w")
+        custom_row += 1
+
+        ctk.CTkLabel(self.toast_custom_size_frame, text="Toast Headline Font Size:").grid(row=custom_row, column=0,
+                                                                                          sticky="w")
+
+        headline_font_size_entry = ctk.CTkEntry(self.toast_custom_size_frame,
+                                                textvariable=self.toast_headline_font_size_var, width=self.width)
+
+        headline_font_size_entry.grid(row=custom_row, column=1, sticky="w")
+
         headline_font_size_entry.bind("<Return>", lambda e: self._update_toast_headline_font_size())
+
         headline_font_size_entry.bind("<FocusOut>", lambda e: self._update_toast_headline_font_size())
+
+        # Hide custom controls unless Custom is selected.
+        self._update_toast_custom_visibility()
+
         row += 1
 
-        ctk.CTkLabel(frame, text="Collection Missing Color:").grid(row=row, column=0, sticky="w")
+        # ==================================================
+        # Appearance
+        # ==================================================
+        ctk.CTkLabel(frame, text="Collection Missing Color:").grid(row=row, column=0, sticky="w", pady=(12, 0))
 
         self.color_preview = ctk.CTkFrame(frame, width=60, height=30, fg_color=self.collection_missing_color_var.get())
-        self.color_preview.grid(row=row, column=1, sticky="w", padx=(0, 10))
 
-        pick_btn = ctk.CTkButton(frame, text="Pick", width=int(self.width/1.4), command=self._pick_collection_color)
-        pick_btn.grid(row=row, column=1, sticky="w", padx=(60, 0))
+        self.color_preview.grid(row=row, column=1, sticky="w", padx=(0, 10), pady=(12, 0))
+
+        pick_btn = ctk.CTkButton(frame, text="Pick", width=int(self.width / 1.4), command=self._pick_collection_color)
+
+        pick_btn.grid(row=row, column=1, sticky="w", padx=(60, 0), pady=(12, 0))
+
         row += 1
 
-        self.example_toast_btn = ctk.CTkButton(frame, text="SHOW EXAMPLE",
-                                               command=self._toggle_example_toast, width=self.long_width)
+        self.example_toast_btn = ctk.CTkButton(frame, text="SHOW EXAMPLE", command=self._toggle_example_toast,
+                                               width=self.long_width)
+
         self.example_toast_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 5))
+
         row += 1
 
-        reset_toasts_btn = ctk.CTkButton(frame, text="Reset Toast Settings", fg_color="#8B0000",
-                                         hover_color="#A00000", command=self._reset_toast_settings,
-                                         width=self.long_width)
+        reset_toasts_btn = ctk.CTkButton(frame, text="Reset Toast Settings", fg_color="#8B0000", hover_color="#A00000",
+                                         command=self._reset_toast_settings, width=self.long_width)
+
         reset_toasts_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(5, 5))
 
     # -------------------------------
@@ -1335,10 +1542,19 @@ class UnifiedSettingsSection:
         except ValueError:
             width = c.DEFAULT_TOAST_IMAGE_WIDTH
 
-        width = max(c.TOAST_IMAGE_WIDTH_MIN, min(c.TOAST_IMAGE_WIDTH_MAX, width))
+        width = max(
+            c.TOAST_IMAGE_WIDTH_MIN,
+            min(c.TOAST_IMAGE_WIDTH_MAX, width)
+        )
 
         self.toast_image_width_var.set(str(width))
-        toasts.set_toast_image_width(width, self.parent)
+
+        self._mark_toast_size_custom()
+
+        toasts.set_toast_image_width(
+            width,
+            self.parent
+        )
 
     def _update_toast_image_height(self, *_):
         val = self.toast_image_height_var.get().strip()
@@ -1348,10 +1564,19 @@ class UnifiedSettingsSection:
         except ValueError:
             height = c.DEFAULT_TOAST_IMAGE_HEIGHT
 
-        height = max(c.TOAST_IMAGE_HEIGHT_MIN, min(c.TOAST_IMAGE_HEIGHT_MAX, height))
+        height = max(
+            c.TOAST_IMAGE_HEIGHT_MIN,
+            min(c.TOAST_IMAGE_HEIGHT_MAX, height)
+        )
 
         self.toast_image_height_var.set(str(height))
-        toasts.set_toast_image_height(height, self.parent)
+
+        self._mark_toast_size_custom()
+
+        toasts.set_toast_image_height(
+            height,
+            self.parent
+        )
 
     def _update_toast_font_size(self, *_):
         val = self.toast_font_size_var.get().strip()
@@ -1361,10 +1586,19 @@ class UnifiedSettingsSection:
         except ValueError:
             size = c.DEFAULT_TOAST_FONT_SIZE
 
-        size = max(c.TOAST_FONT_SIZE_MIN, min(c.TOAST_FONT_SIZE_MAX, size))
+        size = max(
+            c.TOAST_FONT_SIZE_MIN,
+            min(c.TOAST_FONT_SIZE_MAX, size)
+        )
 
         self.toast_font_size_var.set(str(size))
-        toasts.set_toast_font_size(size, self.parent)
+
+        self._mark_toast_size_custom()
+
+        toasts.set_toast_font_size(
+            size,
+            self.parent
+        )
 
     def _update_toast_headline_font_size(self, *_):
         val = self.toast_headline_font_size_var.get().strip()
@@ -1374,10 +1608,95 @@ class UnifiedSettingsSection:
         except ValueError:
             size = c.DEFAULT_TOAST_HEADLINE_FONT_SIZE
 
-        size = max(c.TOAST_HEADLINE_FONT_SIZE_MIN, min(c.TOAST_HEADLINE_FONT_SIZE_MAX, size))
+        size = max(
+            c.TOAST_HEADLINE_FONT_SIZE_MIN,
+            min(c.TOAST_HEADLINE_FONT_SIZE_MAX, size)
+        )
 
         self.toast_headline_font_size_var.set(str(size))
-        toasts.set_toast_headline_font_size(size, self.parent)
+
+        self._mark_toast_size_custom()
+
+        toasts.set_toast_headline_font_size(
+            size,
+            self.parent
+        )
+
+    def _apply_toast_size_preset(self, preset_name):
+        if not preset_name:
+            return
+
+        set_setting(
+            "Application",
+            "toast_size_preset",
+            preset_name
+        )
+
+        if preset_name == "Custom":
+            self._update_toast_custom_visibility()
+            return
+
+        preset = c.TOAST_SIZE_PRESETS.get(preset_name)
+
+        if not preset:
+            return
+
+        image_width = preset["image_width"]
+        image_height = preset["image_height"]
+        font_size = preset["font_size"]
+        headline_font_size = preset["headline_font_size"]
+
+        # Update UI variables.
+        self.toast_image_width_var.set(str(image_width))
+        self.toast_image_height_var.set(str(image_height))
+        self.toast_font_size_var.set(str(font_size))
+        self.toast_headline_font_size_var.set(
+            str(headline_font_size)
+        )
+
+        # Persist values.
+        set_setting("Application", "toast_image_width", image_width)
+
+        set_setting("Application", "toast_image_height", image_height)
+
+        set_setting("Application", "toast_font_size", font_size)
+
+        set_setting("Application", "toast_headline_font_size", headline_font_size)
+
+        toasts.set_toast_image_width(image_width, self.parent)
+
+        toasts.set_toast_image_height(image_height, self.parent)
+
+        toasts.set_toast_font_size(font_size, self.parent)
+
+        toasts.set_toast_headline_font_size(headline_font_size, self.parent)
+
+        self._update_toast_custom_visibility()
+
+        try:
+            toasts.refresh_example(self.parent)
+            toasts.reposition(self.parent)
+        except Exception:
+            pass
+
+        log_message(
+            "Toast Size",
+            (
+                f"{preset_name}: "
+                f"{image_width}x{image_height}, "
+                f"font={font_size}, "
+                f"headline={headline_font_size}"
+            )
+        )
+
+    def _update_toast_custom_visibility(self):
+        if not self.toast_custom_size_frame:
+            return
+
+        if self.toast_size_preset_var.get() == "Custom":
+            self.toast_custom_size_frame.grid()
+        else:
+            self.toast_custom_size_frame.grid_remove()
 
     def _update_toasts_duration(self, *_):
         val = self.toasts_duration_var.get().strip()
@@ -1416,6 +1735,7 @@ class UnifiedSettingsSection:
     def _reset_toast_settings(self):
         log_message("Resetting toast settings to defaults")
 
+        default_size_preset = c.DEFAULT_TOAST_SIZE_PRESET
         default_position = c.DEFAULT_TOAST_POSITION
         default_y = c.DEFAULT_TOAST_Y_OFFSET
         default_x = c.DEFAULT_TOAST_X_OFFSET
@@ -1427,6 +1747,7 @@ class UnifiedSettingsSection:
         default_font_size = c.DEFAULT_TOAST_FONT_SIZE
         default_headline_font_size = c.DEFAULT_TOAST_HEADLINE_FONT_SIZE
 
+        set_setting("Application", "toast_size_preset", default_size_preset)
         set_setting("Application", "toast_position", default_position)
         set_setting("Application", "toast_y_offset", default_y)
         set_setting("Application", "toast_x_offset", default_x)
@@ -1438,6 +1759,7 @@ class UnifiedSettingsSection:
         set_setting("Application", "toast_font_size", default_font_size)
         set_setting("Application", "toast_headline_font_size", default_headline_font_size)
 
+        self.toast_size_preset_var.set(default_size_preset)
         self.toasts_position_var.set(default_position)
         self.toasts_y_offset_var.set(str(default_y))
         self.toasts_x_offset_var.set(str(default_x))
@@ -1458,6 +1780,7 @@ class UnifiedSettingsSection:
         toasts.set_toast_image_height(default_image_height)
         toasts.set_toast_font_size(default_font_size)
         toasts.set_toast_headline_font_size(default_headline_font_size)
+        self._update_toast_custom_visibility()
 
         try:
             toasts.refresh_example(self.parent)
@@ -1577,16 +1900,15 @@ class UnifiedSettingsSection:
     # -------------------------------
     def _toggle_poeladder(self):
         enabled = self.enable_poeladder_var.get()
+
         set_setting("Application", "enable_poeladder", enabled)
-        log_message("poeladder", enabled)
 
-        fetch_btn_state = "normal" if enabled else "disabled"
-
-        if self.fetch_collection_btn:
-            self.fetch_collection_btn.configure(state=fetch_btn_state)
+        log_message("PoE Ladder", enabled)
 
         if self.dynamic_data_league_cb:
-            self.dynamic_data_league_cb.configure(state="normal" if enabled else "disabled")
+            self.dynamic_data_league_cb.configure(state=("readonly" if enabled else "disabled"))
+
+        self._refresh_poeladder_fetch_state()
 
         self.tree_manager.refresh_treeview(self.tracker)
 
@@ -1594,49 +1916,198 @@ class UnifiedSettingsSection:
         player = self.poe_player_var.get().strip()
 
         if not re.match(r"^[A-Za-z0-9_]+#[0-9]{4}$", player):
-            toasts.show_message(self.parent, "Invalid PoE profile! Must be in format 'player#1234'.")
-            self.poe_entry.focus_set()
+            toasts.show_message(
+                self.parent,
+                "Invalid PoE profile! Must be in format 'player#1234'."
+            )
+
+            if self.poe_entry:
+                self.poe_entry.focus_set()
+
             return
 
-        log_message(f"Fetching poeladder collection for {player}")
-        curio_collection_fetch.run_fetch_curios_threaded(player)
-
-        player_ladders = curio_collection_fetch.PLAYER_LADDERS.get(player, {})
-        self.league_display_mapping = {**player_ladders}
-
-        leagues = list(self.league_display_mapping.keys())
-        self.dynamic_data_league_cb.configure(values=leagues)
-
-        saved_identifier = get_setting("Application", "poeladder_ggg_league", c.FIXED_LADDER_IDENTIFIER)
-        selected_name = next(
-            (name for name, ident in self.league_display_mapping.items() if ident == saved_identifier),
-            leagues[0] if leagues else ""
+        log_message(
+            "PoE Ladder",
+            f"Fetching collection for {player}"
         )
 
-        self.dynamic_data_league_var.set(selected_name)
-        threading.Thread(target=self._threaded_on_league_change, daemon=True).start()
+        if self.fetch_collection_btn:
+            self.fetch_collection_btn.configure(state="disabled", text="Fetching...")
+
+        curio_collection_fetch.PLAYER_LADDERS.pop(
+            player,
+            None
+        )
+
+        try:
+            curio_collection_fetch.run_fetch_curios_threaded(player, force=True)
+        except Exception as error:
+            log_message(
+                "PoE Ladder",
+                f"Failed to start collection fetch: {error}"
+            )
+
+            if self.fetch_collection_btn:
+                self.fetch_collection_btn.configure(state="normal", text="Fetch Collection")
+
+            return
+
+        self._wait_for_poeladder_fetch(player, attempt=0)
+
+    def _wait_for_poeladder_fetch(self, player, attempt=0):
+        current_player = self.poe_player_var.get().strip()
+
+        if current_player != player:
+            self._refresh_poeladder_fetch_state()
+            return
+
+        player_ladders = (
+            curio_collection_fetch.PLAYER_LADDERS.get(
+                player,
+                {}
+            )
+        )
+
+        if player_ladders:
+            self._complete_poeladder_fetch(
+                player,
+                player_ladders
+            )
+            return
+
+        # Around 30 seconds total.
+        max_attempts = 120
+
+        if attempt >= max_attempts:
+            log_message(
+                "PoE Ladder",
+                f"Timed out waiting for collection fetch for {player}"
+            )
+
+            if self.fetch_collection_btn:
+                self.fetch_collection_btn.configure(
+                    state="normal",
+                    text="Fetch Collection"
+                )
+
+            return
+
+        self.parent.after(
+            250,
+            lambda: self._wait_for_poeladder_fetch(
+                player,
+                attempt + 1
+            )
+        )
+
+    def _complete_poeladder_fetch(self, player, player_ladders):
+        self.league_display_mapping = dict(player_ladders)
+
+        leagues = list(self.league_display_mapping.keys())
+
+        self.poeladder_cached_profile = player
+
+        set_setting("Application", "poeladder_cached_profile", player)
+
+        set_setting("Application", "poeladder_league_mapping", json.dumps(self.league_display_mapping))
+
+        saved_name = str(get_setting("Application", "poeladder_collection_league", "") or "").strip()
+
+        saved_identifier = str(get_setting("Application", "poeladder_league_identifier", "") or "").strip()
+
+        selected_name = ""
+
+        if saved_name in self.league_display_mapping:
+            selected_name = saved_name
+
+        elif saved_identifier:
+            selected_name = next(
+                (
+                    name
+                    for name, identifier
+                    in self.league_display_mapping.items()
+                    if identifier == saved_identifier
+                ),
+                ""
+            )
+
+        if not selected_name and leagues:
+            selected_name = leagues[0]
+
+        if self.dynamic_data_league_cb:
+            self.dynamic_data_league_cb.configure(values=leagues)
+
+        if selected_name:
+            self.dynamic_data_league_var.set(selected_name)
+
+            self._save_poeladder_league(selected_name)
+
+        if self.fetch_collection_btn:
+            self.fetch_collection_btn.configure(state="disabled", text="Collection Fetched")
+
+        log_message(
+            "PoE Ladder",
+            (
+                f"Collection fetched for {player}; "
+                f"{len(leagues)} league(s)"
+            )
+        )
+
+        self.tracker.on_league_change()
+
         self.tree_manager.refresh_treeview(self.tracker)
 
     def _threaded_on_league_change(self):
         self.parent.after(0, lambda: self.tracker.on_league_change())
 
     def _on_dynamic_league_change(self, *_):
-        league_name = self.dynamic_data_league_var.get()
+        league_name = (self.dynamic_data_league_var.get().strip())
+
         if not league_name:
             return
 
-        player = self.poe_player_var.get().strip()
-        player_ladders = curio_collection_fetch.PLAYER_LADDERS.get(player, {})
-        self.league_display_mapping = {**player_ladders}
-        ladder_identifier = self.league_display_mapping.get(league_name)
+        self._save_poeladder_league(league_name)
+
+    def _save_poeladder_league(self, league_name):
+        ladder_identifier = (self.league_display_mapping.get(league_name))
+
+        # Try the in-memory fetch result too.
+        if not ladder_identifier:
+            player = self.poe_player_var.get().strip()
+
+            player_ladders = (curio_collection_fetch.PLAYER_LADDERS.get(player, {}))
+
+            ladder_identifier = (player_ladders.get(league_name))
+
+            if player_ladders:
+                self.league_display_mapping = dict(player_ladders)
+
+        set_setting("Application", "poeladder_collection_league", league_name)
+        set_setting("Application", "poeladder_ggg_league", league_name)
 
         if ladder_identifier:
-            set_setting("Application", "poeladder_ggg_league", league_name)
             set_setting("Application", "poeladder_league_identifier", ladder_identifier)
-            log_message(f"PoELadder League set to {league_name} ({ladder_identifier})")
 
-            self.tracker.on_league_change()
-            self.tree_manager.refresh_treeview(self.tracker)
+            log_message(
+                "PoE Ladder",
+                (
+                    f"Collection league set to "
+                    f"{league_name} "
+                    f"({ladder_identifier})"
+                )
+            )
+        else:
+            log_message(
+                "PoE Ladder",
+                (
+                    f"Collection league name saved as "
+                    f"{league_name}; no identifier available"
+                )
+            )
+
+        self.tracker.on_league_change()
+
+        self.tree_manager.refresh_treeview(self.tracker)
 
     # -------------------------------
     # Records / Player
@@ -1677,13 +2148,206 @@ class UnifiedSettingsSection:
         )
 
     def _update_tracker_poe_player(self, *_):
-        val = self.poe_player_var.get()
-        if not val:
-            return
+        val = self.poe_player_var.get().strip()
 
         set_setting("User", "poe_user", val)
+
         self.tracker.poe_user = val
-        self.tree_manager.total_frame.player_name.set(val)
+
+        try:
+            self.tree_manager.total_frame.player_name.set(
+                val
+            )
+        except Exception:
+            pass
+
+        self._refresh_poeladder_fetch_state()
+
+    def _refresh_poeladder_fetch_state(self):
+        if not self.fetch_collection_btn:
+            return
+
+        player = self.poe_player_var.get().strip()
+
+        enabled = self.enable_poeladder_var.get()
+
+        fetched_for_current_profile = (
+                bool(player) and player == self.poeladder_cached_profile and bool(self.league_display_mapping))
+
+        if not enabled:
+            self.fetch_collection_btn.configure(state="disabled", text="Fetch Collection")
+            return
+
+        if fetched_for_current_profile:
+            self.fetch_collection_btn.configure(state="disabled", text="Collection Fetched")
+        else:
+            self.fetch_collection_btn.configure(state="normal", text="Fetch Collection")
+
+    def _mark_toast_size_custom(self):
+        if self.toast_size_preset_var.get() == "Custom":
+            return
+
+        self.toast_size_preset_var.set("Custom")
+
+        set_setting("Application", "toast_size_preset", "Custom")
+
+        self._update_toast_custom_visibility()
+
+    def _visualise_top_right_capture_area(self):
+        # Toggle existing preview off.
+        if self.top_right_target_capture_preview_window:
+            self._hide_top_right_capture_area()
+            return
+
+        try:
+            percent = float(
+                self.top_right_target_area_percent_var.get()
+            )
+        except (TypeError, ValueError):
+            percent = c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT
+
+        percent = max(
+            0.01,
+            min(1.0, percent)
+        )
+
+        screen_width = self.parent.winfo_screenwidth()
+        screen_height = self.parent.winfo_screenheight()
+
+        aspect_ratio = (c.TOP_RIGHT_CUT_WIDTH / c.TOP_RIGHT_CUT_HEIGHT)
+
+        total_area = (screen_width * screen_height)
+
+        target_area = (total_area * percent)
+
+        capture_height = math.sqrt(target_area / aspect_ratio)
+
+        capture_width = (capture_height * aspect_ratio)
+
+        capture_width = int(capture_width)
+        capture_height = int(capture_height)
+
+        capture_width = min(screen_width, capture_width)
+
+        capture_height = min(screen_height, capture_height)
+
+        x = screen_width - capture_width
+        y = 0
+
+        try:
+            if self.settings_window and self.settings_window.winfo_exists():
+                self.settings_window.grab_release()
+        except Exception:
+            pass
+
+        preview = ctk.CTkToplevel(
+            self.parent
+        )
+
+        self.top_right_target_capture_preview_window = preview
+
+        preview.overrideredirect(True)
+
+        preview.attributes("-topmost", True)
+
+        try:
+            preview.attributes("-alpha", 0.72)
+        except Exception:
+            pass
+
+        preview.geometry(
+            f"{capture_width}x{capture_height}+{x}+{y}"
+        )
+
+        # One consistent background color.
+        capture_bg = "#300000"
+
+        preview.configure(fg_color=capture_bg)
+
+        border = ctk.CTkFrame(
+            preview,
+            fg_color=capture_bg,
+            border_width=3,
+            border_color="#FF4040",
+            corner_radius=0
+        )
+
+        border.pack(fill="both", expand=True)
+
+        title_label = ctk.CTkLabel(
+            border,
+            text="Layout Capture Area",
+            font=make_font(
+                12,
+                "bold"
+            ),
+            text_color="#FFFFFF",
+            fg_color=capture_bg
+        )
+
+        title_label.place(relx=0.5, rely=0.27, anchor="center")
+
+        size_label = ctk.CTkLabel(
+            border,
+            text=(
+                f"{percent * 100:.1f}%"
+                f"  •  "
+                f"{capture_width}×{capture_height}px"
+            ),
+            font=make_font(
+                10,
+                "bold"
+            ),
+            text_color="#FFFFFF",
+            fg_color=capture_bg
+        )
+
+        size_label.place(relx=0.5, rely=0.52, anchor="center")
+
+        close_label = ctk.CTkLabel(border, text="Click here to close", font=make_font(9), text_color="#D0D0D0",
+                                   fg_color=capture_bg, cursor="hand2")
+
+        close_label.place(relx=0.5, rely=0.75, anchor="center")
+
+        def close_preview(_event=None):
+            self._hide_top_right_capture_area()
+
+        preview.bind("<Button-1>", close_preview)
+
+        border.bind("<Button-1>", close_preview)
+
+        title_label.bind("<Button-1>", close_preview)
+
+        size_label.bind("<Button-1>", close_preview)
+
+        close_label.bind("<Button-1>", close_preview)
+
+        preview.lift()
+
+        try:
+            preview.focus_force()
+        except Exception:
+            pass
+
+    def _hide_top_right_capture_area(self):
+        preview = self.top_right_target_capture_preview_window
+
+        self.top_right_target_capture_preview_window = None
+
+        if preview:
+            try:
+                if preview.winfo_exists():
+                    preview.destroy()
+            except Exception:
+                pass
+
+        try:
+            if self.settings_window and self.settings_window.winfo_exists():
+                self.settings_window.lift()
+                self.settings_window.grab_set()
+                self.settings_window.focus_force()
+        except Exception:
+            pass
 
 
 # -------------------------------
