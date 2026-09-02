@@ -161,9 +161,11 @@ def find_review_fuzzy_terms(text, precomp_terms, threshold=0.84):
 
     fuzzy_matches = []
 
-    for original_term, normalized_term, enchant_parts in precomp_terms:
-        # Keep enchant combinations strict.
-        if enchant_parts is not None:
+    for original_term, normalized_term, enchant_parts, term_type in precomp_terms:
+        if term_type in (
+                c.ARMOR_ENCHANT_TYPE,
+                c.WEAPON_ENCHANT_TYPE
+        ):
             continue
 
         if not normalized_term or len(normalized_term) < 5:

@@ -215,7 +215,8 @@ for term in all_terms:
     PRECOMP_TERMS.append((
         term,
         normalized_term,
-        enchant_parts
+        enchant_parts,
+        term_type_cmp
     ))
 
 
@@ -791,7 +792,7 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
         for line in text_clean.splitlines()
     )
 
-    for original_term, normalized_term, enchant_parts in PRECOMP_TERMS:
+    for original_term, normalized_term, enchant_parts, _ in PRECOMP_TERMS:
         if is_term_match(normalized_term, normalized_lines, enchant_parts):
             duplicate = is_duplicate_recent_entry(original_term)
             all_candidates.append((original_term, duplicate))
