@@ -5,6 +5,7 @@ import customtkinter
 from customtkinter import *
 
 from fonts import init_font_var, make_font
+from gui.actions_frame import ActionsFrame
 from gui.collection_frame import CollectionPopup
 from gui.item_overview_frame import ItemOverviewFrame
 from gui.total_frame import TotalFrame
@@ -219,9 +220,12 @@ def start_main_app(root, theme_mode, theme_manager):
     for col in tree_manager.tree_columns:
         tree.heading(col["id"], command=lambda c=col["id"]: tree_manager.sort_tree(c))
 
+    actions_frame = layout['actions_frame']
+    actions_frame = ActionsFrame(actions_frame, tree_manager, theme_manager)
+
     toggle_frame = layout['toggle_frame']
     tree_toggles = TreeToggles(toggle_frame, tree, tree_manager)
-    tree_toggles.frame.grid(row=0, column=0, sticky="e", padx=5)
+    tree_toggles.frame.grid(row=1, column=0, sticky="e", padx=5)
     total_frame = TotalFrame(layout['total_frame'], tree_manager)
     tree_manager.total_frame = total_frame
     total_frame.frame.pack(anchor="w")

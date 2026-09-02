@@ -31,18 +31,24 @@ def create_layout(root):
     tree_frame.grid_columnconfigure(0, weight=1)
     tree_frame.configure(width=600, height=400)
 
-    # Toggle Buttons Frame below tree_frame
+    # Item Actions Frame below tree_frame
+    actions_frame = CTkFrame(right_frame)
+    actions_frame.grid(row=1, column=0, columnspan=2, sticky="sw", pady=(5, 0))
+    actions_frame.grid_columnconfigure(0, weight=1)
+
+    # Toggle Buttons Frame below actions_frame
     toggle_frame = CTkFrame(right_frame)
-    toggle_frame.grid(row=1, column=0, sticky="nsw", pady=(5, 0))
+    toggle_frame.grid(row=2, column=0, sticky="nsw", pady=(5, 0))
 
     total_frame = CTkFrame(right_frame)
-    total_frame.grid(row=1, column=1, sticky="nsw", pady=(5, 0))
+    total_frame.grid(row=2, column=1, sticky="nsw", pady=(5, 0))
 
     return {
         "top_frame": top_frame,
         "left_frame": left_frame,
         "right_frame": right_frame,
         "tree_frame": tree_frame,
+        "actions_frame": actions_frame,
         "toggle_frame": toggle_frame,
         "total_frame": total_frame
     }
