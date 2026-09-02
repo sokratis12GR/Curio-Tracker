@@ -1,0 +1,259 @@
+name: Bug report
+description: Report a problem with Curio Tracker
+title: "[Bug] "
+labels:
+  - bug
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug with Curio Tracker!
+
+        Please provide as much information as possible. Screenshots and logs are especially helpful for capture, OCR, and detection issues.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: Clearly describe what went wrong.
+      placeholder: Describe the problem you encountered...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Please provide the steps needed to reproduce the issue.
+      value: |
+        1. Launch Curio Tracker
+        2.
+        3.
+        4.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected to happen.
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe what happened instead.
+      placeholder: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / recordings
+      description: |
+        If applicable, drag and drop screenshots or recordings here.
+
+        For capture/OCR issues, please include a screenshot showing the Curio Display or the region that was captured.
+      placeholder: Drag and drop screenshots or recordings here...
+
+  - type: markdown
+    attributes:
+      value: "## Environment"
+
+  - type: input
+    id: version
+    attributes:
+      label: Curio Tracker version
+      description: Enter the Curio Tracker version shown in the app or release you installed.
+      placeholder: "e.g. 0.2.15.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: windows-version
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: league
+    attributes:
+      label: Path of Exile league
+      description: Which league were you playing in when the issue occurred?
+      placeholder: "e.g. Standard or current challenge league"
+
+  - type: dropdown
+    id: resolution
+    attributes:
+      label: Display resolution
+      description: Select your primary display resolution.
+      options:
+        - 1920x1080
+        - 1920x1200
+        - 2560x1080
+        - 2560x1440
+        - 3440x1440
+        - 3840x2160
+        - Other
+        - Not sure
+
+  - type: dropdown
+    id: scaling
+    attributes:
+      label: Windows display scaling
+      options:
+        - 100%
+        - 125%
+        - 150%
+        - 175%
+        - 200%
+        - Other
+        - Not sure
+
+  - type: dropdown
+    id: poe-display-mode
+    attributes:
+      label: Path of Exile display mode
+      options:
+        - Fullscreen
+        - Windowed Fullscreen
+        - Windowed
+        - Not sure
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "## Capture details"
+
+  - type: dropdown
+    id: capture-method
+    attributes:
+      label: Capture method / hotkey
+      description: Which Curio Tracker capture method were you using when the issue occurred?
+      options:
+        - F2 - Full-screen Curio capture
+        - F4 - Region / snippet capture
+        - Other / custom keybind
+        - Not applicable
+    validations:
+      required: true
+
+  - type: input
+    id: custom-keybind
+    attributes:
+      label: Custom capture keybind
+      description: If you selected "Other / custom keybind", enter the keybind you are using.
+      placeholder: "e.g. Ctrl+F2"
+
+  - type: dropdown
+    id: blueprint-area
+    attributes:
+      label: Blueprint area
+      description: If applicable, which Blueprint area was being scanned?
+      options:
+        - Bunker
+        - Records Office
+        - Mansion
+        - Smuggler's Den
+        - Underbelly
+        - Laboratory
+        - Prohibited Library
+        - Repository
+        - Tunnels
+        - Not applicable
+    validations:
+      required: false
+
+  - type: dropdown
+    id: reward-type
+    attributes:
+      label: Reward type
+      description: If applicable, which type of Curio reward was affected?
+      options:
+        - Replicas / Replacements
+        - Scarabs
+        - Currencies
+        - Enchants
+        - Not sure
+        - Not applicable
+
+  - type: textarea
+    id: detection-problem
+    attributes:
+      label: Detection issue
+      description: If this is a capture/OCR issue, describe what was detected incorrectly or not detected.
+      placeholder: |
+        For example:
+        - Item was not detected
+        - Wrong item name was detected
+        - Wrong price was shown
+        - Only some Curios were detected
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does the issue occur?
+      options:
+        - Every time
+        - Often
+        - Sometimes
+        - Rarely
+        - Happened once
+        - Not sure
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "## Log file"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log file
+      description: |
+        If Curio Tracker crashed, produced an error, or behaved unexpectedly, please attach your `tracker.log`.
+
+        The log can be found at:
+
+        `%appdata%/HeistCurioTracker/logs/tracker.log`
+
+        Drag and drop the file into this field.
+
+        **Privacy:** Please review the log before uploading it and remove anything you do not want to share publicly.
+      placeholder: Drag and drop tracker.log here...
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add anything else that might help reproduce or diagnose the problem.
+      placeholder: |
+        For example:
+        - Did the issue start after updating Curio Tracker?
+        - Does it only happen with a particular Blueprint?
+        - Does restarting Curio Tracker fix the issue?
+        - Does restarting Path of Exile fix the issue?
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have checked whether a newer version of Curio Tracker is available.
+          required: true
+        - label: I have searched existing issues to make sure this problem has not already been reported.
+          required: true
