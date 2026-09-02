@@ -379,6 +379,151 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
 
 
 #############################################################################
+# Attempts to recover missed terms using fuzzy OCR matching against the      #
+# actual terms dataset. Duplicate handling and match metadata remain here    #
+# because they depend on the current application state.                     #
+#                                                                           #
+#    Args:                                                                  #
+#        text (str): OCR text returned from the enlarged review capture.     #
+#        allow_dupes (bool): Whether duplicate matches should be allowed.    #
+#        threshold (float): Minimum similarity required for fuzzy matching.  #
+#                                                                           #
+#    Returns:                                                               #
+#        list: Matched term dictionaries using the same format as the normal #
+#              get_matched_terms() function.                                #
+#############################################################################
+def get_review_fuzzy_matches(text, allow_dupes=False, threshold=0.84) -> List[Dict]:
+    global non_dup_count
+
+    matched = []
+
+    fuzzy_matches = utils.find_review_fuzzy_terms(
+        text,
+        PRECOMP_TERMS,
+        threshold=threshold
+    )
+
+    for fuzzy_match in fuzzy_matches:
+        original_term = fuzzy_match["term"]
+        best_line = fuzzy_match["candidate"]
+        best_ratio = fuzzy_match["similarity"]
+
+        duplicate = is_duplicate_recent_entry(
+            original_term
+        )
+
+        if allow_dupes or not duplicate:
+            non_dup_count += 1
+
+            matched.append({
+                "term": original_term,
+                "duplicate": False,
+                "armor_enchant_flag": False,
+                "weapon_enchant_flag": False,
+            })
+        else:
+            matched.append({
+                "term": original_term,
+                "duplicate": True,
+                "armor_enchant_flag": False,
+                "weapon_enchant_flag": False,
+            })
+
+        if c.DEBUGGING:
+            log_message(
+                f"[OCR FUZZY] "
+                f"Matched '{original_term}' "
+                f"against '{best_line}' | "
+                f"similarity={best_ratio:.3f}"
+            )
+
+    return matched
+
+
+#############################################################################
+# Reviews a failed OCR capture once again using an enlarged image.          #
+# This is only called when the original OCR capture returned no matches.    #
+# The enlarged pass first uses normal matching, then falls back to fuzzy    #
+# matching against the actual terms dataset if necessary.                   #
+#                                                                           #
+#    Args:                                                                  #
+#        image_np (np.ndarray): The original captured image as NumPy array. #
+#        scale (int): Scale factor used for the second OCR pass.             #
+#        allow_dupes (bool): Whether duplicate matches should be allowed.    #
+#                                                                           #
+#    Returns:                                                               #
+#        tuple: OCR text and any matched terms found during the review.      #
+#############################################################################
+def review_failed_capture(image_np, scale=2, allow_dupes=False):
+    review_start = time.perf_counter()
+
+    if c.DEBUGGING:
+        log_message(
+            f"[OCR REVIEW] "
+            f"No matches found during initial capture. "
+            f"Reviewing enlarged capture at {scale}x scale..."
+        )
+
+    full_text, filtered = ocr_from_image(
+        image_np,
+        scale=scale
+    )
+
+    ocr_end = time.perf_counter()
+
+    corrected_text = utils.normalize_review_ocr_text(
+        full_text
+    )
+
+    correction_end = time.perf_counter()
+
+    #############################################################
+    # First attempt the exact matcher again after normalization #
+    #############################################################
+    matched_terms = get_matched_terms(
+        corrected_text,
+        allow_dupes
+    )
+
+    exact_match_end = time.perf_counter()
+
+    #############################################################
+    # Only fall back to fuzzy matching if exact matching fails  #
+    #############################################################
+    if not matched_terms:
+        matched_terms = get_review_fuzzy_matches(
+            corrected_text,
+            allow_dupes=allow_dupes,
+            threshold=0.84
+        )
+
+    fuzzy_match_end = time.perf_counter()
+
+    if c.DEBUGGING:
+        if matched_terms:
+            log_message(
+                f"[OCR REVIEW] "
+                f"Found {len(matched_terms)} match(es) during review."
+            )
+        else:
+            log_message(
+                "[OCR REVIEW] "
+                "No matches found after enlarged review."
+            )
+
+        log_message(
+            f"[OCR REVIEW PERF] "
+            f"ocr={(ocr_end - review_start) * 1000:.1f}ms | "
+            f"correction={(correction_end - ocr_end) * 1000:.1f}ms | "
+            f"exact_matching={(exact_match_end - correction_end) * 1000:.1f}ms | "
+            f"fuzzy_matching={(fuzzy_match_end - exact_match_end) * 1000:.1f}ms | "
+            f"total={(fuzzy_match_end - review_start) * 1000:.1f}ms"
+        )
+
+    return corrected_text, matched_terms
+
+
+#############################################################################
 # Experimental Shine Removal & Readability improvements for                 #
 # HDR Curio Tracking                                                        #
 #############################################################################
@@ -806,13 +951,17 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
         attempt += 1
 
 
-def write_entry(root, text, timestamp, allow_dupes=False) -> None:
+def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None) -> None:
     global stack_sizes, parsed_items, data_mgr
     parsed_items = []
 
     t0 = time.perf_counter()
 
-    matched_terms = get_matched_terms(text, allow_dupes)
+    if matched_terms is None:
+        matched_terms = get_matched_terms(
+            text,
+            allow_dupes
+        )
 
     t1 = time.perf_counter()
 
@@ -952,6 +1101,158 @@ def build_row_dict(record_number, term_title, item_type, stack_size, timestamp):
         c.csv_picked_header: False,
         c.csv_enchantment_header: "None"
     }
+
+
+def insert_item(root, term_title, item_type=None, data_manager=None):
+    global parsed_items
+
+    term_title = utils.smart_title_case(
+        term_title.strip()
+    )
+
+    if not term_title:
+        return None
+
+    # ---------------------------------------------------------
+    # Validate term against the actual terms dataset
+    # ---------------------------------------------------------
+    actual_type = term_types.get(term_title)
+
+    if not actual_type:
+        log_message(f"[WARN] Manual insert rejected: unknown term '{term_title}'")
+        return None
+
+    # Always trust the dataset over whatever came from the UI.
+    item_type = actual_type
+
+    mgr = data_manager or data_mgr
+
+    # ---------------------------------------------------------
+    # Current runtime/settings values
+    # ---------------------------------------------------------
+    current_user = get_setting("User", "poe_user", poe_user)
+
+    current_layout = get_setting("Blueprint", "layout", blueprint_layout)
+
+    current_area_level = get_setting("Blueprint", "area_level", blueprint_area_level)
+
+    current_bp_enchantment = get_setting("Blueprint", "bp_enchantment", bp_enchantment)
+
+    timestamp = utils.now_timestamp()
+
+    # Manual Currency / Scarab starts at stack size 1.
+    # It can still be edited from the tree afterwards.
+    stack_size = 1
+
+    # ---------------------------------------------------------
+    # Get next record #
+    # ---------------------------------------------------------
+    record_number = mgr.get_next_record_number(
+        force=True
+    )
+
+    # ---------------------------------------------------------
+    # Dataset metadata
+    # ---------------------------------------------------------
+    currency_data = CURRENCY_DATASET.get(
+        term_title,
+        {}
+    )
+
+    tier_data = TIERS_DATASET.get(
+        term_title,
+        {}
+    )
+
+    owned = COLLECTION_DATASET_ACTIVE.get(
+        term_title,
+        False
+    )
+
+    # ---------------------------------------------------------
+    # Build ParsedItem for TreeManager
+    # ---------------------------------------------------------
+    item = build_parsed_item(
+        record=record_number,
+        term_title=term_title,
+        item_type=item_type,
+        duplicate=False,
+        timestamp=timestamp,
+        experimental_items=experimental_items,
+        stack_size=stack_size,
+        area_level=current_area_level,
+        blueprint_type=current_layout,
+        logged_by=current_user,
+        league=league_version,
+        chaos_value=currency_data.get("chaos"),
+        divine_value=currency_data.get("divine"),
+        tier=tier_data.get("tier", ""),
+        wiki=tier_data.get("wiki", ""),
+        img=tier_data.get("img", ""),
+        five_l_val=currency_data.get("five_link"),
+        six_l_val=currency_data.get("six_link"),
+        picked=False,
+        owned=owned,
+        bp_enchantment=current_bp_enchantment
+    )
+
+    # ---------------------------------------------------------
+    # Build CSV / JSON row
+    # ---------------------------------------------------------
+    row_dict = {
+        c.csv_record_header: record_number,
+        c.csv_league_header: league_version,
+        c.csv_loggedby_header: current_user,
+        c.csv_blueprint_header: current_layout,
+        c.csv_area_level_header: current_area_level,
+
+        c.csv_trinket_header: utils.add_if_trinket(term_title, item_type),
+
+        c.csv_replacement_header: utils.add_if_replacement(term_title, item_type),
+
+        c.csv_replica_header: utils.add_if_replica(term_title, item_type),
+
+        c.csv_experimented_header: utils.add_if_experimental(term_title, item_type),
+
+        c.csv_weapon_enchant_header: utils.add_if_weapon_enchant(term_title, item_type),
+
+        c.csv_armor_enchant_header: utils.add_if_armor_enchant(term_title, item_type),
+
+        c.csv_scarab_header: utils.add_if_scarab(term_title, item_type),
+
+        c.csv_currency_header: utils.add_if_currency(term_title, item_type),
+
+        c.csv_stack_size_header: stack_size if utils.is_currency_or_scarab(item_type) else "",
+
+        c.csv_variant_header: "",
+        c.csv_flag_header: False,
+        c.csv_time_header: timestamp,
+        c.csv_picked_header: False,
+        c.csv_owned_header: owned,
+        c.csv_enchantment_header: current_bp_enchantment
+    }
+
+    try:
+        mgr.ensure_data_file()
+
+        mgr.append_rows([row_dict], root)
+
+    except Exception as e:
+        log_message(f"[ERROR] Failed writing manual item '{term_title}': {e}")
+        return None
+
+    # Keep the recent duplicate buffer consistent with OCR.
+    mark_term_as_captured(term_title)
+    parsed_items = [item]
+    mgr.last_record_number = record_number
+
+    log_message(
+        f"[INFO] Manually inserted "
+        f"Record #{record_number}: "
+        f"{item_type}: {term_title}"
+    )
+
+    return item
 
 
 def init_data():
@@ -1114,6 +1415,19 @@ def capture_once(root):
 
     ocr_end = time.perf_counter()
 
+    match_start = time.perf_counter()
+
+    matched_terms = get_matched_terms(full_text, allow_dupes=False)
+
+    match_end = time.perf_counter()
+
+    review_start = time.perf_counter()
+
+    if not matched_terms:
+        full_text, matched_terms = review_failed_capture(screenshot_np, scale=2, allow_dupes=False)
+
+    review_end = time.perf_counter()
+
     write_start = time.perf_counter()
 
     os.makedirs(c.saves_dir, exist_ok=True)
@@ -1122,7 +1436,8 @@ def capture_once(root):
         root,
         full_text,
         utils.now_timestamp(),
-        allow_dupes=False
+        allow_dupes=False,
+        matched_terms=matched_terms
     )
 
     write_end = time.perf_counter()
@@ -1135,6 +1450,8 @@ def capture_once(root):
             f"bbox={(bbox_end - bbox_start) * 1000:.1f}ms | "
             f"grab={(grab_end - grab_start) * 1000:.1f}ms | "
             f"ocr={(ocr_end - ocr_start) * 1000:.1f}ms | "
+            f"matching={(match_end - match_start) * 1000:.1f}ms | "
+            f"review={(review_end - review_start) * 1000:.1f}ms | "
             f"write={(write_end - write_start) * 1000:.1f}ms | "
             f"total={(total_end - total_start) * 1000:.1f}ms"
         )

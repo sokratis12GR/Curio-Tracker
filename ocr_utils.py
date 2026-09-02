@@ -98,6 +98,150 @@ def normalize_for_search(s: str) -> str:
 def remove_possessive_s(text: str) -> str:
     return re.sub(r"\b(\w+)(?:'s|’s)\b", r"\1", text)
 
+#############################################################################
+# Normalizes OCR text specifically for a failed capture review pass.        #
+# This keeps normal OCR matching strict while cleaning common OCR           #
+# punctuation and spacing issues before fuzzy matching.                     #
+#                                                                           #
+#    Args:                                                                  #
+#        text (str): OCR text returned from the enlarged review capture.     #
+#                                                                           #
+#    Returns:                                                               #
+#        str: Normalized OCR text used during retry matching.                #
+#############################################################################
+def normalize_review_ocr_text(text):
+    normalized_text = str(text)
+
+    # Normalize apostrophe variants
+    normalized_text = normalized_text.replace("’", "'")
+    normalized_text = normalized_text.replace("`", "'")
+    normalized_text = normalized_text.replace("‘", "'")
+
+    # Fix spaced possessives such as:
+    normalized_text = re.sub(
+        r"\s*'\s*[sS]\b",
+        "'s",
+        normalized_text
+    )
+
+    # Remove excessive whitespace introduced by OCR
+    normalized_text = re.sub(
+        r"[ \t]+",
+        " ",
+        normalized_text
+    )
+
+    return normalized_text
+
+#############################################################################
+# Finds fuzzy OCR matches against a pre-normalized terms collection.        #
+# This performs only text comparison and does not handle duplicates,        #
+# item types, enchant flags, counters, or application state.                #
+#                                                                           #
+#    Args:                                                                  #
+#        text (str): OCR text returned from the review capture.              #
+#        precomp_terms (list): Precomputed tuples containing the original    #
+#                              term, normalized term, and enchant parts.      #
+#        threshold (float): Minimum similarity required for a result.        #
+#                                                                           #
+#    Returns:                                                               #
+#        list: Dictionaries containing the matched term, OCR candidate,      #
+#              and similarity ratio.                                        #
+#############################################################################
+def find_review_fuzzy_terms(text, precomp_terms, threshold=0.84):
+    normalized_lines = []
+
+    for raw_line in text.splitlines():
+        line = normalize_for_search(
+            remove_possessive_s(raw_line)
+        )
+
+        if len(line) >= 4:
+            normalized_lines.append(line)
+
+    fuzzy_matches = []
+
+    for original_term, normalized_term, enchant_parts in precomp_terms:
+        # Keep enchant combinations strict.
+        if enchant_parts is not None:
+            continue
+
+        if not normalized_term or len(normalized_term) < 5:
+            continue
+
+        best_ratio = 0
+        best_line = None
+
+        term_words = normalized_term.split()
+        term_word_count = len(term_words)
+
+        for line in normalized_lines:
+            line_words = line.split()
+
+            if not line_words:
+                continue
+
+            #############################################################
+            # Compare word windows roughly matching the term's length.  #
+            # This avoids comparing a term against an entire OCR line   #
+            # containing unrelated UI text.                             #
+            #############################################################
+            min_window = max(
+                1,
+                term_word_count - 1
+            )
+
+            max_window = min(
+                len(line_words),
+                term_word_count + 1
+            )
+
+            for window_size in range(min_window, max_window + 1):
+                for start in range(len(line_words) - window_size + 1):
+                    candidate = " ".join(
+                        line_words[start:start + window_size]
+                    )
+
+                    ratio = SequenceMatcher(
+                        None,
+                        normalized_term,
+                        candidate
+                    ).ratio()
+
+                    if ratio > best_ratio:
+                        best_ratio = ratio
+                        best_line = candidate
+
+        if best_ratio < threshold:
+            continue
+
+        fuzzy_matches.append({
+            "term": original_term,
+            "candidate": best_line,
+            "similarity": best_ratio,
+        })
+
+    ############################################################
+    # Prefer longer matches when one term contains another.    #
+    ############################################################
+    fuzzy_matches.sort(
+        key=lambda item: len(item["term"]),
+        reverse=True
+    )
+
+    filtered_matches = []
+    kept_terms = []
+
+    for match in fuzzy_matches:
+        term_title = match["term"]
+
+        if any(term_title in existing for existing in kept_terms):
+            continue
+
+        filtered_matches.append(match)
+        kept_terms.append(term_title)
+
+    return filtered_matches
 
 #####################################
 # helpers for body armour ordering  # 
