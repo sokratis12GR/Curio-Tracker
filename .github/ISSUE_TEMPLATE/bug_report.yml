@@ -6,24 +6,21 @@ labels:
 assignees: []
 
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug with Curio Tracker!
 
-- type: markdown
-  attributes:
-  value: |
-  Thanks for taking the time to report a bug with Curio Tracker!
+        Please provide as much information as possible. Screenshots and logs are especially helpful for capture, OCR, and detection issues.
 
-  ```
-  Please provide as much information as possible. Screenshots and logs are especially helpful for capture, OCR, and detection issues.
-  ```
-
-- type: textarea
-  id: bug-description
-  attributes:
-  label: Describe the bug
-  description: Clearly describe what went wrong.
-  placeholder: Describe the problem you encountered...
-  validations:
-  required: true
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: Clearly describe what went wrong.
+      placeholder: Describe the problem you encountered...
+    validations:
+      required: true
 
 - type: textarea
   id: reproduction
@@ -87,9 +84,9 @@ body:
   attributes:
   label: Windows version
   options:
-  - Windows 11
-  - Windows 10
-  - Other
+    - Windows 11
+    - Windows 10
+    - Other
   validations:
   required: true
 
@@ -263,6 +260,6 @@ body:
   label: Before submitting
   options:
   - label: I have checked whether a newer version of Curio Tracker is available.
-  required: true
+    required: true
   - label: I have searched existing issues to make sure this problem has not already been reported.
-  required: true
+    required: true
