@@ -1136,7 +1136,7 @@ class UnifiedSettingsSection:
         # Layout capture
         # --------------------------------------------------
         section_title(
-            "Layout Capture",
+            "Blueprint Layout Capture",
             pady=(14, 5)
         )
 
