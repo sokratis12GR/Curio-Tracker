@@ -1462,7 +1462,16 @@ def capture_snippet(root, on_done):
     validate_attempt(c.capturing_prompt)
     system = platform.system().lower()
 
+    is_win11 = False
+
     if system == "windows":
+        try:
+            build = int(platform.version().split(".")[-1])
+            is_win11 = build >= 22000
+        except (ValueError, IndexError):
+            pass
+
+    if is_win11:
         pyperclip.copy("")
 
         subprocess.Popen(["explorer", "ms-screenclip:"])
@@ -1494,7 +1503,6 @@ def capture_snippet(root, on_done):
 
         if on_done:
             on_done(parsed_items)
-
     else:
         bbox = get_poe_bbox()
         if not bbox:
