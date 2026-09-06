@@ -1654,15 +1654,6 @@ class UnifiedSettingsSection:
             str(headline_font_size)
         )
 
-        # Persist values.
-        set_setting("Application", "toast_image_width", image_width)
-
-        set_setting("Application", "toast_image_height", image_height)
-
-        set_setting("Application", "toast_font_size", font_size)
-
-        set_setting("Application", "toast_headline_font_size", headline_font_size)
-
         toasts.set_toast_image_width(image_width, self.parent)
 
         toasts.set_toast_image_height(image_height, self.parent)
@@ -1709,12 +1700,10 @@ class UnifiedSettingsSection:
         except ValueError:
             return
 
-        set_setting("Application", "toasts_duration_seconds", dur)
         toasts.set_toast_duration(dur)
 
     def _toggle_toasts(self):
         enabled = self.toasts_var.get()
-        set_setting("Application", "are_toasts_enabled", enabled)
         toasts.toggle_toasts(enabled)
 
     def _toggle_example_toast(self):
@@ -1730,7 +1719,6 @@ class UnifiedSettingsSection:
             chosen = color_code[1]
             self.collection_missing_color_var.set(chosen)
             self.color_preview.configure(fg_color=chosen)
-            set_setting("Application", "collection_missing_color", chosen)
             toasts.set_collection_missing_color(chosen)
 
     def _reset_toast_settings(self):
@@ -1741,7 +1729,6 @@ class UnifiedSettingsSection:
         default_y = c.DEFAULT_TOAST_Y_OFFSET
         default_x = c.DEFAULT_TOAST_X_OFFSET
         default_duration = c.DEFAULT_TOAST_DURATION
-        default_area = c.DEFAULT_TOP_RIGHT_CAPTURE_PERCENT
         default_enabled = c.DEFAULT_TOAST_ENABLE
         default_image_width = c.DEFAULT_TOAST_IMAGE_WIDTH
         default_image_height = c.DEFAULT_TOAST_IMAGE_HEIGHT
@@ -1752,7 +1739,6 @@ class UnifiedSettingsSection:
         set_setting("Application", "toast_position", default_position)
         set_setting("Application", "toast_y_offset", default_y)
         set_setting("Application", "toast_x_offset", default_x)
-        set_setting("Application", "top_right_target_area_percent", default_area)
         set_setting("Application", "toasts_duration_seconds", default_duration)
         set_setting("Application", "are_toasts_enabled", default_enabled)
         set_setting("Application", "toast_image_width", default_image_width)
@@ -1764,7 +1750,6 @@ class UnifiedSettingsSection:
         self.toasts_position_var.set(default_position)
         self.toasts_y_offset_var.set(str(default_y))
         self.toasts_x_offset_var.set(str(default_x))
-        self.top_right_target_area_percent_var.set(str(default_area))
         self.toasts_duration_var.set(str(default_duration))
         self.toasts_var.set(default_enabled)
         self.toast_image_width_var.set(str(default_image_width))
