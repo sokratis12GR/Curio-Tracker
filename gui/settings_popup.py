@@ -1730,6 +1730,7 @@ class UnifiedSettingsSection:
             chosen = color_code[1]
             self.collection_missing_color_var.set(chosen)
             self.color_preview.configure(fg_color=chosen)
+            set_setting("Application", "collection_missing_color", chosen)
             toasts.set_collection_missing_color(chosen)
 
     def _reset_toast_settings(self):
