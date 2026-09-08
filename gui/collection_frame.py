@@ -33,6 +33,8 @@ class CollectionPopup:
             get_setting("Application", "theme_mode", "DARK")
         ).upper()
 
+        self.collection_league = str(get_setting("Application", "poeladder_collection_league", ""))
+
         self.tree_bg = None
         self.tree_alt_bg = None
         self.tree_fg = None
@@ -68,7 +70,7 @@ class CollectionPopup:
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         league_name = getattr(self.tracker, "league_version", "")
-        popup.title(f"{self.title} - {league_name}")
+        popup.title(f"{self.title} - {league_name} - {self.collection_league}")
 
         search_entry = ctk.CTkEntry(
             main_frame,
