@@ -14,7 +14,6 @@ from img_utils import preload_all_icons
 from logger import log_message
 from update_checker import check_for_updates
 from version_utils import get_version
-from win_utils import center_window_on_parent
 
 _original_destroy = customtkinter.CTkButton.destroy
 
@@ -145,7 +144,6 @@ def main():
     def initialize_app():
         try:
             player = get_setting("User", "poe_user", tracker.poe_user)
-            check_for_updates(root, blocking=True)
 
             fetch_tiers.run_fetch_curios()
             fetch_collection.run_fetch_curios_threaded(player)
@@ -269,7 +267,10 @@ def start_main_app(root, theme_mode, theme_manager):
         if DEBUGGING:
             print(f"[WARN] Could not initialize controller thread: {e}")
 
-    # root.after(5000, lambda: check_for_updates(root))
+    root.after(
+        2000,
+        lambda: check_for_updates(root)
+    )
 
     root.mainloop()
 
