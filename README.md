@@ -6,8 +6,6 @@ This tool allows you to quickly take a screenshot of the **Grand Heist Curio Dis
 
 Each capture has a toast in the top right as a notification which shows the captured items, their value (poe.ninja), rarity and ownership status (PoE Ladder).
 
-![Curio Tracker Showcase](https://sokratis.space/curio_tracker/assets/site/CurioTrackerShowcase.webp)
-
 **Website:** https://sokratis.space/curio_tracker/
 
 **Curio Stats:** https://sokratis.space/curio_tracker/stats/
