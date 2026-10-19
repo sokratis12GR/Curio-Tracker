@@ -1,0 +1,16 @@
+customtkinter
+inputs
+mss; sys_platform != "win32"
+numpy
+opencv_python
+pandas==3.0.0
+Pillow
+pyautogui
+pygetwindow
+pynput
+pyperclip
+pytesseract
+pytz
+pywin32; sys_platform == "win32"
+Requests
+termcolor
