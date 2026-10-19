@@ -10,6 +10,7 @@ pygetwindow
 pynput
 pyperclip
 pytesseract
+python-xlib; sys_platform != "win32"
 pytz
 pywin32; sys_platform == "win32"
 Requests
