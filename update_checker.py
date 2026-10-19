@@ -13,7 +13,6 @@ from fonts import make_font
 from markdown_utils import render_markdown_to_frame
 from version_utils import VERSION
 
-
 GITHUB_LATEST_RELEASE_URL = (
     "https://api.github.com/repos/"
     "sokratis12GR/Curio-Tracker/releases/latest"
@@ -55,10 +54,10 @@ def get_parent_window(root):
 
 
 def center_popup_on_parent(
-    popup,
-    parent,
-    width,
-    height
+        popup,
+        parent,
+        width,
+        height
 ):
     try:
         parent.update_idletasks()
@@ -85,13 +84,13 @@ def center_popup_on_parent(
         parent_height = popup.winfo_screenheight()
 
     x = (
-        parent_x
-        + (parent_width - width) // 2
+            parent_x
+            + (parent_width - width) // 2
     )
 
     y = (
-        parent_y
-        + (parent_height - height) // 2
+            parent_y
+            + (parent_height - height) // 2
     )
 
     screen_width = popup.winfo_screenwidth()
@@ -119,10 +118,10 @@ def center_popup_on_parent(
 
 
 def show_popup_window(
-    popup,
-    parent,
-    width,
-    height
+        popup,
+        parent,
+        width,
+        height
 ):
     try:
         if not popup.winfo_exists():
@@ -160,8 +159,8 @@ def show_popup_window(
 
 
 def close_popup(
-    popup,
-    root=None
+        popup,
+        root=None
 ):
     try:
         popup.attributes(
@@ -184,9 +183,9 @@ def close_popup(
 
 
 def check_for_updates(
-    root,
-    show_uptodate_popup=False,
-    blocking=False
+        root,
+        show_uptodate_popup=False,
+        blocking=False
 ):
     result_queue = queue.Queue()
 
@@ -232,8 +231,8 @@ def check_for_updates(
             )
 
             if (
-                version_tuple(latest)
-                > version_tuple(VERSION)
+                    version_tuple(latest)
+                    > version_tuple(VERSION)
             ):
                 result_queue.put(
                     (
@@ -348,9 +347,9 @@ def check_for_updates(
 
 
 def show_up_to_date_popup(
-    root,
-    latest_version=None,
-    error=False
+        root,
+        latest_version=None,
+        error=False
 ):
     parent = get_parent_window(root)
 
@@ -448,9 +447,9 @@ def deploy_updater():
         )
 
     if getattr(
-        sys,
-        "frozen",
-        False
+            sys,
+            "frozen",
+            False
     ):
         app_dir = Path(
             sys.executable
@@ -473,10 +472,10 @@ def deploy_updater():
 
 
 def show_update_popup(
-    root,
-    latest_version,
-    release_url,
-    changelog=""
+        root,
+        latest_version,
+        release_url,
+        changelog=""
 ):
     parent = get_parent_window(root)
 
@@ -632,9 +631,9 @@ def show_update_popup(
         ctk.CTkLabel(
             changelog_frame,
             text=(
-                changelog
-                or
-                "No release notes were provided."
+                    changelog
+                    or
+                    "No release notes were provided."
             ),
             justify="left",
             anchor="w",
@@ -691,7 +690,7 @@ def show_update_popup(
         )
 
         with Image.open(
-            icon_path
+                icon_path
         ) as source:
             img = (
                 source

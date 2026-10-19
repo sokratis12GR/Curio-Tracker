@@ -17,7 +17,6 @@ from gui.item_overview_frame import ItemOverviewFrame
 from json_manager import JSONManager
 from settings import get_setting
 from tree_utils import get_item_name_str, generate_item_id
-import pyinstrument
 
 
 def _get_row_tag(index):
