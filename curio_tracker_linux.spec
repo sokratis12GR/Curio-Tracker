@@ -9,7 +9,7 @@
 import os
 
 import customtkinter
-from PyInstaller.utils.hooks import collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_submodules
 
 opencv_libs = collect_dynamic_libs('cv2')
 pillow_libs = collect_dynamic_libs('PIL')
@@ -45,7 +45,7 @@ a = Analysis(
     pathex=[os.path.abspath('.')],
     binaries=binaries,
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=collect_submodules('pynput') + collect_submodules('Xlib'),
     hookspath=['.'],
     runtime_hooks=[],
     excludes=[],
