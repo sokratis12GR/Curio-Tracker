@@ -15,12 +15,12 @@ import numpy as np
 import pyautogui
 import pyperclip
 import pytesseract
-from PIL import ImageGrab
 from termcolor import colored
 
 import config as c
 import currency_utils
 import ocr_utils as utils
+import platform_compat
 import toasts
 from config import data_file_base
 from csv_manager import CSVManager
@@ -1405,7 +1405,7 @@ def capture_once(root):
     bbox = get_ocr_bbox(bbox)
 
     screenshot_np = np.array(
-        ImageGrab.grab(bbox=bbox)
+        platform_compat.grab_screen(bbox=bbox)
     )
 
     grab_end = time.perf_counter()
@@ -1482,7 +1482,7 @@ def capture_snippet(root, on_done):
         for _ in range(60):  # up to 30 seconds
             time.sleep(0.5)
             try:
-                img = ImageGrab.grabclipboard()
+                img = platform_compat.grab_clipboard_image()
             except Exception:
                 # If grabclipboard fails or returns invalid content, treat as cancel
                 img = None
@@ -1543,7 +1543,7 @@ def capture_snippet(root, on_done):
                 return
 
             bbox = (x1, y1, x2, y2)
-            screenshot_np = np.array(ImageGrab.grab(bbox))
+            screenshot_np = np.array(platform_compat.grab_screen(bbox))
             if screenshot_np is None or screenshot_np.size == 0:
                 log_message(c.snippet_txt_failed)
                 return
@@ -1572,7 +1572,16 @@ def capture_layout(root):
 
     validate_attempt(c.layout_prompt)
 
-    screenshot = pyautogui.screenshot()
+    try:
+        screenshot = pyautogui.screenshot()
+    except Exception as e:
+        if not platform_compat.IS_WINDOWS:
+            log_message(f"[ERROR] Screenshot failed: {e}. On Linux, install a screenshot "
+                        f"backend such as 'scrot' or 'gnome-screenshot' and try again.")
+        else:
+            log_message(f"[ERROR] Screenshot failed: {e}")
+        return
+
     full_width, full_height = screenshot.size
 
     cropped = screenshot.crop(utils.get_top_right_layout(full_width, full_height))

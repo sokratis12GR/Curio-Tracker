@@ -12,7 +12,8 @@ DISCORD_USERNAME = "sokratis12GR"
 APP_NAME = "HeistCurioTracker"
 if getattr(sys, 'frozen', False):
     # Running as bundled exe
-    base_path = os.path.join(os.getenv('APPDATA'), APP_NAME)
+    import platform_compat
+    base_path = platform_compat.get_app_data_dir(APP_NAME)
 else:
     # Running normally
     base_path = os.path.join(os.path.expanduser("~"), f".{APP_NAME}")
@@ -61,7 +62,7 @@ DEFAULT_SETTINGS = {
         "cycle_bp_enchantment_key": "alt+4"
     },
     'DEFAULT': {
-        'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+        'pytesseract_path': r'C:\Program Files\Tesseract-OCR\tesseract.exe' if sys.platform == "win32" else '/usr/bin/tesseract',
     },
     'Application': {
         'time_last_dupe_check_seconds': '60',

@@ -4,14 +4,20 @@ from datetime import datetime
 from difflib import get_close_matches, SequenceMatcher
 from types import SimpleNamespace
 
-import win32clipboard
-from PIL import ImageGrab
-
 import config as c
+import platform_compat
 
 
 def grab_new_clipboard_image(timeout=30):
     import time
+
+    if not platform_compat.IS_WINDOWS:
+        # No cross-platform clipboard-image-change polling implemented; callers
+        # already handle a None result as "nothing new on the clipboard".
+        return None
+
+    import win32clipboard
+
     start = time.time()
 
     # Get current clipboard image (or None)
@@ -38,7 +44,7 @@ def grab_new_clipboard_image(timeout=30):
             continue
 
         if new_data != old_data:
-            img = ImageGrab.grabclipboard()
+            img = platform_compat.grab_clipboard_image()
             break
 
     return img

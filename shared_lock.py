@@ -4,12 +4,12 @@ import threading
 import time
 
 import config as c
+import platform_compat
 
 _LOCK_WRITE_MUTEX = threading.Lock()
 
 def _get_data_path(filename: str) -> str:
-    appdata = os.getenv("APPDATA") or os.path.expanduser("~")
-    base = os.path.join(appdata, c.APP_NAME)
+    base = platform_compat.get_app_data_dir(c.APP_NAME)
     full_path = os.path.join(base, filename)
 
     os.makedirs(os.path.dirname(full_path), exist_ok=True)

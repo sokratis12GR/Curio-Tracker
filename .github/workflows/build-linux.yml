@@ -1,0 +1,62 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            tesseract-ocr \
+            scrot \
+            python3-tk \
+            xvfb
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Linux binary
+        run: pyinstaller --clean curio_tracker_linux.spec
+
+      - name: Smoke test (headless launch under Xvfb)
+        run: |
+          chmod +x dist/HeistCurioTracker
+          xvfb-run --auto-servernum dist/HeistCurioTracker &
+          APP_PID=$!
+          sleep 8
+          if ! kill -0 "$APP_PID" 2>/dev/null; then
+            echo "App exited unexpectedly during smoke test"
+            exit 1
+          fi
+          kill "$APP_PID"
+
+      - name: Package artifact
+        run: |
+          cd dist
+          tar -czf HeistCurioTracker-linux-x86_64.tar.gz HeistCurioTracker
+          sha256sum HeistCurioTracker-linux-x86_64.tar.gz > HeistCurioTracker-linux-x86_64.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HeistCurioTracker-linux
+          path: |
+            dist/HeistCurioTracker-linux-x86_64.tar.gz
+            dist/HeistCurioTracker-linux-x86_64.tar.gz.sha256

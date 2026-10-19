@@ -5,6 +5,7 @@ import sys
 import pytesseract
 
 import config as c
+import platform_compat
 from logger import log_message
 
 
@@ -16,6 +17,7 @@ from logger import log_message
 ################################################################################
 def set_tesseract_path():
     tesseract_bin = None
+    bundled_bin_name = "tesseract.exe" if platform_compat.IS_WINDOWS else "tesseract"
 
     # 1. Attempt to find from PATH
     path_from_system = shutil.which("tesseract")
@@ -24,7 +26,7 @@ def set_tesseract_path():
 
     # 2. If not in PATH, attempt PyInstaller bundled executable
     if not tesseract_bin and hasattr(sys, "_MEIPASS"):
-        bundled_path = os.path.join(sys._MEIPASS, "tesseract", "tesseract.exe")
+        bundled_path = os.path.join(sys._MEIPASS, "tesseract", bundled_bin_name)
         if os.path.isfile(bundled_path):
             tesseract_bin = bundled_path
 
@@ -33,7 +35,7 @@ def set_tesseract_path():
         dev_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "tesseract",
-            "tesseract.exe"
+            bundled_bin_name
         )
         if os.path.isfile(dev_path):
             tesseract_bin = dev_path

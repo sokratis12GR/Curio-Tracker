@@ -6,6 +6,7 @@ import sys
 import urllib
 
 import config as c
+import platform_compat
 from ocr_utils import smart_title_case, format_currency_value
 from shared_lock import is_site_cache_valid, update_site_cache_lock
 
@@ -13,8 +14,7 @@ _DATASETS = None
 
 
 def get_data_path(filename: str) -> str:
-    appdata = os.getenv('APPDATA') or os.path.expanduser('~')
-    base = os.path.join(appdata, c.APP_NAME)
+    base = platform_compat.get_app_data_dir(c.APP_NAME)
     full_path = os.path.join(base, filename)
 
     # Ensure that the directory structure exists for the file

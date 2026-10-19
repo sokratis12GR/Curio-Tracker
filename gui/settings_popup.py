@@ -5,10 +5,11 @@ import webbrowser
 from tkinter import colorchooser
 
 import customtkinter as ctk
-from PIL import Image, ImageGrab, ImageTk
+from PIL import Image, ImageTk
 
 import config as c
 import curio_collection_fetch
+import platform_compat
 import toasts
 from fonts import update_all_fonts, make_font, init_font_var
 from img_utils import get_local_image
@@ -279,7 +280,7 @@ class OCRRegionEditor:
 
             left, top, right, bottom = bbox
 
-            screenshot = ImageGrab.grab(
+            screenshot = platform_compat.grab_screen(
                 bbox=(
                     int(left),
                     int(top),
