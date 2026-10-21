@@ -32,17 +32,6 @@ jobs:
           .venv/bin/pip install -r requirements.txt
           .venv/bin/pip install pyinstaller
 
-      - name: Diagnose Tk "transparent" canvas color support
-        run: |
-          xvfb-run --auto-servernum .venv/bin/python -c "
-          import tkinter
-          r = tkinter.Tk()
-          c = tkinter.Canvas(r)
-          item = c.create_rectangle(0, 0, 10, 10)
-          c.itemconfig(item, fill='transparent')
-          print('Tk transparent canvas color: OK')
-          "
-
       - name: Build Linux binary
         run: .venv/bin/pyinstaller --clean curio_tracker_linux.spec
 
