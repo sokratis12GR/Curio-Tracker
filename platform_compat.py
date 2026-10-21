@@ -51,3 +51,20 @@ def get_app_data_dir(app_name):
 
     xdg_data_home = os.getenv("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
     return os.path.join(xdg_data_home, app_name)
+
+
+def patch_ctk_transparent_color():
+    if IS_WINDOWS or sys.platform == "darwin":
+        return
+
+    from customtkinter.windows.widgets.core_rendering.ctk_canvas import CTkCanvas
+
+    original_itemconfig = CTkCanvas.itemconfig
+
+    def itemconfig(self, tag_or_id, *args, **kwargs):
+        for key in ("fill", "outline"):
+            if kwargs.get(key) == "transparent":
+                kwargs[key] = self.cget("bg")
+        return original_itemconfig(self, tag_or_id, *args, **kwargs)
+
+    CTkCanvas.itemconfig = itemconfig

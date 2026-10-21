@@ -14,6 +14,9 @@ from img_utils import preload_all_icons
 from logger import log_message
 from update_checker import check_for_updates
 from version_utils import get_version
+import platform_compat
+
+platform_compat.patch_ctk_transparent_color()
 
 _original_destroy = customtkinter.CTkButton.destroy
 
