@@ -10,8 +10,11 @@ from gui.popups.blueprint_encyclopedia import show_blueprint_encyclopedia_popup
 from gui.frames.collection import CollectionPopup
 from gui.frames.item_overview import ItemOverviewFrame
 from gui.frames.total import TotalFrame
-from gui.popups.trade import show_quick_trade_popup
-from img_utils import preload_all_icons
+from PIL import Image as PILImage
+from customtkinter import CTkImage
+
+from gui.popups.trade import show_quick_trade_popup, BLUEPRINT_ICONS
+from img_utils import preload_all_icons, get_icon
 from logger import log_message
 from update_checker import check_for_updates
 from version_utils import get_version
@@ -130,16 +133,43 @@ def main():
 
     loading = CTkToplevel(root)
     loading.title("Loading...")
-    loading.geometry("300x120")
+    loading.geometry("300x150")
     loading.resizable(False, False)
     loading.overrideredirect(True)
     center_on_active_monitor(loading)
+
+    loading_icons_frame = CTkFrame(loading, fg_color="transparent")
+    loading_icons_frame.pack(pady=(15, 0))
+
+    loading_icon_labels = [
+        CTkLabel(loading_icons_frame, text="")
+        for _ in list(BLUEPRINT_ICONS.items())[:4]
+    ]
+    for icon_label in loading_icon_labels:
+        icon_label.pack(side="left", padx=4)
+
+    def load_loading_icons():
+        for icon_label, (name, url) in zip(
+                loading_icon_labels, list(BLUEPRINT_ICONS.items())[:4]
+        ):
+            pil_icon = get_icon(
+                name=name,
+                url=url,
+                size=(28, 28),
+                parent=loading_icons_frame,
+                return_pil=True,
+            )
+            if isinstance(pil_icon, PILImage.Image):
+                ctk_icon = CTkImage(light_image=pil_icon, dark_image=pil_icon, size=(28, 28))
+                loading.after(0, lambda lbl=icon_label, img=ctk_icon: lbl.configure(image=img))
+
+    threading.Thread(target=load_loading_icons, daemon=True).start()
 
     CTkLabel(
         loading,
         text="Initializing, please wait...",
         font=make_font(11)
-    ).pack(pady=20)
+    ).pack(pady=(10, 10))
 
     progress = CTkProgressBar(
         loading,
@@ -243,6 +273,21 @@ def start_main_app(root, theme_mode, theme_manager):
         command=lambda: show_quick_trade_popup(top_frame)
     )
     quick_trade_btn.grid(row=0, column=3, sticky="nsew", pady=(5, 2), padx=(5, 0))
+
+    def load_quick_trade_icon():
+        name, url = next(iter(BLUEPRINT_ICONS.items()))
+        pil_icon = get_icon(
+            name=name,
+            url=url,
+            size=(20, 20),
+            parent=top_frame,
+            return_pil=True,
+        )
+        if isinstance(pil_icon, PILImage.Image):
+            ctk_icon = CTkImage(light_image=pil_icon, dark_image=pil_icon, size=(20, 20))
+            root.after(0, lambda: quick_trade_btn.configure(image=ctk_icon, compound="left"))
+
+    threading.Thread(target=load_quick_trade_icon, daemon=True).start()
 
     tree_manager = TreeManager(root, tree, theme_mode, tracker)
 

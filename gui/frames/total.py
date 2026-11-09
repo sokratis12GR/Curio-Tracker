@@ -1,3 +1,4 @@
+import threading
 import webbrowser
 from tkinter import StringVar
 
@@ -5,10 +6,13 @@ from PIL import Image
 from customtkinter import CTkFrame, CTkLabel, CTkSwitch, CTkButton, CTkImage
 
 import load_utils
-from config import CHAOS_COLOR, poe_user
+from config import CHAOS_COLOR, poe_user, CHAOS_ORB_ICON_URL, DIVINE_ORB_ICON_URL
 from fonts import make_font
+from img_utils import get_icon
 from settings import get_setting, set_setting
 from tree_manager import TreeManager
+
+VALUE_ICON_SIZE = (16, 16)
 
 
 def _add_kofi_button(frame):
@@ -53,7 +57,35 @@ class TotalFrame:
 
         self.player_name = StringVar(value=get_setting("User", "poe_user", poe_user))
 
+        self.currency_icons = {}
+
         self._create_widgets()
+        self._load_currency_icons()
+
+    def _load_currency_icons(self):
+        def _to_ctk_icon(name, url):
+            pil_icon = get_icon(
+                name=name,
+                url=url,
+                size=VALUE_ICON_SIZE,
+                parent=self.frame,
+                return_pil=True,
+            )
+            if isinstance(pil_icon, Image.Image):
+                return CTkImage(light_image=pil_icon, dark_image=pil_icon, size=VALUE_ICON_SIZE)
+            return None
+
+        def _load():
+            self.currency_icons["Chaos"] = _to_ctk_icon("Chaos Orb (Value Icon)", CHAOS_ORB_ICON_URL)
+            self.currency_icons["Divine"] = _to_ctk_icon("Divine Orb (Value Icon)", DIVINE_ORB_ICON_URL)
+            self.frame.after(0, self._apply_value_icon)
+
+        threading.Thread(target=_load, daemon=True).start()
+
+    def _apply_value_icon(self):
+        icon = self.currency_icons.get(self.value_mode.get())
+        self.total_value_label.configure(image=icon)
+        self.total_picked_label.configure(image=icon)
 
     def _create_widgets(self):
         # Player name
@@ -80,7 +112,9 @@ class TotalFrame:
             self.frame,
             text="Total Value: 0 Chaos",
             font=make_font(12, "bold"),
-            text_color=CHAOS_COLOR
+            text_color=CHAOS_COLOR,
+            compound="left",
+            padx=4
         )
         self.total_value_label.grid(row=0, column=2, padx=(10, 5))
 
@@ -97,7 +131,9 @@ class TotalFrame:
             self.frame,
             text="Picked Value: 0 Chaos",
             font=make_font(12, "bold"),
-            text_color=CHAOS_COLOR
+            text_color=CHAOS_COLOR,
+            compound="left",
+            padx=4
         )
         self.total_picked_label.grid(row=0, column=4, padx=(5, 10))
 
@@ -107,4 +143,5 @@ class TotalFrame:
     def on_value_mode_changed(self):
         mode = self.value_mode.get()
         set_setting("Display", "value_mode", mode)
+        self._apply_value_icon()
         self.tm.update_total_labels()

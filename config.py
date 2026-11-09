@@ -314,6 +314,9 @@ CHAOS_COLOR = (
     "#8A6500",
     "#d6b85a",
 )
+
+CHAOS_ORB_ICON_URL = "https://web.poecdn.com/image/Art/2DItems/Currency/CurrencyRerollRare.png"
+DIVINE_ORB_ICON_URL = "https://web.poecdn.com/image/Art/2DItems/Currency/CurrencyModValues.png"
 available_fonts = ["Segoe UI", "Roboto", "Arial", "Calibri", "Comic Sans MS"]
 
 VALID_TOAST_POSITIONS = {
