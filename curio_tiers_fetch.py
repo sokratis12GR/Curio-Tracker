@@ -3,9 +3,10 @@ import requests
 
 import config
 from config import LEAGUE
+from fetch_state import should_skip_recent_run
 from load_utils import OUTPUT_TIERS_CSV, LOCK_FILE
 from logger import log_message
-from shared_lock import is_recent_run, update_lock
+from shared_lock import update_lock
 
 # === CONFIG ===
 MIN_SECONDS_BETWEEN_RUNS = 12 * 60 * 60
@@ -42,11 +43,12 @@ def fetch_curios():
 
 # === WRAPPER FUNCTION TO CALL ===
 def run_fetch_curios(force=False):
-    if not force and is_recent_run(
+    if should_skip_recent_run(
             LOCK_FILE_IDENTIFIER,
-            MIN_SECONDS_BETWEEN_RUNS
+            MIN_SECONDS_BETWEEN_RUNS,
+            force,
+            "[INFO] Last run <12 hours ago, skipping tiers fetch."
     ):
-        log_message("[INFO] Last run <12 hours ago, skipping tiers fetch.")
         return
 
     curios = fetch_curios()

@@ -3,9 +3,9 @@
 from customtkinter import *
 
 from config import layout_keywords, time_options
-from gui.blueprint_info_frame import BlueprintInfoPopup
-from gui.custom_load_popup import CustomLoader
-from gui.info_frame import InfoPanelPopup
+from gui.frames.blueprint_info import BlueprintInfoPopup
+from gui.popups.custom_load import CustomLoader
+from gui.frames.info import InfoPanelPopup
 from settings import set_setting
 
 

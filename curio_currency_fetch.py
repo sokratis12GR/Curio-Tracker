@@ -8,9 +8,10 @@ import requests
 
 import config
 from config import LEAGUES_TO_FETCH, APP_DISPLAY_NAME, DISCORD_USERNAME, CONTACT
+from fetch_state import should_skip_recent_run
 from load_utils import get_datasets, OUTPUT_CURRENCY_CSV
 from logger import log_message
-from shared_lock import is_recent_run, update_lock
+from shared_lock import update_lock
 from version_utils import VERSION
 
 # === THREADING FLAGS ===
@@ -340,11 +341,12 @@ def run_fetch(force=False):
     global IS_FETCHING
 
     # --- Skip if recent ---
-    if not force and is_recent_run(
+    if should_skip_recent_run(
             LOCK_FILE_IDENTIFIER,
-            min_duration=MIN_SECONDS_BETWEEN_RUNS
+            MIN_SECONDS_BETWEEN_RUNS,
+            force,
+            "[INFO] Using cached currency data (recent lock found)."
     ):
-        log_message("[INFO] Using cached currency data (recent lock found).")
         FETCH_DONE.set()
         IS_FETCHING = False
         return

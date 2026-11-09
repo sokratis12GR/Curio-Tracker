@@ -4,7 +4,7 @@ from pathlib import Path
 
 from config import data_file_base, csv_record_header, csv_time_header
 from data_manager import BaseDataManager
-from json_utils import rows_to_nested_json, nested_json_to_rows
+from json_utils import rows_to_nested_json, nested_json_to_rows, find_or_create_blueprint
 from logger import log_message
 
 
@@ -156,35 +156,9 @@ class JSONManager(BaseDataManager):
             if stack_size:
                 reward_entry["StackSize"] = stack_size
 
-            # Find or create player
-            player = next((p for p in nested_json["Players"] if p["Player"] == player_name), None)
-            if not player:
-                player = {"Player": player_name, "Leagues": []}
-                nested_json["Players"].append(player)
-
-            # Find or create league
-            league = next((l for l in player["Leagues"] if l["League"] == league_name), None)
-            if not league:
-                league = {"League": league_name, "Blueprints": []}
-                player["Leagues"].append(league)
-
-            # Find or create blueprint
-            blueprint = next(
-                (
-                    b for b in league["Blueprints"]
-                    if b["Blueprint"] == blueprint_name
-                       and b.get("BPEnchantment", "None") == bp_enchantment
-                ),
-                None
+            blueprint = find_or_create_blueprint(
+                nested_json, player_name, league_name, blueprint_name, area_level, bp_enchantment
             )
-            if not blueprint:
-                blueprint = {
-                    "Blueprint": blueprint_name,
-                    "AreaLevel": area_level,
-                    "BPEnchantment": bp_enchantment,
-                    "Rewards": []
-                }
-                league["Blueprints"].append(blueprint)
 
             # Append reward directly
             blueprint["Rewards"].append(reward_entry)

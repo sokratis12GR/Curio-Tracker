@@ -5,6 +5,7 @@ from pathlib import Path
 import requests
 from PIL import Image, ImageTk
 
+import ocr_utils as utils
 from load_utils import get_datasets, get_resource_path
 
 # Temp folder for caching icons
@@ -53,23 +54,50 @@ def preload_all_icons(parent=None, size=(24, 24), placeholder=None):
     tiers = datasets.get("tiers", {})
     terms = datasets.get("terms", {})
 
+    pending = []
+    pending_lock = threading.Lock()
+
     def _download_icon(name, url):
         if not url or name in _img_refs:
             return
-        get_icon(name=name, url=url, size=size, placeholder=placeholder, parent=parent)
+        pil_img = get_icon(name=name, url=url, size=size, placeholder=placeholder, parent=parent, return_pil=True)
+        if isinstance(pil_img, Image.Image):
+            with pending_lock:
+                pending.append((name, pil_img))
 
     threads = []
     for name, type_name in terms.items():
-        if type_name.lower() in ["replica", "replacement"]:
-            url = tiers.get(name, {}).get("img")
-            if url:
-                t = threading.Thread(target=_download_icon, args=(name, url), daemon=True)
-                t.start()
-                threads.append(t)
+        if not utils.is_unique(type_name):
+            continue
 
-    # Wait for all threads to finish
+        display_name = (
+            f"{name} (Replica)"
+            if type_name and type_name.lower() == "replica"
+            else name
+        )
+
+        url = tiers.get(name, {}).get("img")
+        if url:
+            t = threading.Thread(target=_download_icon, args=(display_name, url), daemon=True)
+            t.start()
+            threads.append(t)
+
     for t in threads:
         t.join()
+
+    if parent is not None and pending:
+        done = threading.Event()
+
+        def _create_tk_images():
+            for name, pil_img in pending:
+                if name not in _img_refs:
+                    tk_img = ImageTk.PhotoImage(pil_img, master=parent)
+                    tk_img._pil_image = pil_img
+                    _img_refs[name] = tk_img
+            done.set()
+
+        parent.after(0, _create_tk_images)
+        done.wait()
 
 
 def get_local_image(relative_path, mode="RGB"):

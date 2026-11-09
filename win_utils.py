@@ -62,6 +62,52 @@ def _get_poe_bbox_linux(title):
         return None
 
 
+def center_on_active_monitor(window):
+    window.update_idletasks()
+
+    width = window.winfo_width()
+    height = window.winfo_height()
+
+    mon_x, mon_y, mon_w, mon_h = _get_active_monitor_bounds(window)
+
+    x = mon_x + (mon_w // 2) - (width // 2)
+    y = mon_y + (mon_h // 2) - (height // 2)
+
+    window.geometry(f"+{x}+{y}")
+
+
+def _get_active_monitor_bounds(window):
+    if platform_compat.IS_WINDOWS:
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class MONITORINFO(ctypes.Structure):
+                _fields_ = [
+                    ("cbSize", wintypes.DWORD),
+                    ("rcMonitor", wintypes.RECT),
+                    ("rcWork", wintypes.RECT),
+                    ("dwFlags", wintypes.DWORD),
+                ]
+
+            pointer_x, pointer_y = window.winfo_pointerxy()
+            point = wintypes.POINT(pointer_x, pointer_y)
+
+            MONITOR_DEFAULTTONEAREST = 2
+            monitor = ctypes.windll.user32.MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST)
+
+            info = MONITORINFO()
+            info.cbSize = ctypes.sizeof(MONITORINFO)
+            ctypes.windll.user32.GetMonitorInfoW(monitor, ctypes.byref(info))
+
+            work = info.rcWork
+            return work.left, work.top, work.right - work.left, work.bottom - work.top
+        except Exception:
+            pass
+
+    return 0, 0, window.winfo_screenwidth(), window.winfo_screenheight()
+
+
 def center_window_on_parent(window, parent):
     window.update_idletasks()
 

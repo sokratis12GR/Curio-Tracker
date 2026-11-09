@@ -7,10 +7,11 @@ import requests
 
 import config
 from config import APP_DISPLAY_NAME, CONTACT, DISCORD_USERNAME
+from fetch_state import should_skip_recent_run
 from load_utils import OUTPUT_COLLECTION_CSV, OUTPUT_LEAGUES_CSV
 from logger import log_message
 from ocr_utils import smart_title_case
-from shared_lock import is_recent_run, update_lock
+from shared_lock import update_lock
 from version_utils import VERSION
 
 # === THREADING FLAGS ===
@@ -150,11 +151,12 @@ def fetch_all_ladders(player: str):
 def run_fetch_curios_threaded(player: str, force=False):
     global IS_FETCHING
 
-    if not force and is_recent_run(
+    if should_skip_recent_run(
             LOCK_FILE_IDENTIFIER,
-            min_duration=COLLECTION_LOCK_DURATION
+            COLLECTION_LOCK_DURATION,
+            force,
+            "[INFO] Using cached collection data (recent lock found)."
     ):
-        log_message("[INFO] Using cached collection data (recent lock found).")
         FETCH_DONE.set()
         IS_FETCHING = False
         return

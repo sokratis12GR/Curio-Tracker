@@ -1,10 +1,10 @@
 import customtkinter as ctk
 
 import config
-from gui import keybinds_popup
-from gui.about_popup import CustomAboutPopup
-from gui.data_tools_popup import show_data_tools_popup
-from gui.settings_popup import show_settings_popup
+from gui.popups import keybinds as keybinds_popup
+from gui.popups.about import CustomAboutPopup
+from gui.popups.data_tools import show_data_tools_popup
+from gui.settings.popup import show_settings_popup
 from settings import get_setting, set_setting
 from tree_manager import TreeManager
 from update_checker import check_for_updates

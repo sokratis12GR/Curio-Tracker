@@ -5,3 +5,11 @@
 /dist/
 /saved/
 /snippets/
+__pycache__/
+*.pyc
+.idea/
+/updater/updater.exe
+/SandboxTest/
+/enchantments_trade.json
+/poeprofiles_to_test_with.txt
+/terms.json

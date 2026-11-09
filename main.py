@@ -5,11 +5,12 @@ import customtkinter
 from customtkinter import *
 
 from fonts import init_font_var, make_font
-from gui.actions_frame import ActionsFrame
-from gui.collection_frame import CollectionPopup
-from gui.item_overview_frame import ItemOverviewFrame
-from gui.total_frame import TotalFrame
-from gui.trade_popup import show_quick_trade_popup
+from gui.frames.actions import ActionsFrame
+from gui.popups.blueprint_encyclopedia import show_blueprint_encyclopedia_popup
+from gui.frames.collection import CollectionPopup
+from gui.frames.item_overview import ItemOverviewFrame
+from gui.frames.total import TotalFrame
+from gui.popups.trade import show_quick_trade_popup
 from img_utils import preload_all_icons
 from logger import log_message
 from update_checker import check_for_updates
@@ -106,6 +107,7 @@ from set_tesseract_path import set_tesseract_path
 from settings import get_setting
 from themes import CTkThemes, apply_theme
 from tree_manager import TreeManager
+from win_utils import center_on_active_monitor
 
 
 def main():
@@ -130,6 +132,8 @@ def main():
     loading.title("Loading...")
     loading.geometry("300x120")
     loading.resizable(False, False)
+    loading.overrideredirect(True)
+    center_on_active_monitor(loading)
 
     CTkLabel(
         loading,
@@ -148,8 +152,18 @@ def main():
         try:
             player = get_setting("User", "poe_user", tracker.poe_user)
 
-            fetch_tiers.run_fetch_curios()
-            fetch_collection.run_fetch_curios_threaded(player)
+            fetch_threads = [
+                threading.Thread(target=fetch_tiers.run_fetch_curios),
+                threading.Thread(target=fetch_collection.run_fetch_curios_threaded, args=(player,)),
+                threading.Thread(target=fetch_currency.run_fetch),
+            ]
+
+            for fetch_thread in fetch_threads:
+                fetch_thread.start()
+
+            for fetch_thread in fetch_threads:
+                fetch_thread.join()
+
             load_data()
             preload_all_icons(parent=root)
 
@@ -184,6 +198,17 @@ def start_main_app(root, theme_mode, theme_manager):
     if platform.startswith("win"):
         root.after(200, lambda: root.iconbitmap(get_resource_path("assets/icon.ico")))
 
+    def on_closing():
+        try:
+            for after_id in root.tk.eval("after info").split():
+                root.after_cancel(after_id)
+        except Exception:
+            pass
+
+        root.destroy()
+
+    root.protocol("WM_DELETE_WINDOW", on_closing)
+
     tracker.poe_user = get_setting("User", "poe_user", tracker.poe_user)
     tracker.blueprint_layout = get_setting("Blueprint", "layout", tracker.blueprint_layout)
     tracker.blueprint_area_level = get_setting("Blueprint", "area_level", tracker.blueprint_area_level)
@@ -205,16 +230,19 @@ def start_main_app(root, theme_mode, theme_manager):
     )
     lbl.grid(row=0, column=1, sticky="nsew", pady=(5, 2), padx=(5, 0))
 
-    # lbl_bp = CTkButton(top_frame, text="Blueprints Information")
-    # lbl_bp.grid(row=0, column=2, sticky="nsew", pady=(5, 2), padx=(5, 0)) # TODO: ADD Blueprint encyclopedia with information about traps, monster types, side rooms, etc...
+    lbl_bp = CTkButton(
+        top_frame,
+        text="Blueprints Information",
+        command=lambda: show_blueprint_encyclopedia_popup(top_frame, tracker=tracker)
+    )
+    lbl_bp.grid(row=0, column=2, sticky="nsew", pady=(5, 2), padx=(5, 0))
+
     quick_trade_btn = CTkButton(
         top_frame,
         text="Quick Trade",
         command=lambda: show_quick_trade_popup(top_frame)
     )
     quick_trade_btn.grid(row=0, column=3, sticky="nsew", pady=(5, 2), padx=(5, 0))
-
-    # quick_trade_btn.pack()
 
     tree_manager = TreeManager(root, tree, theme_mode, tracker)
 

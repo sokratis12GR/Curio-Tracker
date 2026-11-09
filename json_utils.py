@@ -1,6 +1,40 @@
 from collections import defaultdict
 
 
+def find_or_create_blueprint(nested: dict, player_name, league_name, blueprint_name, area_level, bp_enchantment):
+    # Find or create player
+    player = next((p for p in nested["Players"] if p["Player"] == player_name), None)
+    if not player:
+        player = {"Player": player_name, "Leagues": []}
+        nested["Players"].append(player)
+
+    # Find or create league
+    league = next((l for l in player["Leagues"] if l["League"] == league_name), None)
+    if not league:
+        league = {"League": league_name, "Blueprints": []}
+        player["Leagues"].append(league)
+
+    # Find or create blueprint
+    blueprint = next(
+        (
+            b for b in league["Blueprints"]
+            if b["Blueprint"] == blueprint_name
+               and b.get("BPEnchantment", "None") == bp_enchantment
+        ),
+        None
+    )
+    if not blueprint:
+        blueprint = {
+            "Blueprint": blueprint_name,
+            "AreaLevel": area_level,
+            "BPEnchantment": bp_enchantment,
+            "Rewards": []
+        }
+        league["Blueprints"].append(blueprint)
+
+    return blueprint
+
+
 def rows_to_nested_json(rows: list[dict]) -> dict:
     nested = {
         "RewardTypes": {
@@ -48,36 +82,9 @@ def rows_to_nested_json(rows: list[dict]) -> dict:
         if stack_size:
             reward_entry["StackSize"] = stack_size
 
-        # Find or create player
-        player = next((p for p in nested["Players"] if p["Player"] == player_name), None)
-        if not player:
-            player = {"Player": player_name, "Leagues": []}
-            nested["Players"].append(player)
-
-        # Find or create league
-        league = next((l for l in player["Leagues"] if l["League"] == league_name), None)
-        if not league:
-            league = {"League": league_name, "Blueprints": []}
-            player["Leagues"].append(league)
-
-        # Find or create blueprint
-        blueprint = next(
-            (
-                b for b in league["Blueprints"]
-                if b["Blueprint"] == blueprint_name
-                   and b.get("BPEnchantment", "None") == bp_enchantment
-            ),
-            None
+        blueprint = find_or_create_blueprint(
+            nested, player_name, league_name, blueprint_name, area_level, bp_enchantment
         )
-        if not blueprint:
-            blueprint = {
-                "Blueprint": blueprint_name,
-                "AreaLevel": area_level,
-                "BPEnchantment": bp_enchantment,
-                "Rewards": []
-            }
-            league["Blueprints"].append(blueprint)
-
         blueprint["Rewards"].append(reward_entry)
 
     return nested
