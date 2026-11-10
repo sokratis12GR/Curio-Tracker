@@ -9,8 +9,8 @@ from PIL import Image
 from customtkinter import CTkImage
 
 from config import LEAGUE
-from img_utils import get_icon
-from win_utils import center_window_on_parent
+from img_utils import get_cached_icon, get_icons_parallel
+from win_utils import center_window_on_parent, prepare_popup
 
 TRADE_URL_BASE = "https://www.pathofexile.com/trade/search"
 
@@ -160,6 +160,7 @@ class QuickTradePopup:
         self.parent = parent
 
         self.popup = ctk.CTkToplevel(parent)
+        prepare_popup(self.popup)
         self.popup.title("Quick Trade")
         self.popup.geometry(f"500x{self.EXPANDED_HEIGHT}")
         self.popup.resizable(False, False)
@@ -178,12 +179,20 @@ class QuickTradePopup:
         )
 
         self.icons = {}
+        self.icon_labels = {}
+
+        # Use icons already in memory before the first draw.
+        for name in BLUEPRINT_ICONS:
+            cached = get_cached_icon(name, (self.ICON_SIZE, self.ICON_SIZE))
+            if cached is not None:
+                self.icons[name] = self._to_ctk(cached)
+
+        self._build()
+
         threading.Thread(
             target=self._wait_and_load_icons,
             daemon=True
         ).start()
-
-        self._build()
 
         center_window_on_parent(
             self.popup,
@@ -195,26 +204,49 @@ class QuickTradePopup:
 
     # ---------------- ICON SAFE LOAD ----------------
 
+    def _to_ctk(self, pil_img):
+        return CTkImage(
+            light_image=pil_img,
+            dark_image=pil_img,
+            size=(self.ICON_SIZE, self.ICON_SIZE)
+        )
+
     def _wait_and_load_icons(self):
-        self.all_icons = {}
+        missing = [
+            (name, url)
+            for name, url in BLUEPRINT_ICONS.items()
+            if name not in self.icons
+        ]
 
-        for k, url in BLUEPRINT_ICONS.items():
-            tk_img = get_icon(
-                name=k,
-                url=url,
-                size=(self.ICON_SIZE, self.ICON_SIZE),
-                placeholder=self.placeholder,
-                parent=self.popup,
-                return_pil=False,
-            )
+        loaded = get_icons_parallel(
+            missing,
+            size=(self.ICON_SIZE, self.ICON_SIZE)
+        )
 
-            self.all_icons[k] = tk_img or self.placeholder
+        if not loaded:
+            return
 
-        self.popup.after(0, self._apply_icons)
+        try:
+            self.popup.after(0, lambda: self._apply_icons(loaded))
+        except Exception:
+            pass
 
-    def _apply_icons(self):
-        self.icons = self.all_icons
-        self._build()
+    def _apply_icons(self, loaded):
+        try:
+            if not self.popup.winfo_exists():
+                return
+        except Exception:
+            return
+
+        # Swap images on the existing tiles instead of rebuilding the UI,
+        # which used to stack a second copy of every widget and reset filters.
+        for name, pil_img in loaded.items():
+            ctk_img = self._to_ctk(pil_img)
+            self.icons[name] = ctk_img
+
+            label = self.icon_labels.get(name)
+            if label is not None:
+                label.configure(image=ctk_img)
 
     # ---------------- BUILD UI ----------------
 
@@ -258,6 +290,7 @@ class QuickTradePopup:
 
             icon_label = ctk.CTkLabel(frame, text="", image=icon)
             icon_label.pack(expand=True)
+            self.icon_labels[b] = icon_label
 
             text_label = ctk.CTkLabel(
                 frame,

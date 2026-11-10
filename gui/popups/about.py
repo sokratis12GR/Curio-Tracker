@@ -8,7 +8,7 @@ import customtkinter as ctk
 import load_utils
 from fonts import make_font
 from version_utils import VERSION
-from win_utils import center_window_on_parent
+from win_utils import center_window_on_parent, prepare_popup
 
 
 def _add_kofi_button(frame):
@@ -74,12 +74,13 @@ class CustomAboutPopup:
 
         # --- Popup setup ---
         self.popup = ctk.CTkToplevel(self.parent)
+        prepare_popup(self.popup)
         self.popup.title("About Heist Curio Tracker")
         self.popup.resizable(False, False)
         self.popup.protocol("WM_DELETE_WINDOW", self._close)
         self.popup.bind("<Escape>", lambda e: self._close())
         self.popup.transient(self.parent.winfo_toplevel())
-        self.popup.minsize(430, 530)
+        self.popup.minsize(430, 580)
         self.popup.attributes("-topmost", True)
 
         # --- Determine accent color from theme ---
@@ -202,13 +203,27 @@ class CustomAboutPopup:
 
         _add_kofi_button(frame)
 
+        # --- Disclaimer ---
+        ctk.CTkLabel(
+            frame,
+            text=(
+                "This product isn't affiliated with or endorsed by "
+                "Grinding Gear Games in any way. Path of Exile and its "
+                "game imagery are property of Grinding Gear Games."
+            ),
+            font=make_font(9),
+            text_color=("gray40", "gray60"),
+            wraplength=360,
+            justify="center"
+        ).pack(pady=(14, 0))
+
         # --- Close Button ---
         ctk.CTkButton(
             frame,
             text="Close",
             command=self._close,
             width=100
-        ).pack(pady=(18, 5))
+        ).pack(pady=(10, 5))
 
         # --- Center popup ---
         center_window_on_parent(

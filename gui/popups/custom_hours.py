@@ -1,6 +1,6 @@
 from customtkinter import *
 
-from win_utils import center_window_on_parent
+from win_utils import center_window_on_parent, prepare_popup
 
 
 class CustomHoursPopup:
@@ -9,6 +9,7 @@ class CustomHoursPopup:
         self.callback = callback
 
         self.popup = CTkToplevel(self.parent)
+        prepare_popup(self.popup)
         self.popup.title("Custom Hours Filter")
         self.popup.geometry("250x200")
         self.popup.resizable(False, False)
@@ -64,6 +65,7 @@ class CustomHoursPopup:
 class CTkMessagePopup:
     def __init__(self, parent, title="Error", message=""):
         self.popup = CTkToplevel(parent)
+        prepare_popup(self.popup)
         self.popup.title(title)
         self.popup.geometry("300x120")
         self.popup.resizable(False, False)
@@ -82,10 +84,6 @@ class CTkMessagePopup:
         # Close button
         CTkButton(frame, text="OK", command=self.popup.destroy).pack()
 
-        # Center popup
-        self.popup.update_idletasks()
-        w, h = self.popup.winfo_width(), self.popup.winfo_height()
-        x = (self.popup.winfo_screenwidth() // 2) - (w // 2)
-        y = (self.popup.winfo_screenheight() // 2) - (h // 2)
-        self.popup.geometry(f"{w}x{h}+{x}+{y}")
+        # Center popup (revealed once positioned)
+        center_window_on_parent(self.popup, parent)
         parent.wait_window(self.popup)

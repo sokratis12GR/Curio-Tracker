@@ -1,5 +1,7 @@
 import customtkinter as ctk
 
+from win_utils import prepare_popup, reveal_popup
+
 
 class CTkMessageBox:
     def __init__(self, parent=None, min_size=(300, 120), max_size=(500, 400)):
@@ -9,6 +11,7 @@ class CTkMessageBox:
 
     def _show(self, title, message, type="info"):
         popup = ctk.CTkToplevel(self.parent)
+        prepare_popup(popup)
         popup.title(title)
         popup.minsize(width=self.min_size[0], height=self.min_size[1])
         popup.maxsize(width=self.max_size[0], height=self.max_size[1])
@@ -53,6 +56,7 @@ class CTkMessageBox:
         y = (popup.winfo_screenheight() // 2) - (h // 2)
 
         popup.geometry(f"{w}x{h}+{x}+{y}")
+        reveal_popup(popup)
 
         popup.wait_window()
         return result["value"]

@@ -1,21 +1,23 @@
-from PIL import Image
+import threading
+
 from customtkinter import *
 from customtkinter import CTkImage
 
 import currency_utils
 from config import IMAGE_COL_WIDTH, ROW_HEIGHT
 from fonts import make_font
-from img_utils import get_icon
+from img_utils import fit_image, get_cached_icon, get_icon
 from link_utils import generate_trade_url_from_values, open_url
 from ocr_utils import parse_item_name
 from renderer import render_item
-from tree_utils import pad_image
 
 
 class ItemOverviewFrame:
     def __init__(self, parent, row_index_start=0):
         self.parent = parent
         self.item = None
+        self._icon_request = 0
+        self._visible_fields = set()
 
         self.frame = CTkFrame(
             parent,
@@ -97,25 +99,24 @@ class ItemOverviewFrame:
 
     def update_item(self, item):
         self.item = item
-        self.image_label.grid_remove()
-        self.icon_label.grid_remove()
-        for lbl_field, lbl_value in self.label_pairs.values():
-            lbl_field.grid_remove()
-            lbl_value.grid_remove()
+        self._icon_request += 1
 
         if item is None:
+            self.image_label.grid_remove()
+            self.icon_label.grid_remove()
+            self.item_name_label.grid_remove()
+            self._show_fields(set())
             return
 
-        # Render main item image
+        # Render main item image (fitted, not stretched)
         try:
-            pil_img = render_item(item)
-            pil_img = pil_img.resize((IMAGE_COL_WIDTH, ROW_HEIGHT), Image.LANCZOS)
-            pil_img = pad_image(pil_img, top_pad=0, target_width=IMAGE_COL_WIDTH, target_height=ROW_HEIGHT)
+            pil_img = fit_image(render_item(item), (IMAGE_COL_WIDTH, ROW_HEIGHT))
             ctk_img = CTkImage(light_image=pil_img, dark_image=pil_img, size=(IMAGE_COL_WIDTH, ROW_HEIGHT))
             self.image_label.configure(image=ctk_img, text="")
             self.image_label.image = ctk_img
-            self.image_label.grid(sticky="n")
+            self.image_label.grid()
         except Exception as e:
+            self.image_label.grid_remove()
             print(f"[ItemOverview] No image: {e}")
 
         # Update text fields
@@ -159,33 +160,21 @@ class ItemOverviewFrame:
         name = parse_item_name(item) if item else ""
         if name:
             self.item_name_label.configure(text=name)
-            self.item_name_label.grid(sticky="n")
+            self.item_name_label.grid()
         else:
             self.item_name_label.configure(text="")
             self.item_name_label.grid_remove()
 
+        visible = set()
+
         for field, value in data.items():
             if value not in (None, "", "N/A", 0):
-                field_lbl, value_lbl = self.label_pairs[field]
+                _, value_lbl = self.label_pairs[field]
                 value_lbl.configure(text=str(value))
-                field_lbl.grid()
-                value_lbl.grid()
+                visible.add(field)
 
-        # --- Load icon using global temp cache ---
-        if icon_url:
-            pil_icon = get_icon(
-                name=name,
-                url=icon_url,
-                size=(ROW_HEIGHT, ROW_HEIGHT),
-                placeholder=None,
-                parent=self.parent,
-                return_pil=True
-            )
-            if pil_icon:
-                ctk_icon = CTkImage(light_image=pil_icon, dark_image=pil_icon, size=(ROW_HEIGHT, ROW_HEIGHT))
-                self.icon_label.configure(image=ctk_icon, text="")
-                self.icon_label.image = ctk_icon
-                self.icon_label.grid(sticky="n", pady=(0, 10))
+        # --- Icon: memory cache first, otherwise load in the background ---
+        self._update_icon(name, icon_url)
 
         # --- Wiki link ---
         if wiki_url:
@@ -200,8 +189,7 @@ class ItemOverviewFrame:
                 "<Button-1>",
                 lambda e, url=wiki_url: open_url(url)
             )
-            field_lbl.grid()
-            value_lbl.grid()
+            visible.add("Wiki")
 
         # --- Trade link ---
         if trade_url:
@@ -227,5 +215,67 @@ class ItemOverviewFrame:
                 "<Button-1>",
                 lambda e, url=trade_url: open_url(url)
             )
-            field_lbl.grid()
-            value_lbl.grid()
+            visible.add("Trade")
+
+        self._show_fields(visible)
+
+    def _show_fields(self, visible):
+        # Only toggle rows whose visibility changed, so the panel doesn't
+        # collapse and re-expand (jump) on every selection.
+        for field, (field_lbl, value_lbl) in self.label_pairs.items():
+            should_show = field in visible
+            was_shown = field in self._visible_fields
+
+            if should_show and not was_shown:
+                field_lbl.grid()
+                value_lbl.grid()
+            elif was_shown and not should_show:
+                field_lbl.grid_remove()
+                value_lbl.grid_remove()
+
+        self._visible_fields = set(visible)
+
+    def _apply_icon(self, pil_icon):
+        ctk_icon = CTkImage(light_image=pil_icon, dark_image=pil_icon, size=(ROW_HEIGHT, ROW_HEIGHT))
+        self.icon_label.configure(image=ctk_icon, text="")
+        self.icon_label.image = ctk_icon
+        self.icon_label.grid()
+
+    def _update_icon(self, name, icon_url):
+        icon_size = (ROW_HEIGHT, ROW_HEIGHT)
+
+        if not icon_url:
+            self.icon_label.grid_remove()
+            return
+
+        cached = get_cached_icon(name, icon_size)
+        if cached is not None:
+            self._apply_icon(cached)
+            return
+
+        self.icon_label.grid_remove()
+        request_id = self._icon_request
+
+        def _load():
+            pil_icon = get_icon(
+                name=name,
+                url=icon_url,
+                size=icon_size,
+                placeholder=None,
+                return_pil=True
+            )
+
+            if pil_icon is None:
+                return
+
+            def _apply():
+                # Ignore results for an item that's no longer selected.
+                if request_id == self._icon_request:
+                    self._apply_icon(pil_icon)
+
+            try:
+                self.frame.after(0, _apply)
+            except Exception:
+                pass
+
+        threading.Thread(target=_load, daemon=True).start()

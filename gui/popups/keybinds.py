@@ -4,7 +4,7 @@ import customtkinter as ctk
 
 import curio_keybinds
 from fonts import make_font
-from win_utils import center_window_on_parent
+from win_utils import center_window_on_parent, prepare_popup
 
 
 class KeybindsPopup:
@@ -23,6 +23,7 @@ class KeybindsPopup:
         self.popup_buttons = []
 
         self.popup = ctk.CTkToplevel(parent)
+        prepare_popup(self.popup)
 
         self.popup.title("Keybind Settings")
 

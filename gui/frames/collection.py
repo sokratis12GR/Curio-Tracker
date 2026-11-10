@@ -8,10 +8,10 @@ from PIL import Image, ImageTk
 import config
 import ocr_utils as utils
 from fonts import make_font
-from img_utils import get_icon
+from img_utils import get_cached_icon, get_icons_parallel
 from link_utils import generate_trade_url_from_values, open_url
 from settings import get_setting
-from win_utils import center_window_on_parent
+from win_utils import center_window_on_parent, prepare_popup
 
 
 class CollectionPopup:
@@ -59,6 +59,7 @@ class CollectionPopup:
 
     def show(self):
         popup = ctk.CTkToplevel(self.parent)
+        prepare_popup(popup)
         popup.title(self.title)
 
         popup.geometry("850x600")
@@ -149,6 +150,10 @@ class CollectionPopup:
                 str(x["tier"]).lower()
             )
         )
+
+        # Icons already in memory (preloaded at startup) are applied before
+        # the first draw, so most rows appear with their icon straight away.
+        self._apply_cached_icons()
 
         # Names appear immediately.
         self.refresh_tree()
@@ -365,29 +370,44 @@ class CollectionPopup:
             item.get("base_name")
         )
 
-    def _load_icons_thread(self):
-        loaded_icons = []
-
+    def _apply_cached_icons(self):
         for item in self.all_items:
-            try:
-                pil_img = get_icon(
-                    name=item["name"],
-                    url=item.get("img_url"),
-                    size=(self.ICON_SIZE, self.ICON_SIZE),
-                    placeholder=None,
-                    parent=None,
-                    return_pil=True,
-                )
-
-                if pil_img is not None:
-                    loaded_icons.append(
-                        (item["base_name"], pil_img)
-                    )
-
-            except Exception:
+            if item.get("_tk_img") is not None or not item.get("img_url"):
                 continue
 
-        if self.parent:
+            pil_img = get_cached_icon(
+                item["name"],
+                (self.ICON_SIZE, self.ICON_SIZE)
+            )
+
+            if pil_img is not None:
+                self._set_item_tk_image(item, pil_img)
+
+    def _set_item_tk_image(self, item, pil_img):
+        try:
+            tk_img = ImageTk.PhotoImage(pil_img, master=self.parent)
+        except Exception:
+            return
+
+        item["_tk_img"] = tk_img
+        self._image_refs.append(tk_img)
+
+    def _load_icons_thread(self):
+        missing = [
+            (item["name"], item.get("img_url"))
+            for item in self.all_items
+            if item.get("_tk_img") is None and item.get("img_url")
+        ]
+
+        if not missing:
+            return
+
+        loaded_icons = get_icons_parallel(
+            missing,
+            size=(self.ICON_SIZE, self.ICON_SIZE)
+        )
+
+        if self.parent and loaded_icons:
             try:
                 self.parent.after(
                     0,
@@ -396,40 +416,32 @@ class CollectionPopup:
             except Exception:
                 pass
 
-    def _apply_loaded_icons(self, loaded_icons):
+    def _tree_alive(self):
         if not hasattr(self, "tree"):
-            return
+            return False
 
         try:
-            if not self.tree.winfo_exists():
-                return
+            return bool(self.tree.winfo_exists())
         except Exception:
+            return False
+
+    def _apply_loaded_icons(self, loaded_icons):
+        if not self._tree_alive():
             return
 
-        icon_lookup = {
-            base_name: pil_img
-            for base_name, pil_img in loaded_icons
-        }
-
         for item in self.all_items:
-            pil_img = icon_lookup.get(item["base_name"])
+            pil_img = loaded_icons.get(item["name"])
 
             if pil_img is None:
                 continue
 
-            try:
-                tk_img = ImageTk.PhotoImage(
-                    pil_img,
-                    master=self.parent
-                )
+            self._set_item_tk_image(item, pil_img)
 
-                item["_tk_img"] = tk_img
-                self._image_refs.append(tk_img)
-
-            except Exception:
-                continue
-
-        self.refresh_tree()
+            # Update the existing row in place rather than rebuilding the
+            # whole tree (avoids flicker and losing scroll/selection).
+            row_id = item.get("_row_id")
+            if row_id and self.tree.exists(row_id):
+                self.tree.item(row_id, image=item["_tk_img"])
 
     def open_link(self, event):
         row_id = self.tree.identify_row(event.y)
@@ -467,6 +479,9 @@ class CollectionPopup:
         self.tree.delete(*self.tree.get_children())
         self._row_item_map.clear()
 
+        for item in self.all_items:
+            item["_row_id"] = None
+
         rows = filtered if filtered is not None else self.all_items
 
         for i, item in enumerate(rows):
@@ -494,6 +509,7 @@ class CollectionPopup:
             )
 
             self._row_item_map[row_id] = item
+            item["_row_id"] = row_id
 
     def filter_items(self):
         query = self.search_var.get().lower().strip()
@@ -610,13 +626,7 @@ class CollectionPopup:
                 print(f"[Collection] Failed to calculate found counts: {e}")
 
     def _apply_found_counts(self, counts):
-        if not hasattr(self, "tree"):
-            return
-
-        try:
-            if not self.tree.winfo_exists():
-                return
-        except Exception:
+        if not self._tree_alive():
             return
 
         for item in self.all_items:
@@ -625,4 +635,6 @@ class CollectionPopup:
                 0
             )
 
-        self.refresh_tree()
+            row_id = item.get("_row_id")
+            if row_id and self.tree.exists(row_id):
+                self.tree.set(row_id, "Found", item["found_count"])

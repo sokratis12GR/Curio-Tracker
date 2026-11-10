@@ -127,3 +127,10 @@ If the app crashes or shows an error, please create an issue at [Create Issue](h
   `%appdata%/HeistCurioTracker/logs/tracker.log`
 
 ***Appreciate any feedback ^^***
+
+## Disclaimer
+
+This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
+Path of Exile and its game imagery are property of Grinding Gear Games. Item and
+Heist icons are not bundled with this tool; they are loaded at runtime from GGG's
+CDN and cached locally.

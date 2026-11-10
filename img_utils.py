@@ -1,5 +1,7 @@
+import hashlib
 import tempfile
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
@@ -12,41 +14,147 @@ from load_utils import get_datasets, get_resource_path
 ICON_CACHE_DIR = Path(tempfile.gettempdir()) / "curio_icons"
 ICON_CACHE_DIR.mkdir(exist_ok=True)
 
-# In-memory cache of PhotoImage objects
+# Parallel downloads when many icons are fetched at once.
+ICON_DOWNLOAD_WORKERS = 8
+
+# In-memory caches, keyed by (name, size) so callers asking for different
+# sizes never receive an image scaled for someone else.
 _img_refs = {}
+_pil_cache = {}
 _lock = threading.Lock()
 
 
+def _normalize_size(size):
+    if isinstance(size, int):
+        return size, size
+    return int(size[0]), int(size[1])
+
+
+def fit_image(pil_img, size, align="center"):
+    """
+    Scale an image to fit inside `size` while keeping its aspect ratio, then
+    pad it with transparency to exactly `size`. Prevents icons from being
+    stretched when shown in fixed-size (often square) slots.
+    """
+    box_w, box_h = _normalize_size(size)
+    img = pil_img.convert("RGBA")
+
+    if img.width == 0 or img.height == 0:
+        return Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
+
+    scale = min(box_w / img.width, box_h / img.height)
+    new_w = max(1, round(img.width * scale))
+    new_h = max(1, round(img.height * scale))
+
+    if (new_w, new_h) != img.size:
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+
+    canvas = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
+    x = 0 if align == "left" else (box_w - new_w) // 2
+    y = (box_h - new_h) // 2
+    canvas.paste(img, (x, y), img)
+    return canvas
+
+
+def _download_icon_file(name, url):
+    safe_name = "".join(c if c not in r'<>:"/\|?*' else "_" for c in name)
+    if url:
+        # Include the URL in the file name so a changed icon URL is re-downloaded
+        # instead of reusing the old image cached under the same name.
+        safe_name += "_" + hashlib.md5(url.encode("utf-8")).hexdigest()[:8]
+    local_file = ICON_CACHE_DIR / f"{safe_name}.png"
+
+    if local_file.exists() and local_file.stat().st_size > 0:
+        return local_file
+
+    if not url:
+        return None
+
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        tmp_file = local_file.with_suffix(".part")
+        tmp_file.write_bytes(response.content)
+        tmp_file.replace(local_file)
+        return local_file
+    except Exception:
+        return None
+
+
 def get_icon(name: str, url: str, size=(24, 24), placeholder=None, parent=None, return_pil=False):
-    global _img_refs
+    """
+    Return an icon fitted (not stretched) into `size`.
 
-    if name in _img_refs:
-        img = _img_refs[name]
-        return img if not return_pil else img._pil_image
+    return_pil=True is safe to call from worker threads. Tk images
+    (return_pil=False) must only be requested from the Tk main thread.
+    """
+    size = _normalize_size(size)
+    key = (name, size)
 
-    local_file = ICON_CACHE_DIR / f"{name}.png"
+    if return_pil:
+        cached = _pil_cache.get(key)
+        if cached is not None:
+            return cached
+    else:
+        cached = _img_refs.get(key)
+        if cached is not None:
+            return cached
 
-    if not local_file.exists():
+    pil_img = _pil_cache.get(key)
+
+    if pil_img is None:
+        local_file = _download_icon_file(name, url)
+        if local_file is None:
+            return placeholder
+
         try:
-            response = requests.get(url, timeout=5)
-            response.raise_for_status()
-            local_file.write_bytes(response.content)
+            with Image.open(local_file) as source:
+                pil_img = fit_image(source, size)
         except Exception:
             return placeholder
 
-    try:
-        pil_img = Image.open(local_file).convert("RGBA")
-        pil_img.thumbnail(size, Image.LANCZOS)
+        with _lock:
+            _pil_cache[key] = pil_img
 
-        if return_pil:
-            return pil_img
-        else:
-            tk_img = ImageTk.PhotoImage(pil_img, master=parent)
-            tk_img._pil_image = pil_img
-            _img_refs[name] = tk_img
-            return tk_img
+    if return_pil:
+        return pil_img
+
+    try:
+        tk_img = ImageTk.PhotoImage(pil_img, master=parent)
+        tk_img._pil_image = pil_img
+        _img_refs[key] = tk_img
+        return tk_img
     except Exception:
         return placeholder
+
+
+def get_cached_icon(name, size=(24, 24)):
+    """Return an already-loaded PIL icon from memory, or None. Never touches disk/network."""
+    return _pil_cache.get((name, _normalize_size(size)))
+
+
+def get_icons_parallel(requests_list, size=(24, 24)):
+    """
+    Fetch many icons concurrently. `requests_list` is an iterable of
+    (name, url). Returns {name: PIL image} for icons that loaded.
+    Safe to call from a worker thread.
+    """
+    results = {}
+    items = [(n, u) for n, u in requests_list if u]
+
+    if not items:
+        return results
+
+    def _fetch(entry):
+        name, url = entry
+        return name, get_icon(name=name, url=url, size=size, return_pil=True)
+
+    with ThreadPoolExecutor(max_workers=ICON_DOWNLOAD_WORKERS) as pool:
+        for name, pil_img in pool.map(_fetch, items):
+            if isinstance(pil_img, Image.Image):
+                results[name] = pil_img
+
+    return results
 
 
 def preload_all_icons(parent=None, size=(24, 24), placeholder=None):
@@ -54,18 +162,7 @@ def preload_all_icons(parent=None, size=(24, 24), placeholder=None):
     tiers = datasets.get("tiers", {})
     terms = datasets.get("terms", {})
 
-    pending = []
-    pending_lock = threading.Lock()
-
-    def _download_icon(name, url):
-        if not url or name in _img_refs:
-            return
-        pil_img = get_icon(name=name, url=url, size=size, placeholder=placeholder, parent=parent, return_pil=True)
-        if isinstance(pil_img, Image.Image):
-            with pending_lock:
-                pending.append((name, pil_img))
-
-    threads = []
+    to_fetch = []
     for name, type_name in terms.items():
         if not utils.is_unique(type_name):
             continue
@@ -78,26 +175,11 @@ def preload_all_icons(parent=None, size=(24, 24), placeholder=None):
 
         url = tiers.get(name, {}).get("img")
         if url:
-            t = threading.Thread(target=_download_icon, args=(display_name, url), daemon=True)
-            t.start()
-            threads.append(t)
+            to_fetch.append((display_name, url))
 
-    for t in threads:
-        t.join()
-
-    if parent is not None and pending:
-        done = threading.Event()
-
-        def _create_tk_images():
-            for name, pil_img in pending:
-                if name not in _img_refs:
-                    tk_img = ImageTk.PhotoImage(pil_img, master=parent)
-                    tk_img._pil_image = pil_img
-                    _img_refs[name] = tk_img
-            done.set()
-
-        parent.after(0, _create_tk_images)
-        done.wait()
+    # Downloads + decoding only; PIL results are cached per size and Tk
+    # images are created lazily on the main thread by the caller.
+    get_icons_parallel(to_fetch, size=size)
 
 
 def get_local_image(relative_path, mode="RGB"):

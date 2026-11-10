@@ -62,11 +62,53 @@ def _get_poe_bbox_linux(title):
         return None
 
 
-def center_on_active_monitor(window):
-    window.update_idletasks()
+def prepare_popup(window):
+    """
+    Call right after creating a Toplevel. Keeps the window invisible while
+    its widgets are built; it is revealed once positioned by
+    center_window_on_parent / center_on_active_monitor (or reveal_popup).
+    Avoids the window flashing at the default position and then jumping.
+    """
+    try:
+        window.attributes("-alpha", 0.0)
+    except Exception:
+        pass
+
+
+def reveal_popup(window):
+    try:
+        if not window.winfo_exists():
+            return
+        window.update_idletasks()
+        window.attributes("-alpha", 1.0)
+    except Exception:
+        pass
+
+
+def _settle_window_size(window):
+    """
+    Tk only reports a Toplevel's real size once it has been mapped by the
+    window manager; update_idletasks() alone still returns the 200x200
+    default. A full update() maps the (still transparent) window so the
+    measurements used for centering are correct.
+    """
+    try:
+        window.update()
+    except Exception:
+        window.update_idletasks()
 
     width = window.winfo_width()
     height = window.winfo_height()
+
+    if width <= 1 or height <= 1:
+        width = window.winfo_reqwidth()
+        height = window.winfo_reqheight()
+
+    return width, height
+
+
+def center_on_active_monitor(window):
+    width, height = _settle_window_size(window)
 
     mon_x, mon_y, mon_w, mon_h = _get_active_monitor_bounds(window)
 
@@ -74,6 +116,7 @@ def center_on_active_monitor(window):
     y = mon_y + (mon_h // 2) - (height // 2)
 
     window.geometry(f"+{x}+{y}")
+    reveal_popup(window)
 
 
 def _get_active_monitor_bounds(window):
@@ -109,7 +152,7 @@ def _get_active_monitor_bounds(window):
 
 
 def center_window_on_parent(window, parent):
-    window.update_idletasks()
+    width, height = _settle_window_size(window)
 
     parent = parent.winfo_toplevel()
     parent.update_idletasks()
@@ -117,13 +160,14 @@ def center_window_on_parent(window, parent):
     x = (
             parent.winfo_x()
             + (parent.winfo_width() // 2)
-            - (window.winfo_width() // 2)
+            - (width // 2)
     )
 
     y = (
             parent.winfo_y()
             + (parent.winfo_height() // 2)
-            - (window.winfo_height() // 2)
+            - (height // 2)
     )
 
     window.geometry(f"+{x}+{y}")
+    reveal_popup(window)

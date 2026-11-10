@@ -297,6 +297,7 @@ file_body_armors = "body_armors.txt"
 all_terms_url = "https://sokratis.space/curio_tracker/terms.json"
 experimental_items_url = "https://sokratis.space/curio_tracker/experimental_items.json"
 enchantments_trade_url = "https://sokratis.space/curio_tracker/enchantments_trade.json"
+blueprint_info_url = "https://sokratis.space/curio_tracker/blueprint_info.json"
 
 site_cache_lock_file_name = "fetch/site_cache.lock"
 
@@ -304,6 +305,7 @@ site_config_cache_file_name = "fetch/site_config.json"
 terms_cache_file_name = "fetch/terms.json"
 experimental_items_cache_file_name = "fetch/experimental_items.json"
 enchantments_trade_cache_file_name = "fetch/enchantments_trade.json"
+blueprint_info_cache_file_name = "fetch/blueprint_info.json"
 
 target_application = "Path of Exile"
 not_found_target_txt = "Path of Exile window not found."

@@ -1,7 +1,7 @@
 import customtkinter as ctk
 
 import curio_keybinds
-from win_utils import center_window_on_parent
+from win_utils import center_window_on_parent, prepare_popup
 
 
 class InfoPanelPopup:
@@ -11,6 +11,7 @@ class InfoPanelPopup:
 
     def show(self):
         popup = ctk.CTkToplevel(self.parent)
+        prepare_popup(popup)
         popup.title(self.title)
         popup.geometry("720x520")
         popup.resizable(False, False)

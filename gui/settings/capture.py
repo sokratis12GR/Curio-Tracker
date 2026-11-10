@@ -9,7 +9,7 @@ from fonts import make_font
 from img_utils import get_local_image
 from logger import log_message
 from settings import get_setting, set_setting
-from win_utils import center_window_on_parent, get_poe_bbox
+from win_utils import center_window_on_parent, get_poe_bbox, prepare_popup
 
 
 class OCRRegionEditor:
@@ -39,6 +39,7 @@ class OCRRegionEditor:
         self._capture_preview()
 
         self.window = ctk.CTkToplevel(parent)
+        prepare_popup(self.window)
         self.window.title("Configure OCR Region")
         self.window.resizable(False, False)
 

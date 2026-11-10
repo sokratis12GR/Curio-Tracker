@@ -10,7 +10,7 @@ import config
 from csv_manager import CSVManager
 from csv_to_json import csv_to_nested_json
 from gui.ctksimplebox import CTkMessageBox
-from win_utils import center_window_on_parent
+from win_utils import center_window_on_parent, prepare_popup
 
 
 class DataToolsPopup:
@@ -19,6 +19,7 @@ class DataToolsPopup:
         self.tree_manager = tree_manager
 
         self.popup = CTkToplevel(parent)
+        prepare_popup(self.popup)
         self.popup.title("Data Tools")
         self.popup.geometry("450x390")
         self.popup.resizable(False, False)

@@ -11,7 +11,7 @@ from logger import log_message
 from settings import get_setting, set_setting
 from themes import apply_theme
 from tree_manager import TreeManager
-from win_utils import center_window_on_parent
+from win_utils import center_window_on_parent, prepare_popup
 
 from gui.settings.common import CollapsibleSection, _safe_combo_values, _safe_json_dict_setting, _safe_float_setting
 from gui.settings.general import GeneralSettingsMixin
@@ -32,6 +32,7 @@ class SettingsPopup:
         init_font_var(parent)
 
         self.popup = ctk.CTkToplevel(parent)
+        prepare_popup(self.popup)
         self.popup.title("Application Settings")
         self.popup.geometry("470x540")
         self.popup.resizable(False, False)
