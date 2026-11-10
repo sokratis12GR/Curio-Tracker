@@ -193,9 +193,11 @@ def create_toast(
             item_text = utils.parse_item_name(item)
 
             if tree_manager is not None:
+                # Read at click time: deletes can shift record numbers
+                # while the toast is open.
                 tree_manager.data_mgr.modify_record(
                     root,
-                    record_number,
+                    getattr(item, "record_number", None),
                     item_text,
                     updates={"Picked": check_var.get()},
                 )

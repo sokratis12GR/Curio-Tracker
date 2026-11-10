@@ -28,7 +28,7 @@ from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
 from settings import get_setting, set_setting
-from tracking.ocr_capture import extract_currency_value, get_ocr_bbox, ocr_from_image
+from tracking.ocr_capture import extract_currency_value, get_ocr_bbox, ocr_from_image, prepare_ocr_mask
 from tracking.recent_terms import (
     clear_recent_terms,
     is_duplicate_recent_entry,
@@ -43,6 +43,7 @@ from tracking.term_matching import (
     experimental_items,
     get_matched_terms,
     get_review_fuzzy_matches,
+    review_failed_capture,
     term_types,
 )
 from win_utils import get_poe_bbox
@@ -144,7 +145,6 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
         duplicate = match["duplicate"]
         armor_flag = match["armor_enchant_flag"]
         weapon_flag = match["weapon_enchant_flag"]
-        current_number = data_mgr.get_next_record_number()
 
         item_type = term_types.get(utils.smart_title_case(term_title))
 
@@ -227,7 +227,7 @@ def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None) ->
 
     rows_to_write = []
 
-    next_record_number = data_mgr.get_next_record_number(force=True)
+    next_record_number = data_mgr.get_next_record_number()
 
     for match in matched_terms:
         term_title = match["term"]
@@ -391,9 +391,7 @@ def insert_item(root, term_title, item_type=None, data_manager=None):
     # ---------------------------------------------------------
     # Get next record #
     # ---------------------------------------------------------
-    record_number = mgr.get_next_record_number(
-        force=True
-    )
+    record_number = mgr.get_next_record_number()
 
     # ---------------------------------------------------------
     # Dataset metadata
@@ -631,6 +629,21 @@ def load_recent_parsed_items(_data_mgr: BaseDataManager, within_seconds=120, max
 # OCR reads the texts and checks for matches.       #
 # If a match is found, it will save it in the .csv  #
 #####################################################
+def save_raw_capture(screenshot_np):
+    import cv2
+
+    try:
+        os.makedirs(c.RAW_CAPTURES_DIR, exist_ok=True)
+        name = datetime.now().strftime("capture_%Y-%m-%d_%H-%M-%S_%f")[:-3] + ".png"
+        path = os.path.join(c.RAW_CAPTURES_DIR, name)
+
+        code = cv2.COLOR_RGBA2BGR if screenshot_np.shape[-1] == 4 else cv2.COLOR_RGB2BGR
+        cv2.imwrite(path, cv2.cvtColor(screenshot_np, code))
+        log_message(f"[RAW CAPTURE] Saved {path}")
+    except Exception as e:
+        log_message(f"[RAW CAPTURE] Failed to save capture: {e}")
+
+
 def capture_once(root):
     validate_attempt(c.capturing_prompt)
 
@@ -653,9 +666,15 @@ def capture_once(root):
 
     grab_end = time.perf_counter()
 
+    if c.SAVE_RAW_CAPTURES:
+        save_raw_capture(screenshot_np)
+
     ocr_start = time.perf_counter()
 
-    full_text, filtered = ocr_from_image(screenshot_np)
+    # Build the HDR/color-filter mask once; the review pass reuses it.
+    _, ocr_mask = prepare_ocr_mask(screenshot_np)
+
+    full_text, filtered = ocr_from_image(screenshot_np, prepared_mask=ocr_mask)
 
     ocr_end = time.perf_counter()
 
@@ -668,7 +687,7 @@ def capture_once(root):
     review_start = time.perf_counter()
 
     if not matched_terms:
-        full_text, matched_terms = review_failed_capture(screenshot_np, scale=2, allow_dupes=False)
+        full_text, matched_terms = review_failed_capture(screenshot_np, scale=2, allow_dupes=False, prepared_mask=ocr_mask)
 
     review_end = time.perf_counter()
 

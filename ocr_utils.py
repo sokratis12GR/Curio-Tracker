@@ -154,7 +154,61 @@ def normalize_review_ocr_text(text):
 #        list: Dictionaries containing the matched term, OCR candidate,      #
 #              and similarity ratio.                                        #
 #############################################################################
-def find_review_fuzzy_terms(text, precomp_terms, threshold=0.84):
+def _words_resemble(term_words, candidate_words, min_ratio):
+    #############################################################
+    # Every meaningful term word must resemble some OCR word.   #
+    # Rejects "Infernal Axe" vs "Infernal Blade", where one     #
+    # shared word carries the whole-phrase ratio over the bar.  #
+    #############################################################
+    if len(term_words) < 2:
+        return True
+
+    for term_word in term_words:
+        if len(term_word) < 3:
+            continue
+
+        best = max(
+            SequenceMatcher(None, term_word, cand_word).ratio()
+            for cand_word in candidate_words
+        )
+
+        if best < min_ratio:
+            return False
+
+    return True
+
+
+def find_review_fuzzy_terms(
+        text,
+        precomp_terms,
+        threshold=None,
+        near_miss_floor=None,
+        word_min_ratio=None,
+        ambiguity_margin=None,
+        rejected=None
+):
+    #############################################################
+    # rejected: optional list; receives near-miss candidates    #
+    # as dicts with term/candidate/similarity/reason.           #
+    #############################################################
+    if threshold is None:
+        threshold = c.FUZZY_THRESHOLD
+    if near_miss_floor is None:
+        near_miss_floor = c.FUZZY_NEAR_MISS_FLOOR
+    if word_min_ratio is None:
+        word_min_ratio = c.FUZZY_WORD_MIN_RATIO
+    if ambiguity_margin is None:
+        ambiguity_margin = c.FUZZY_AMBIGUITY_MARGIN
+
+    def reject(term, candidate, similarity, reason):
+        if rejected is not None:
+            rejected.append({
+                "term": term,
+                "candidate": candidate,
+                "similarity": similarity,
+                "reason": reason,
+            })
+
     normalized_lines = []
 
     for raw_line in text.splitlines():
@@ -179,9 +233,16 @@ def find_review_fuzzy_terms(text, precomp_terms, threshold=0.84):
 
         best_ratio = 0
         best_line = None
+        best_valid_ratio = 0
+        best_valid_line = None
 
         term_words = normalized_term.split()
         term_word_count = len(term_words)
+
+        # One matcher per term (seq1 fixed); candidates swap in as seq2.
+        matcher = SequenceMatcher(None, normalized_term, "")
+        # Ratios below this can never be reported or accepted.
+        prune_floor = min(near_miss_floor, threshold)
 
         for line in normalized_lines:
             line_words = line.split()
@@ -206,28 +267,72 @@ def find_review_fuzzy_terms(text, precomp_terms, threshold=0.84):
 
             for window_size in range(min_window, max_window + 1):
                 for start in range(len(line_words) - window_size + 1):
-                    candidate = " ".join(
-                        line_words[start:start + window_size]
-                    )
+                    window_words = line_words[start:start + window_size]
+                    candidate = " ".join(window_words)
 
-                    ratio = SequenceMatcher(
-                        None,
-                        normalized_term,
-                        candidate
-                    ).ratio()
+                    matcher.set_seq2(candidate)
+
+                    #############################################################
+                    # Cheap upper bounds: skip the full ratio() when this       #
+                    # candidate can't reach the floor or beat both bests.       #
+                    # Output is identical to computing ratio() every time.      #
+                    #############################################################
+                    upper = matcher.real_quick_ratio()
+                    if upper < prune_floor or (upper <= best_ratio and upper <= best_valid_ratio):
+                        continue
+                    upper = matcher.quick_ratio()
+                    if upper < prune_floor or (upper <= best_ratio and upper <= best_valid_ratio):
+                        continue
+
+                    ratio = matcher.ratio()
 
                     if ratio > best_ratio:
                         best_ratio = ratio
                         best_line = candidate
 
-        if best_ratio < threshold:
+                    if (
+                            ratio > best_valid_ratio
+                            and ratio >= threshold
+                            and _words_resemble(term_words, window_words, word_min_ratio)
+                    ):
+                        best_valid_ratio = ratio
+                        best_valid_line = candidate
+
+        if best_valid_line is None:
+            if best_ratio >= near_miss_floor:
+                reason = "word_mismatch" if best_ratio >= threshold else "below_threshold"
+                reject(original_term, best_line, best_ratio, reason)
             continue
 
         fuzzy_matches.append({
             "term": original_term,
-            "candidate": best_line,
-            "similarity": best_ratio,
+            "candidate": best_valid_line,
+            "similarity": best_valid_ratio,
         })
+
+    ############################################################
+    # Drop ambiguous matches: two different terms scoring       #
+    # nearly the same against the same OCR text.                #
+    ############################################################
+    by_candidate = {}
+    for match in fuzzy_matches:
+        by_candidate.setdefault(match["candidate"], []).append(match)
+
+    unambiguous = []
+    for group in by_candidate.values():
+        group.sort(key=lambda item: item["similarity"], reverse=True)
+
+        if (
+                len(group) > 1
+                and group[0]["similarity"] - group[1]["similarity"] < ambiguity_margin
+        ):
+            for match in group:
+                reject(match["term"], match["candidate"], match["similarity"], "ambiguous")
+            continue
+
+        unambiguous.extend(group)
+
+    fuzzy_matches = unambiguous
 
     ############################################################
     # Prefer longer matches when one term contains another.    #

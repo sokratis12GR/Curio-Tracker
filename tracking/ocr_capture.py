@@ -123,10 +123,8 @@ def hdr_remove_shine(image_np):
 def filter_item_text(image_np, fullscreen=False):
     t0 = time.perf_counter()
 
-    img_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-    t1 = time.perf_counter()
-
-    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    # Convert RGB straight to HSV (no intermediate BGR step).
+    hsv = cv2.cvtColor(image_np, cv2.COLOR_RGB2HSV)
     t2 = time.perf_counter()
 
     combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
@@ -139,16 +137,11 @@ def filter_item_text(image_np, fullscreen=False):
 
     mask_end = time.perf_counter()
 
-    kernel = np.ones((1, 1), np.uint8)
-    combined_mask = cv2.morphologyEx(
-        combined_mask,
-        cv2.MORPH_CLOSE,
-        kernel
-    )
-
+    # No morphological close: a 1x1 kernel would be a no-op.
     t3 = time.perf_counter()
 
     if c.OCR_DEBUGGING:
+        img_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
         contours, _ = cv2.findContours(
             combined_mask,
             cv2.RETR_EXTERNAL,
@@ -174,10 +167,8 @@ def filter_item_text(image_np, fullscreen=False):
     if c.DEBUGGING:
         log_message(
             f"[FILTER PERF] "
-            f"rgb_to_bgr={(t1 - t0) * 1000:.1f}ms | "
-            f"bgr_to_hsv={(t2 - t1) * 1000:.1f}ms | "
+            f"rgb_to_hsv={(t2 - t0) * 1000:.1f}ms | "
             f"color_masks={(mask_end - mask_start) * 1000:.1f}ms | "
-            f"morph={(t3 - mask_end) * 1000:.1f}ms | "
             f"ocr_debug={(t4 - t3) * 1000:.1f}ms | "
             f"gray_to_rgb={(t5 - t4) * 1000:.1f}ms | "
             f"total={(t5 - t0) * 1000:.1f}ms"
@@ -199,30 +190,43 @@ def filter_item_text(image_np, fullscreen=False):
 #    Returns:                                                               #
 #        str: The OCR'd text in smart title case.                           #
 #############################################################################
-def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
-    t0 = time.perf_counter()
-
-    if apply_filter:
-        if c.IS_HDR_ENABLED:
-            image_np = hdr_remove_shine(image_np)
-
-            if c.OCR_DEBUGGING:
-                cv2.imwrite(
-                    "hdr_fixed.png",
-                    cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-                )
-
-        t1 = time.perf_counter()
-
-        image_np_filtered = filter_item_text(image_np)
-
-        t2 = time.perf_counter()
+#############################################################
+# HDR shine removal (if enabled) + color filtering.         #
+# Returns (processed_image, filtered_mask) so the mask can  #
+# be reused by the failed-capture review pass.              #
+#############################################################
+def prepare_ocr_mask(image_np):
+    if c.IS_HDR_ENABLED:
+        image_np = hdr_remove_shine(image_np)
 
         if c.OCR_DEBUGGING:
             cv2.imwrite(
-                "filtered.png",
-                cv2.cvtColor(image_np_filtered, cv2.COLOR_RGB2BGR)
+                "hdr_fixed.png",
+                cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
             )
+
+    image_np_filtered = filter_item_text(image_np)
+
+    if c.OCR_DEBUGGING:
+        cv2.imwrite(
+            "filtered.png",
+            cv2.cvtColor(image_np_filtered, cv2.COLOR_RGB2BGR)
+        )
+
+    return image_np, image_np_filtered
+
+
+def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True, prepared_mask=None):
+    t0 = time.perf_counter()
+
+    if apply_filter and prepared_mask is not None:
+        image_np_filtered = prepared_mask
+        t1 = t0
+        t2 = time.perf_counter()
+    elif apply_filter:
+        image_np, image_np_filtered = prepare_ocr_mask(image_np)
+        t1 = t0
+        t2 = time.perf_counter()
     else:
         image_np_filtered = image_np
         t1 = t0
@@ -235,6 +239,8 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
                 int(image_np_filtered.shape[1]) * scale,
                 int(image_np_filtered.shape[0]) * scale
             ),
+            # LANCZOS4 gives smoother glyph edges than INTER_NEAREST, which
+            # noticeably improves Tesseract accuracy on the upscaled mask.
             interpolation=cv2.INTER_LANCZOS4
         )
 
@@ -262,9 +268,20 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
             f"scale={scale}"
         )
 
+    tess_config = f"--psm {psm}"
+    tess_input = image_np_filtered
+
+    #############################################################
+    # Experimental: hand Tesseract black-on-white text and skip #
+    # its own inversion check. See OCR_INVERT_FOR_TESSERACT.    #
+    #############################################################
+    if apply_filter and c.OCR_INVERT_FOR_TESSERACT:
+        tess_input = cv2.bitwise_not(image_np_filtered)
+        tess_config += " -c tessedit_do_invert=0"
+
     text = pytesseract.image_to_string(
-        image_np_filtered,
-        config=f"--psm {psm}",
+        tess_input,
+        config=tess_config,
         lang=lang
     )
 
@@ -287,8 +304,8 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True):
     if c.DEBUGGING:
         log_message(
             f"[OCR PERF] "
-            f"HDR={(t1 - t0) * 1000:.1f}ms | "
-            f"filter={(t2 - t1) * 1000:.1f}ms | "
+            f"hdr+filter={(t2 - t0) * 1000:.1f}ms"
+            f"{' (reused)' if prepared_mask is not None else ''} | "
             f"resize={(t3 - t2) * 1000:.1f}ms | "
             f"tesseract={(t4 - t3) * 1000:.1f}ms | "
             f"title_case={(t5 - t4) * 1000:.1f}ms | "

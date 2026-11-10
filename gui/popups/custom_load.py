@@ -3,7 +3,7 @@ import time
 from customtkinter import CTkInputDialog
 
 from gui.ctksimplebox import CTkMessageBox
-from tree_manager import TreeManager
+from tree_manager import TreeManager, format_load_estimate
 from win_utils import center_window_on_parent
 
 
@@ -46,21 +46,11 @@ class CustomLoader:
             self.msgbox.showerror("Invalid Input", "Please enter a valid number.")
             return
 
-        estimated_seconds = max_items * 0.01
-
-        if estimated_seconds < 60:
-            estimate_text = f"{estimated_seconds:.0f} seconds"
-        elif estimated_seconds < 3600:
-            estimate_text = f"{estimated_seconds / 60:.1f} minutes"
-        else:
-            estimate_text = f"{estimated_seconds / 3600:.1f} hours"
-
         confirm = self.msgbox.askyesno(
             "Load Entries",
             f"Load approximately:\n\n"
             f"• Entries: {max_items:,}\n"
-            f"• Batch Size: 200\n"
-            f"• Estimated Time: {estimate_text}\n\n"
+            f"• Estimated Time: {format_load_estimate(max_items)}\n\n"
             "Large loads may temporarily reduce responsiveness.\n\n"
             "Continue?"
         )
@@ -68,43 +58,23 @@ class CustomLoader:
         if not confirm:
             return
 
-        # Clear existing tree
         self.load_start_time = time.perf_counter()
-        self.tree_manager.clear_tree()
+        tm = self.tree_manager
 
-        all_items = self.tracker.load_all_parsed_items(self.tree_manager.data_mgr)
-        if not all_items:
-            elapsed = time.perf_counter() - self.load_start_time
+        def prepare():
+            # Newest first, keep max_items, then back to file order
+            all_items = self.tracker.load_all_parsed_items(tm.data_mgr)
+            newest_first = tm._dedupe_by_record(all_items[::-1][:max_items])
+            return newest_first[::-1]
 
-            self.msgbox.showinfo(
-                "Load Entries",
-                f"No items available to load.\n\n"
-                f"Completed in {elapsed:.1f} seconds."
-            )
-            return
-
-        # Reverse so newest first
-        all_items = all_items[::-1]
-        items_to_add = all_items[:max_items]
-
-        # Insert in batches
-        self._add_batch(items_to_add)
-
-    def _add_batch(self, items, start_index=0, batch_size=200):
-        end_index = min(start_index + batch_size, len(items))
-        for i in range(start_index, end_index):
-            self.tree_manager.add_item_to_tree(items[i])
-
-        if end_index < len(items):
-            self.root.after(15, self._add_batch, items, end_index, batch_size)
-        else:
-            self.tree_manager.reapply_row_formatting()
-            self.tree_manager.filter_tree_by_time()
+        def on_done(count):
+            tm.filter_tree_by_time()
             self.controls.update_total_items_count()
             elapsed = time.perf_counter() - self.load_start_time
+            if count:
+                text = f"Loaded {count:,} entries successfully.\n\n"
+            else:
+                text = "No items available to load.\n\n"
+            self.msgbox.showinfo("Load Entries", text + f"Completed in {elapsed:.1f} seconds.")
 
-            self.msgbox.showinfo(
-                "Load Entries",
-                f"Loaded {len(items):,} entries successfully.\n\n"
-                f"Completed in {elapsed:.1f} seconds."
-            )
+        tm.load_in_background(prepare, on_done)

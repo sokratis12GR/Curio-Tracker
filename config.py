@@ -232,6 +232,21 @@ ARMOR_ENCHANT_TYPE = "Armor Enchants"
 SCARAB_TYPE = "Scarab"
 CURRENCY_TYPE = "Currency"
 
+# Fuzzy matching (failed-capture review fallback only)
+FUZZY_THRESHOLD = 0.84          # Minimum whole-phrase similarity to accept a match
+FUZZY_NEAR_MISS_FLOOR = 0.75    # Rejected candidates at/above this are logged
+FUZZY_WORD_MIN_RATIO = 0.6      # Every term word must resemble an OCR word this much
+FUZZY_AMBIGUITY_MARGIN = 0.03   # Drop matches when two terms tie on the same OCR text
+
+# Experimental: feed Tesseract black-on-white text and disable its inversion
+# check. Can be faster, but may change OCR output; compare [OCR PERF] logs.
+OCR_INVERT_FOR_TESSERACT = True
+
+# Test harness: save every hotkey capture (raw, pre-filter) as a PNG so it can
+# be replayed offline with `python tests/replay_captures.py`.
+SAVE_RAW_CAPTURES = False
+RAW_CAPTURES_DIR = os.path.join("tests", "captures")
+
 # Keys / Strings / Locations / Texts
 
 ## Logging

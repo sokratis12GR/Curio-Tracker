@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from config import data_file_base, csv_record_header, csv_time_header
-from data_manager import BaseDataManager
+from data_manager import BaseDataManager, max_record_number, shift_records_after_delete
 from json_utils import rows_to_nested_json, nested_json_to_rows, find_or_create_blueprint
 from logger import log_message
 
@@ -60,21 +60,22 @@ class JSONManager(BaseDataManager):
         except Exception as e:
             log_message(f"[ERROR] JSON save failed: {e}")
 
+    def _set_last_record_number(self, value):
+        from settings import set_setting
+
+        self.last_record_number = value
+        set_setting("Application", "json_current_row", value)
+
+    #############################################################
+    # Record numbers are kept continuous (1..N), so the next    #
+    # number is highest + 1. This only peeks; callers that      #
+    # write a record update last_record_number afterwards.      #
+    #############################################################
     def get_next_record_number(self, force=False):
-        from settings import set_setting, get_setting
+        if force or self.last_record_number == 0:
+            self.recalculate_record_number()
 
-        if self.last_record_number == 0:
-            self.last_record_number = get_setting("Application", "json_current_row", 0)
-            if (self.last_record_number == 0 or force) and self.file_path.exists():
-                rows = self.load_dict()
-                if rows:
-                    last = rows[-1].get(csv_record_header)
-                    if last and str(last).isdigit():
-                        self.last_record_number = int(last)
-
-        self.last_record_number += 1
-        set_setting("Application", "json_current_row", self.last_record_number)
-        return self.last_record_number
+        return self.last_record_number + 1
 
     def modify_record(self, root, record_number, item_name, updates=None, delete=False):
         rows = self.load_dict()
@@ -88,6 +89,7 @@ class JSONManager(BaseDataManager):
 
                 if delete:
                     rows.remove(row)
+                    shift_records_after_delete(rows, record_number)
                     updated = True
                     break
 
@@ -112,6 +114,9 @@ class JSONManager(BaseDataManager):
                         "8": "Currency"
                     }, "Players": []}, f, indent=2)
 
+            if delete:
+                self._set_last_record_number(max_record_number(rows))
+
     def append_rows(self, rows: list[dict], root=None):
         if not rows:
             return
@@ -124,7 +129,9 @@ class JSONManager(BaseDataManager):
         for row in rows:
             # Assign record number if missing
             if not row.get(csv_record_header):
-                row[csv_record_header] = str(self.get_next_record_number())
+                next_number = self.get_next_record_number()
+                row[csv_record_header] = str(next_number)
+                self.last_record_number = next_number
             player_name = row["Logged By"].split("#")[0]
             league_name = row["League"]
             blueprint_name = row.get("Blueprint Type", "")
@@ -166,21 +173,12 @@ class JSONManager(BaseDataManager):
         with self.file_path.open("w", encoding="utf-8") as f:
             json.dump(nested_json, f, ensure_ascii=False, indent=2)
 
-        self.last_record_number = max(int(r[csv_record_header]) for r in rows)
-        from settings import set_setting
-        set_setting("Application", "json_current_row", self.last_record_number)
+        self._set_last_record_number(
+            max(self.last_record_number, max_record_number(rows))
+        )
 
     def recalculate_record_number(self):
-        from settings import set_setting
-
-        rows = self.load_dict()
-        if rows:
-            last_row = rows[-1]
-            self.last_record_number = int(last_row.get(csv_record_header, 0))
-        else:
-            self.last_record_number = 0
-
-        set_setting("Application", "json_current_row", self.last_record_number)
+        self._set_last_record_number(max_record_number(self.load_dict()))
         return self.last_record_number
 
     def upgrade_structure(self):
@@ -214,17 +212,17 @@ class JSONManager(BaseDataManager):
             self.save_dict(None, rows, fieldnames=list(rows[0].keys()))
             log_message("[INFO] JSON structure upgraded")
 
+        # Rows are now numbered 1..N.
+        self._set_last_record_number(len(rows))
+
     def duplicate_latest(self, root=None):
         rows = self.load_dict()
         if not rows:
             log_message("[ERROR] JSON file has no entries to duplicate.")
             return None
 
-        # Recalculate last_record_number based on current rows in file
-        self.recalculate_record_number()
-
         last_row = rows[-1].copy()
-        record_number = self.get_next_record_number()
+        record_number = max_record_number(rows) + 1
         last_row[csv_record_header] = str(record_number)
 
         if csv_time_header in last_row:
@@ -236,8 +234,7 @@ class JSONManager(BaseDataManager):
 
         log_message(f"[INFO] Duplicated latest entry → Record {record_number}")
 
-        from settings import set_setting
-        set_setting("Application", "json_current_row", self.last_record_number)
+        self._set_last_record_number(record_number)
 
         return last_row
 

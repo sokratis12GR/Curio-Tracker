@@ -15,19 +15,31 @@ are_toasts_enabled = get_setting('Application', 'are_toasts_enabled', True)  # d
 
 
 def handle_capture(root, tree_manager: TreeManager, controls):
-    tracker.capture_once(root)
+    try:
+        tracker.capture_once(root)
+    except Exception:
+        # Log the full traceback; otherwise the hotkey thread swallows it.
+        # Return early so items from the previous capture aren't re-added.
+        import traceback
+        log_message(f"[ERROR] Capture failed:\n{traceback.format_exc()}")
+        return
 
     if c.DEBUGGING:
         print(f"[DEBUG] Parsed items after capture: {len(tracker.parsed_items)}")
 
-    for item in tracker.parsed_items:
-        if not item.duplicate:
-            if are_toasts_enabled:
-                toasts.show(root, item, tree_manager=tree_manager, tracker=tracker)
-            tree_manager.add_item_to_tree(item)
+    # Snapshot now: the next capture rebinds tracker.parsed_items.
+    new_items = [item for item in tracker.parsed_items if not item.duplicate]
 
-    # Controls now manage the total count label
-    root.after(0, controls.update_total_items_count)
+    def show_results():
+        if are_toasts_enabled:
+            for item in new_items:
+                toasts.show(root, item, tree_manager=tree_manager, tracker=tracker)
+        for item in new_items:
+            tree_manager.add_item_to_tree(item)
+        # Controls manage the total count label
+        controls.update_total_items_count()
+
+    root.after(0, show_results)
 
 
 def handle_snippet(root, tree_manager: TreeManager, controls):

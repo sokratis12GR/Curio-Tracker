@@ -197,16 +197,34 @@ def get_matched_terms(text, allow_dupes=False) -> List[Dict]:
 #        list: Matched term dictionaries using the same format as the normal #
 #              get_matched_terms() function.                                #
 #############################################################################
-def get_review_fuzzy_matches(text, allow_dupes=False, threshold=0.84) -> List[Dict]:
+def get_review_fuzzy_matches(text, allow_dupes=False, threshold=None) -> List[Dict]:
     global non_dup_count
 
+    if threshold is None:
+        threshold = c.FUZZY_THRESHOLD
+
     matched = []
+    rejected = []
 
     fuzzy_matches = utils.find_review_fuzzy_terms(
         text,
         PRECOMP_TERMS,
-        threshold=threshold
+        threshold=threshold,
+        rejected=rejected
     )
+
+    #############################################################
+    # Always logged (not gated on DEBUGGING) so misfires can be #
+    # diagnosed from a user's normal log file.                  #
+    #############################################################
+    for near_miss in sorted(rejected, key=lambda m: m["similarity"], reverse=True):
+        log_message(
+            f"[OCR FUZZY] "
+            f"Rejected '{near_miss['term']}' "
+            f"against '{near_miss['candidate']}' | "
+            f"similarity={near_miss['similarity']:.3f} | "
+            f"reason={near_miss['reason']}"
+        )
 
     for fuzzy_match in fuzzy_matches:
         original_term = fuzzy_match["term"]
@@ -234,13 +252,13 @@ def get_review_fuzzy_matches(text, allow_dupes=False, threshold=0.84) -> List[Di
                 "weapon_enchant_flag": False,
             })
 
-        if c.DEBUGGING:
-            log_message(
-                f"[OCR FUZZY] "
-                f"Matched '{original_term}' "
-                f"against '{best_line}' | "
-                f"similarity={best_ratio:.3f}"
-            )
+        log_message(
+            f"[OCR FUZZY] "
+            f"Matched '{original_term}' "
+            f"against '{best_line}' | "
+            f"similarity={best_ratio:.3f} | "
+            f"threshold={threshold:.2f}"
+        )
 
     return matched
 
@@ -259,7 +277,7 @@ def get_review_fuzzy_matches(text, allow_dupes=False, threshold=0.84) -> List[Di
 #    Returns:                                                               #
 #        tuple: OCR text and any matched terms found during the review.      #
 #############################################################################
-def review_failed_capture(image_np, scale=2, allow_dupes=False):
+def review_failed_capture(image_np, scale=2, allow_dupes=False, prepared_mask=None):
     review_start = time.perf_counter()
 
     if c.DEBUGGING:
@@ -271,7 +289,8 @@ def review_failed_capture(image_np, scale=2, allow_dupes=False):
 
     full_text, filtered = ocr_from_image(
         image_np,
-        scale=scale
+        scale=scale,
+        prepared_mask=prepared_mask
     )
 
     ocr_end = time.perf_counter()
@@ -298,8 +317,7 @@ def review_failed_capture(image_np, scale=2, allow_dupes=False):
     if not matched_terms:
         matched_terms = get_review_fuzzy_matches(
             corrected_text,
-            allow_dupes=allow_dupes,
-            threshold=0.84
+            allow_dupes=allow_dupes
         )
 
     fuzzy_match_end = time.perf_counter()

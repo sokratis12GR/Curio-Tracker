@@ -1,16 +1,71 @@
 import re
 from datetime import datetime, timedelta
+from tkinter import TclError
 
 import currency_utils
 from gui.popups.custom_hours import CustomHoursPopup
 from settings import get_setting
 
 
+PICKED_CELL_VALUES = ("☑", "True", "true", "YES", "yes")
+
+
 def _get_row_tag(index):
     return "odd" if index % 2 == 0 else "even"
 
 
+def row_chaos_value(item):
+    # Chaos value of a row including its stack size; 0.0 if unpriced.
+    chaos_value = currency_utils.convert_to_float(getattr(item, "chaos_value", 0))
+    if not chaos_value:
+        return 0.0
+    stack_size, _ = currency_utils.get_stack_size(item)
+    return chaos_value * stack_size
+
+
 class TreeFilteringMixin:
+    #############################################################
+    # Per-row caches (value, search text, stripe tag) avoid one #
+    # Tk call per row on every total, filter and sort. Rows are #
+    # invalidated by TreeManager's hook on tree.set/delete, so  #
+    # any cell edit is picked up on the next read.              #
+    #############################################################
+    def _row_totals_entry(self, iid):
+        entry = self._row_totals.get(iid)
+        if entry is not None:
+            return entry
+
+        item = self.csv_row_map.get(iid)
+        if not item:
+            return None
+        chaos_value = row_chaos_value(item)
+        picked = False
+        if chaos_value:
+            try:
+                picked = str(self.tree.set(iid, "picked")).strip() in PICKED_CELL_VALUES
+            except TclError:
+                return None  # row no longer exists in the tree
+        entry = (chaos_value, picked)
+        self._row_totals[iid] = entry
+        return entry
+
+    def _set_row_tag(self, iid, tag):
+        if self._row_tags.get(iid) != tag:
+            self.tree.item(iid, tags=(tag,))
+            self._row_tags[iid] = tag
+
+    def _restripe(self, ordered_iids):
+        # Direct Tk call: same as tree.item(iid, tags=(tag,)) without
+        # ttk's per-call option formatting, which dominates on big lists.
+        call = self.tree.tk.call
+        widget = self.tree._w
+        row_tags = self._row_tags
+        for index, iid in enumerate(ordered_iids):
+            tag = "odd" if index % 2 == 0 else "even"
+            if row_tags.get(iid) != tag:
+                call(widget, "item", iid, "-tags", tag)
+                row_tags[iid] = tag
+
     def calculate_totals(self):
         total_chaos = 0.0
         total_divine = 0.0
@@ -22,24 +77,19 @@ class TreeFilteringMixin:
         )
 
         for iid in self.all_item_iids:
-            if not self.tree.exists(iid):
+            entry = self._row_totals_entry(iid)
+            if entry is None:
                 continue
-
-            item = self.csv_row_map.get(iid)
-            if not item:
+            chaos_value, picked = entry
+            if not chaos_value:
                 continue
-
-            chaos_value = currency_utils.convert_to_float(getattr(item, "chaos_value", 0))
-            stack_size, _ = currency_utils.get_stack_size(item)
-            chaos_value *= stack_size
 
             divine_value = chaos_value / league_divine_equiv if league_divine_equiv > 0 else 0
 
             total_chaos += chaos_value
             total_divine += divine_value
 
-            picked_value = self.tree.set(iid, "picked")
-            if str(picked_value).strip() in ("☑", "True", "true", "YES", "yes"):
+            if picked:
                 picked_chaos += chaos_value
                 picked_divine += divine_value
 
@@ -74,6 +124,22 @@ class TreeFilteringMixin:
         children = self.tree.get_children()
         reverse = self.sort_reverse.get(column, False)
 
+        missing = float('inf') if not reverse else float('-inf')
+
+        # record/time come from data already in memory (kept in sync with
+        # the cells), avoiding one Tk read per row. Same keys as below.
+        def record_key(iid):
+            text = str(getattr(self.csv_row_map.get(iid), "record_number", "") or "").strip()
+            return int(text) if text.isdigit() else missing
+
+        def time_key(iid):
+            # (group, datetime): inf can't be compared with datetimes, so
+            # the group puts rows without a time last in either direction.
+            dt = self.item_time_map.get(iid)
+            if dt is None:
+                return (0 if reverse else 1, datetime.min)
+            return (1 if reverse else 0, dt)
+
         def sort_key(iid):
             val = self.tree.set(iid, column)
             if val in ("", None):
@@ -107,13 +173,12 @@ class TreeFilteringMixin:
                 return str(val).lower()
 
         # Sort all iids by the key
-        sorted_iids = sorted(children, key=sort_key, reverse=reverse)
+        key = {"record": record_key, "time": time_key}.get(column, sort_key)
+        sorted_iids = sorted(children, key=key, reverse=reverse)
 
-        # Reinsert in sorted order
-        for index, iid in enumerate(sorted_iids):
-            self.tree.move(iid, "", index)
-            tag = _get_row_tag(index)
-            self.tree.item(iid, tags=(tag,))
+        # Reinsert in sorted order (one Tk call instead of one per row)
+        self.tree.set_children("", *sorted_iids)
+        self._restripe(sorted_iids)
 
         # Toggle sort direction for next click
         self.sort_reverse[column] = not reverse
@@ -131,14 +196,22 @@ class TreeFilteringMixin:
         # Collect iids that should be visible
         visible_iids = []
 
+        # all_item_iids only holds existing top-level rows (deletes go
+        # through TreeManager's hook), so no per-row exists/parent checks.
         for iid in self.all_item_iids:
-            if not self.tree.exists(iid) or self.tree.parent(iid) != "":
-                continue
-
-            # Search match
-            values = self.tree.item(iid, "values")
-            text = " ".join(str(v).lower() for v in values)
-            matches_search = search_query in text if search_query else True
+            # Search match; row text is read from Tk once, then cached
+            # until one of the row's cells changes.
+            matches_search = True
+            if search_query:
+                text = self._search_text.get(iid)
+                if text is None:
+                    try:
+                        values = self.tree.item(iid, "values")
+                    except TclError:
+                        continue
+                    text = " ".join(str(v).lower() for v in values)
+                    self._search_text[iid] = text
+                matches_search = search_query in text
 
             # Time match
             dt = self.item_time_map.get(iid)
@@ -178,15 +251,11 @@ class TreeFilteringMixin:
         # Sort visible rows by timestamp descending
         visible_iids.sort(key=lambda x: x[0], reverse=True)
 
-        # Reattach in correct order
-        for _, iid in visible_iids:
-            self.tree.reattach(iid, "", "end")
-
-        # Detach invisible rows
-        invisible_iids = set(self.all_item_iids) - {iid for _, iid in visible_iids}
-        for iid in invisible_iids:
-            if self.tree.exists(iid):
-                self.tree.detach(iid)
+        # One call reattaches the visible rows in order and detaches
+        # every other row (detached rows still exist).
+        ordered = [iid for _, iid in visible_iids]
+        self.tree.set_children("", *ordered)
+        self._restripe(ordered)
 
     # @pyinstrument.profile()
     def open_custom_hours_popup(self):
