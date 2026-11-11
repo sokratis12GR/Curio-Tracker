@@ -8,14 +8,16 @@ from customtkinter import CTkFrame, CTkLabel, CTkSwitch, CTkButton, CTkImage
 import load_utils
 from config import CHAOS_COLOR, poe_user, CHAOS_ORB_ICON_URL, DIVINE_ORB_ICON_URL
 from fonts import make_font
+from gui.palette import CARD_COLOR, MUTED_TEXT, SEPARATOR_COLOR
 from img_utils import get_icon
 from settings import get_setting, set_setting
 from tree_manager import TreeManager
 
-VALUE_ICON_SIZE = (16, 16)
+VALUE_ICON_SIZE = (18, 18)
+EMPTY_VALUE = "—"
 
 
-def _add_kofi_button(frame):
+def _add_kofi_button(frame, column):
     def open_kofi():
         webbrowser.open_new("https://ko-fi.com/sofodev")
 
@@ -34,10 +36,12 @@ def _add_kofi_button(frame):
             cursor="hand2",
             width=120,
             height=30,
-        ).grid(row=0, column=5, padx=(0, 0), sticky="e")
+        ).grid(row=0, column=column, padx=(10, 4), sticky="e")
     except Exception as e:
         print(f"Could not load Ko-fi image: {e}")
-        CTkButton(frame, text="Support me on Ko-fi", command=open_kofi, width=120).grid(row=0, column=5, padx=(0, 0), sticky="e")
+        CTkButton(frame, text="Support me on Ko-fi", command=open_kofi, width=120).grid(
+            row=0, column=column, padx=(10, 4), sticky="e"
+        )
 
 
 class TotalFrame:
@@ -87,58 +91,65 @@ class TotalFrame:
         self.total_value_label.configure(image=icon)
         self.total_picked_label.configure(image=icon)
 
+    def _make_stat_card(self, column, caption):
+        card = CTkFrame(self.frame, fg_color=CARD_COLOR, corner_radius=8)
+        card.grid(row=0, column=column, padx=5, sticky="ns")
+
+        CTkLabel(
+            card,
+            text=caption.upper(),
+            font=make_font(9, "bold"),
+            text_color=MUTED_TEXT,
+            height=14,
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=(6, 0))
+
+        value = CTkLabel(
+            card,
+            text=EMPTY_VALUE,
+            font=make_font(14, "bold"),
+            text_color=CHAOS_COLOR,
+            compound="left",
+            anchor="w",
+            padx=4,
+            height=24,
+        )
+        value.grid(row=1, column=0, sticky="w", padx=8, pady=(0, 6))
+        return value
+
     def _create_widgets(self):
-        # Player name
+        # Player name + Chaos/Divine switch stacked on the left
+        player_box = CTkFrame(self.frame, fg_color="transparent")
+        player_box.grid(row=0, column=0, padx=(4, 10), sticky="w")
+
         self.player_label = CTkLabel(
-            self.frame,
+            player_box,
             textvariable=self.player_name,
             font=make_font(12, "bold"),
+            height=20,
         )
-        self.player_label.grid(row=0, column=0, padx=(10, 10))
+        self.player_label.grid(row=0, column=0, sticky="w")
 
-        # Chaos/Divine Switch
         self.mode_switch = CTkSwitch(
-            self.frame,
+            player_box,
             text="Chaos/Divine",
             variable=self.value_mode,
             onvalue="Divine",
             offvalue="Chaos",
-            font=make_font(10)
+            font=make_font(10),
+            text_color=MUTED_TEXT,
         )
-        self.mode_switch.grid(row=0, column=1, padx=(10, 10))
+        self.mode_switch.grid(row=1, column=0, sticky="w")
 
-        # Total Value label
-        self.total_value_label = CTkLabel(
-            self.frame,
-            text="Total Value: 0 Chaos",
-            font=make_font(12, "bold"),
-            text_color=CHAOS_COLOR,
-            compound="left",
-            padx=4
-        )
-        self.total_value_label.grid(row=0, column=2, padx=(10, 5))
+        # Thin vertical divider (kept as `separator` for compatibility)
+        self.separator = CTkFrame(self.frame, width=2, height=1, fg_color=SEPARATOR_COLOR)
+        self.separator.grid(row=0, column=1, sticky="ns", padx=(0, 5), pady=4)
 
-        # Separator
-        self.separator = CTkLabel(
-            self.frame,
-            text="|",
-            font=make_font(12, "bold"),
-        )
-        self.separator.grid(row=0, column=3, padx=5)
+        self.total_value_label = self._make_stat_card(2, "Total Value")
+        self.total_picked_label = self._make_stat_card(3, "Picked Value")
 
-        # Picked Value label
-        self.total_picked_label = CTkLabel(
-            self.frame,
-            text="Picked Value: 0 Chaos",
-            font=make_font(12, "bold"),
-            text_color=CHAOS_COLOR,
-            compound="left",
-            padx=4
-        )
-        self.total_picked_label.grid(row=0, column=4, padx=(5, 10))
-
-        _add_kofi_button(self.frame)
-
+        # Spacer pushes Ko-fi to the far right
+        self.frame.grid_columnconfigure(4, weight=1)
+        _add_kofi_button(self.frame, column=5)
 
     def on_value_mode_changed(self):
         mode = self.value_mode.get()

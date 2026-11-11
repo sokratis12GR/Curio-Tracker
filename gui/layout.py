@@ -1,5 +1,8 @@
 from customtkinter import CTkFrame
 
+MARGIN = 8  # Outer window margin shared by all panels
+GAP = 6     # Spacing between neighbouring panels
+
 
 def create_layout(root):
     root.grid_columnconfigure(0, weight=0, minsize=280)  # Left panel
@@ -10,15 +13,15 @@ def create_layout(root):
 
     # --- Top Frame (menu/toolbar) ---
     top_frame = CTkFrame(root, height=0, corner_radius=6)
-    top_frame.grid(row=0, column=0, columnspan=3, sticky="nsew", padx=5)
+    top_frame.grid(row=0, column=0, columnspan=3, sticky="nsew", padx=MARGIN, pady=(MARGIN, GAP))
 
     # --- Left Frame ---
     left_frame = CTkFrame(root)
-    left_frame.grid(row=1, column=0, padx=(5, 10), pady=(2,10), sticky="nsw")
+    left_frame.grid(row=1, column=0, padx=(MARGIN, GAP), pady=(0, MARGIN), sticky="nsw")
 
     # --- Right Frame ---
     right_frame = CTkFrame(root)
-    right_frame.grid(row=1, column=1, padx=10, pady=(2,10), sticky="nsew")
+    right_frame.grid(row=1, column=1, columnspan=2, padx=(0, MARGIN), pady=(0, MARGIN), sticky="nsew")
     right_frame.grid_rowconfigure(0, weight=1)
     right_frame.grid_rowconfigure(1, weight=0)
     right_frame.grid_columnconfigure(0, weight=0)
@@ -37,11 +40,11 @@ def create_layout(root):
     actions_frame.grid_columnconfigure(0, weight=1)
 
     # Toggle Buttons Frame below actions_frame
-    toggle_frame = CTkFrame(right_frame)
-    toggle_frame.grid(row=2, column=0, sticky="nsw", pady=(5, 0))
+    toggle_frame = CTkFrame(right_frame, corner_radius=8)
+    toggle_frame.grid(row=2, column=0, sticky="nsew", pady=(GAP, 0), padx=(0, GAP))
 
-    total_frame = CTkFrame(right_frame)
-    total_frame.grid(row=2, column=1, sticky="nsw", pady=(5, 0))
+    total_frame = CTkFrame(right_frame, corner_radius=8)
+    total_frame.grid(row=2, column=1, sticky="nsew", pady=(GAP, 0))
 
     return {
         "top_frame": top_frame,

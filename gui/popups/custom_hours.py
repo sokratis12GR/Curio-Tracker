@@ -1,89 +1,108 @@
+import math
+
 from customtkinter import *
 
 from win_utils import center_window_on_parent, prepare_popup
 
+# Unit name -> (hours per unit, short suffix used in the filter label)
+TIME_UNITS = {
+    "Minutes": (1 / 60, "m"),
+    "Hours": (1, "h"),
+    "Days": (24, "d"),
+    "Weeks": (168, "w"),
+}
+DEFAULT_UNIT = "Hours"
+
+
+def range_to_hours(amount, unit):
+    hours_per_unit, _ = TIME_UNITS.get(unit, TIME_UNITS[DEFAULT_UNIT])
+    return amount * hours_per_unit
+
+
+def format_range_label(amount, unit):
+    _, suffix = TIME_UNITS.get(unit, TIME_UNITS[DEFAULT_UNIT])
+    return f"Custom ({amount:g}{suffix})"
+
 
 class CustomHoursPopup:
-    def __init__(self, parent, initial_hours=1, callback=None):
+    """Asks for a time range (amount + unit).
+
+    on_apply(amount, unit) is called on a valid Apply; on_cancel() is called
+    when the popup is closed any other way (Cancel, X, Escape).
+    """
+
+    def __init__(self, parent, initial_amount=1, initial_unit=DEFAULT_UNIT, on_apply=None, on_cancel=None):
         self.parent = parent
-        self.callback = callback
+        self.on_apply = on_apply
+        self.on_cancel = on_cancel
+        self._closed = False
 
         self.popup = CTkToplevel(self.parent)
         prepare_popup(self.popup)
-        self.popup.title("Custom Hours Filter")
-        self.popup.geometry("250x200")
+        self.popup.title("Custom Time Filter")
         self.popup.resizable(False, False)
-
         self.popup.transient(self.parent.winfo_toplevel())
 
-        self.popup.protocol("WM_DELETE_WINDOW", self._close)
-        self.popup.bind("<Escape>", lambda e: self._close())
+        self.popup.protocol("WM_DELETE_WINDOW", self._cancel)
+        self.popup.bind("<Escape>", lambda e: self._cancel())
 
-        # Container frame
         frame = CTkFrame(self.popup)
         frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Label
-        lbl = CTkLabel(frame, text="Enter hours:")
-        lbl.pack(pady=(10, 5))
+        CTkLabel(frame, text="Show items from the last:").grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
 
-        # Entry
-        self.entry_var = StringVar(value=str(initial_hours))
-        entry = CTkEntry(frame, textvariable=self.entry_var, width=200)
-        entry.pack(pady=5)
-        entry.focus()
+        self.amount_var = StringVar(value=f"{initial_amount:g}")
+        entry = CTkEntry(frame, textvariable=self.amount_var, width=90)
+        entry.grid(row=1, column=0, sticky="ew", padx=(10, 5), pady=5)
         entry.bind("<Return>", lambda e: self._apply())
+        entry.focus()
+        entry.select_range(0, "end")
 
-        # Apply Button
-        btn = CTkButton(frame, text="Apply", command=self._apply)
-        btn.pack(pady=10)
+        if initial_unit not in TIME_UNITS:
+            initial_unit = DEFAULT_UNIT
+        self.unit_var = StringVar(value=initial_unit)
+        CTkOptionMenu(frame, variable=self.unit_var, values=list(TIME_UNITS), width=110).grid(
+            row=1, column=1, sticky="ew", padx=(5, 10), pady=5)
 
-        # Center popup on main application
-        center_window_on_parent(
-            self.popup,
-            self.parent
-        )
+        self.error_label = CTkLabel(frame, text="", text_color="#e05252")
+        self.error_label.grid(row=2, column=0, columnspan=2, sticky="w", padx=10)
+
+        CTkButton(frame, text="Apply", command=self._apply, width=90).grid(
+            row=3, column=0, sticky="ew", padx=(10, 5), pady=(5, 10))
+        CTkButton(frame, text="Cancel", command=self._cancel, width=110, fg_color="transparent",
+                  border_width=1).grid(row=3, column=1, sticky="ew", padx=(5, 10), pady=(5, 10))
+
+        center_window_on_parent(self.popup, self.parent)
 
         self.popup.grab_set()
         self.popup.focus_force()
 
     def _apply(self):
         try:
-            hours = float(self.entry_var.get())
-            if self.callback:
-                self.callback(hours)
+            amount = float(self.amount_var.get().strip().replace(",", "."))
         except ValueError:
-            CTkMessagePopup(self.popup, title="Invalid Input", message="Please enter a valid number.")
+            amount = None
+        if amount is None or not math.isfinite(amount) or amount <= 0:
+            self.error_label.configure(text="Enter a number greater than 0.")
+            return
+
+        unit = self.unit_var.get()
+        self._close()
+        if self.on_apply:
+            self.on_apply(amount, unit)
+
+    def _cancel(self):
+        if self._closed:
             return
         self._close()
+        if self.on_cancel:
+            self.on_cancel()
 
     def _close(self):
-        self.popup.grab_release()
+        self._closed = True
+        try:
+            self.popup.grab_release()
+        except Exception:
+            pass
         self.popup.destroy()
-
-
-class CTkMessagePopup:
-    def __init__(self, parent, title="Error", message=""):
-        self.popup = CTkToplevel(parent)
-        prepare_popup(self.popup)
-        self.popup.title(title)
-        self.popup.geometry("300x120")
-        self.popup.resizable(False, False)
-        self.popup.grab_set()
-        self.popup.focus_force()
-        self.popup.protocol("WM_DELETE_WINDOW", self.popup.destroy)
-        self.popup.bind("<Escape>", lambda e: self.popup.destroy())
-
-        # Frame
-        frame = CTkFrame(self.popup, fg_color="transparent")
-        frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        # Message label
-        CTkLabel(frame, text=message, wraplength=260).pack(pady=(0, 10))
-
-        # Close button
-        CTkButton(frame, text="OK", command=self.popup.destroy).pack()
-
-        # Center popup (revealed once positioned)
-        center_window_on_parent(self.popup, parent)
-        parent.wait_window(self.popup)

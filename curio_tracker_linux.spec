@@ -28,10 +28,11 @@ for root, _, files in os.walk(assets_dir):
         dest_dir = os.path.join("assets", rel_path)
         datas.append((src_file, dest_dir))
 
-theme_file = os.path.abspath(os.path.join("ctk_themes", "heist_theme.json"))
-if not os.path.isfile(theme_file):
-    raise FileNotFoundError(f"CustomTkinter theme not found: {theme_file}")
-datas.append((theme_file, "ctk_themes"))
+for theme_name in ("heist_theme.json", "poe_theme.json"):
+    theme_file = os.path.abspath(os.path.join("ctk_themes", theme_name))
+    if not os.path.isfile(theme_file):
+        raise FileNotFoundError(f"CustomTkinter theme not found: {theme_file}")
+    datas.append((theme_file, "ctk_themes"))
 
 ctk_path = os.path.dirname(customtkinter.__file__)
 datas.append((ctk_path, "customtkinter"))

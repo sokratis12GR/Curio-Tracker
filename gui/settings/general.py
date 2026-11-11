@@ -1,10 +1,16 @@
+import os
+import subprocess
+import sys
+
 import customtkinter as ctk
 
 import config as c
 from fonts import update_all_fonts, make_font
+from gui import palette
+from gui.ctksimplebox import CTkMessageBox
 from logger import log_message
 from settings import set_setting
-from themes import apply_theme
+from themes import apply_theme, needs_restart
 from win_utils import center_window_on_parent
 
 
@@ -60,10 +66,53 @@ class GeneralSettingsMixin:
         if not settings_window:
             return
 
+        if needs_restart(palette.ACTIVE_MODE, val):
+            settings_window.after(100, lambda: self._prompt_theme_restart(val))
+            return
+
         settings_window.after(
             100,
             lambda: self._apply_theme_safely(val)
         )
+
+    def _prompt_theme_restart(self, val):
+        settings_window = self.settings_window
+        if not settings_window:
+            return
+
+        restart = CTkMessageBox(settings_window).askyesno(
+            "Restart Required",
+            f"Switching to the {val} theme requires restarting the application.\n\n"
+            "Restart now? If you choose No, the theme will be applied the next time you start the app."
+        )
+
+        if restart:
+            self._restart_application()
+        else:
+            self._restore_settings_window()
+
+    def _restart_application(self):
+        log_message("Theme Switch", "Restarting application to apply theme")
+
+        if getattr(sys, "frozen", False):
+            args = [sys.executable] + sys.argv[1:]
+        else:
+            args = [sys.executable] + sys.argv
+
+        try:
+            subprocess.Popen(args)
+        except Exception as error:
+            log_message("Theme Switch", f"Failed to restart: {error}")
+            CTkMessageBox(self.settings_window).showerror(
+                "Restart Failed",
+                "Could not restart automatically. Please restart the application manually."
+            )
+            return
+
+        try:
+            self.parent.winfo_toplevel().destroy()
+        finally:
+            os._exit(0)
 
     def _apply_theme_safely(self, val):
         settings_window = self.settings_window

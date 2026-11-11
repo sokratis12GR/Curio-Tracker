@@ -148,7 +148,7 @@ layout_keywords = [
 ]
 
 theme_modes = [
-    "LIGHT", "DARK"
+    "LIGHT", "DARK", "POE"
 ]
 time_options = [
     "All", "Last hour", "Last 2 hours", "Last 12 hours", "Today", "Last 24 hours",

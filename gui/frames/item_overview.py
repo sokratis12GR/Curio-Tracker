@@ -6,6 +6,7 @@ from customtkinter import CTkImage
 import currency_utils
 from config import IMAGE_COL_WIDTH, ROW_HEIGHT
 from fonts import make_font
+from gui.palette import POE_PALETTE, themed
 from img_utils import fit_image, get_cached_icon, get_icon
 from link_utils import generate_trade_url_from_values, open_url
 from ocr_utils import parse_item_name
@@ -23,8 +24,8 @@ class ItemOverviewFrame:
             parent,
             corner_radius=6,
             border_width=1,
-            border_color=("#e0e0e0", "#40444b"),
-            fg_color=("#f4f6f8", "#2f3136")
+            border_color=themed(("#e0e0e0", "#40444b"), POE_PALETTE["border_dim"]),
+            fg_color=themed(("#f4f6f8", "#2f3136"), POE_PALETTE["panel_bg"])
         )
         self.frame.grid(row=row_index_start, column=0, columnspan=2, sticky="new", padx=5, pady=5)
         self.frame.configure(width=300)
@@ -90,6 +91,16 @@ class ItemOverviewFrame:
             lbl_value.grid_remove()
             self.row_index += 1
 
+        # Placeholder shown while no item is selected
+        self.placeholder_label = CTkLabel(
+            self.frame,
+            text="Select an item to see details",
+            font=make_font(10),
+            text_color=("gray45", "gray60"),
+        )
+        self.placeholder_label.grid(row=self.row_index, column=0, columnspan=2, pady=(0, 12))
+        self.row_index += 1
+
         text_rows_count = len(self.fields) + 2  # item name + optional Wiki row
         for r in range(self.row_index):
             if r < self.row_index - text_rows_count:
@@ -106,7 +117,10 @@ class ItemOverviewFrame:
             self.icon_label.grid_remove()
             self.item_name_label.grid_remove()
             self._show_fields(set())
+            self.placeholder_label.grid()
             return
+
+        self.placeholder_label.grid_remove()
 
         # Render main item image (fitted, not stretched)
         try:

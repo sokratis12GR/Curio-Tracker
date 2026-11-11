@@ -17,6 +17,7 @@ from gui.tree.context_menu import TreeContextMenuMixin
 from gui.tree.editing import TreeEditingMixin
 from gui.tree.filtering import TreeFilteringMixin, _get_row_tag, row_chaos_value, PICKED_CELL_VALUES
 from json_manager import JSONManager
+from gui.palette import tree_palette
 from settings import get_setting
 from tree_utils import get_item_name_str, generate_item_id
 
@@ -64,6 +65,7 @@ class TreeManager(TreeEditingMixin, TreeContextMenuMixin, TreeFilteringMixin):
         self._custom_popup_open = False
         self.time_filter_var = StringVar(value="All")
         self.custom_hours_var = DoubleVar(value=1)
+        self.load_custom_time_range()
         self.time_filter_var.trace_add("write", self.filter_tree_by_time)
         self.search_var = StringVar(value="")
         self.search_var.trace_add("write", lambda *args: self.apply_filters())
@@ -91,15 +93,9 @@ class TreeManager(TreeEditingMixin, TreeContextMenuMixin, TreeFilteringMixin):
         self.sort_reverse = {col["id"]: col.get("sort_reverse", False) for col in TREE_COLUMNS}
 
         # Row tags
-        if self.current_mode == "POE":
-            self.tree.tag_configure("poe_odd", background="#2a1a12", foreground="#e6dcc0")
-            self.tree.tag_configure("poe_even", background="#3a2618", foreground="#e6dcc0")
-        elif self.current_mode == "DARK":
-            self.tree.tag_configure("odd", background="#2f3136", foreground="#dcddde")
-            self.tree.tag_configure("even", background="#36393f", foreground="#dcddde")
-        elif self.current_mode == "LIGHT":
-            self.tree.tag_configure("light_odd", background="#f4f6f8", foreground="black")
-            self.tree.tag_configure("light_even", background="#e8eaed", foreground="black")
+        pal = tree_palette(self.current_mode)
+        self.tree.tag_configure("odd", background=pal["bg"], foreground=pal["fg"])
+        self.tree.tag_configure("even", background=pal["alt_bg"], foreground=pal["fg"])
 
         self.checkbox_states = {}
         # Bind events

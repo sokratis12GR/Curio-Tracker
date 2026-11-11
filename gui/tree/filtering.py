@@ -3,11 +3,28 @@ from datetime import datetime, timedelta
 from tkinter import TclError
 
 import currency_utils
-from gui.popups.custom_hours import CustomHoursPopup
-from settings import get_setting
+from gui.popups.custom_hours import (
+    CustomHoursPopup, TIME_UNITS, DEFAULT_UNIT, range_to_hours, format_range_label,
+)
+from settings import get_setting, set_setting
 
 
 PICKED_CELL_VALUES = ("☑", "True", "true", "YES", "yes")
+
+# Dropdown entry that opens the custom range popup.
+CUSTOM_PROMPT = "Custom..."
+
+# Rolling-window presets ("All" and "Today" are handled separately).
+TIME_PRESETS = {
+    "Last hour": timedelta(hours=1),
+    "Last 2 hours": timedelta(hours=2),
+    "Last 12 hours": timedelta(hours=12),
+    "Last 24 hours": timedelta(hours=24),
+    "Last week": timedelta(weeks=1),
+    "Last 2 weeks": timedelta(weeks=2),
+    "Last month": timedelta(days=30),
+    "Last year": timedelta(days=365),
+}
 
 
 def _get_row_tag(index):
@@ -112,8 +129,9 @@ class TreeFilteringMixin:
             total_picked_value = picked_chaos
             suffix = " Chaos"
 
-        total_text = f"Total Value: {total_value:.2f}{suffix}" if total_value else ""
-        picked_text = f"Picked Value: {total_picked_value:.2f}{suffix}" if total_picked_value else ""
+        # The stat cards carry the caption, so only the amount is shown here.
+        total_text = f"{total_value:,.2f}{suffix}" if total_value else "—"
+        picked_text = f"{total_picked_value:,.2f}{suffix}" if total_picked_value else "—"
 
         self.total_frame.total_value_label.configure(text=total_text)
         self.total_frame.total_picked_label.configure(text=picked_text)
@@ -191,7 +209,23 @@ class TreeFilteringMixin:
         search_query = search_query.lower().strip()
 
         selected_time = self.time_filter_var.get()
+        if selected_time == CUSTOM_PROMPT:
+            # Popup is open; keep showing the previous filter's rows.
+            return
         now = datetime.now()
+        today = now.date()
+        cutoff = None
+
+        if selected_time == "Today":
+            time_mode = "today"
+        elif selected_time in TIME_PRESETS:
+            time_mode = "cutoff"
+            cutoff = now - TIME_PRESETS[selected_time]
+        elif selected_time.startswith("Custom ("):
+            time_mode = "cutoff"
+            cutoff = now - timedelta(hours=self.custom_hours_var.get())
+        else:
+            time_mode = "all"  # "All" or anything unrecognised
 
         # Collect iids that should be visible
         visible_iids = []
@@ -215,35 +249,14 @@ class TreeFilteringMixin:
 
             # Time match
             dt = self.item_time_map.get(iid)
-            matches_time = False
             if dt is None:
                 matches_time = False
+            elif time_mode == "all":
+                matches_time = True
+            elif time_mode == "today":
+                matches_time = dt.date() == today
             else:
-                delta = now - dt
-                if selected_time == "All":
-                    matches_time = True
-                elif selected_time == "Today":
-                    matches_time = dt.date() == now.date()
-                elif selected_time == "Last hour":
-                    matches_time = dt >= now - timedelta(hours=1)
-                elif selected_time == "Last 2 hours":
-                    matches_time = dt >= now - timedelta(hours=2)
-                elif selected_time == "Last 12 hours":
-                    matches_time = dt >= now - timedelta(hours=12)
-                elif selected_time == "Last 24 hours":
-                    matches_time = dt >= now - timedelta(hours=24)
-                elif selected_time == "Last week":
-                    matches_time = dt >= now - timedelta(weeks=1)
-                elif selected_time == "Last 2 weeks":
-                    matches_time = dt >= now - timedelta(weeks=2)
-                elif selected_time == "Last month":
-                    matches_time = dt >= now - timedelta(days=30)
-                elif selected_time == "Last year":
-                    matches_time = dt >= now - timedelta(days=365)
-                elif selected_time == "Custom...":
-                    if not getattr(self, "_custom_popup_open", False):
-                        self.open_custom_hours_popup()
-                    return
+                matches_time = dt >= cutoff
 
             if matches_search and matches_time:
                 visible_iids.append((dt or datetime.min, iid))
@@ -257,29 +270,51 @@ class TreeFilteringMixin:
         self.tree.set_children("", *ordered)
         self._restripe(ordered)
 
-    # @pyinstrument.profile()
+    # ---------- Custom time range ----------
+    def load_custom_time_range(self):
+        # Restores the saved custom range (amount + unit) into custom_hours_var.
+        amount = currency_utils.convert_to_float(get_setting("Application", "custom_time_amount", 1))
+        if not amount or amount <= 0:
+            amount = 1.0
+        unit = str(get_setting("Application", "custom_time_unit", DEFAULT_UNIT))
+        if unit not in TIME_UNITS:
+            unit = DEFAULT_UNIT
+        self.custom_time_amount = amount
+        self.custom_time_unit = unit
+        self.custom_hours_var.set(range_to_hours(amount, unit))
+
     def open_custom_hours_popup(self):
         if getattr(self, "_custom_popup_open", False):
             return  # already open
         self._custom_popup_open = True
 
-        def on_apply(hours):
-            self.custom_hours_var.set(hours)
-            self.time_filter_var.set("Custom")
-            self.filter_tree_by_time()
+        def on_apply(amount, unit):
             self._custom_popup_open = False
+            self.custom_time_amount = amount
+            self.custom_time_unit = unit
+            self.custom_hours_var.set(range_to_hours(amount, unit))
+            set_setting("Application", "custom_time_amount", amount)
+            set_setting("Application", "custom_time_unit", unit)
+            # The trace on time_filter_var re-filters the tree.
+            self.time_filter_var.set(format_range_label(amount, unit))
+
+        def on_cancel():
+            self._custom_popup_open = False
+            self.time_filter_var.set(getattr(self, "_last_time_filter", "All"))
 
         CustomHoursPopup(
             parent=self.tree.winfo_toplevel(),
-            initial_hours=self.custom_hours_var.get(),
-            callback=on_apply
+            initial_amount=getattr(self, "custom_time_amount", 1),
+            initial_unit=getattr(self, "custom_time_unit", DEFAULT_UNIT),
+            on_apply=on_apply,
+            on_cancel=on_cancel,
         )
-
-    def _close_custom_popup(self, popup):
-        self._custom_popup_open = False
-        popup.destroy()
 
     # @pyinstrument.profile()
     def filter_tree_by_time(self, *args):
-        current_search = self.search_var.get()
-        self.apply_filters(search_query=current_search)
+        selected = self.time_filter_var.get()
+        if selected == CUSTOM_PROMPT:
+            self.open_custom_hours_popup()
+            return
+        self._last_time_filter = selected
+        self.apply_filters(search_query=self.search_var.get())

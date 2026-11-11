@@ -1,4 +1,5 @@
 import threading
+import tkinter as tk
 from collections import Counter
 from tkinter import ttk
 
@@ -8,7 +9,10 @@ from PIL import Image, ImageTk
 import config
 import ocr_utils as utils
 from fonts import make_font
-from img_utils import get_cached_icon, get_icons_parallel
+from currency_utils import convert_to_float
+from gui.palette import collection_palette
+from ocr_utils import format_currency_value
+from img_utils import get_cached_icon, get_icon, get_icons_parallel
 from link_utils import generate_trade_url_from_values, open_url
 from settings import get_setting
 from win_utils import center_window_on_parent, prepare_popup
@@ -24,7 +28,6 @@ class CollectionPopup:
         self.parent = parent
         self.tracker = tracker
         self.title = title
-        self.search_var = ctk.StringVar()
         self.all_items = []
 
         self._row_item_map = {}
@@ -57,56 +60,188 @@ class CollectionPopup:
         self._sort_column = "Tier"
         self._sort_ascending = True
 
+        # Filter state
+        self.type_var = ctk.StringVar(value=self.ALL_TYPES)
+        self.owned_var = ctk.StringVar(value="All")
+        self.found_only_var = ctk.BooleanVar(value=False)
+
+    ALL_TYPES = "All types"
+    HEADINGS = {
+        "#0": "Name",
+        "Type": "Type",
+        "Tier": "Tier",
+        "Found": "Found",
+        "Owned": "Owned",
+        "Value": "Value",
+    }
+
     def show(self):
         popup = ctk.CTkToplevel(self.parent)
         prepare_popup(popup)
         popup.title(self.title)
 
-        popup.geometry("850x600")
-        popup.minsize(750, 400)
-        popup.resizable(False, False)
+        popup.geometry("900x720")
+        popup.minsize(750, 480)
+        popup.resizable(True, True)
         popup.transient(self.parent.winfo_toplevel())
+        self.popup = popup
 
-        main_frame = ctk.CTkFrame(popup)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        P = collection_palette(self.theme_mode)
+
+        popup.configure(fg_color=P["window_bg"])
+
+        main_frame = ctk.CTkFrame(popup, fg_color=P["window_bg"], corner_radius=0)
+        main_frame.pack(fill="both", expand=True, padx=12, pady=12)
 
         league_name = getattr(self.tracker, "league_version", "")
         popup.title(f"{self.title} - {league_name} - {self.collection_league}")
 
-        search_entry = ctk.CTkEntry(
-            main_frame,
-            placeholder_text="Search...",
-            textvariable=self.search_var
-        )
-        search_entry.pack(fill="x", pady=(0, 10))
-        self.search_var.trace_add("write", lambda *args: self.filter_items())
-
-        columns = ("Type", "Tier", "Found", "Owned", "Wiki", "Trade")
+        # Build the collection immediately from already-loaded terms.json
+        # (needed up front for the Type filter options).
+        self.load_items()
 
         self._apply_tree_theme()
+        self._load_currency_icons()
+
+        # --- Stat bar ---
+        self._build_stat_bar(main_frame)
+
+        # --- Search + filters ---
+        controls = ctk.CTkFrame(main_frame, fg_color="transparent")
+        controls.pack(fill="x", pady=(0, 8))
+
+        control_style = dict(
+            corner_radius=6,
+            border_width=1,
+            border_color=P["border"],
+            fg_color=P["panel_bg"],
+            text_color=P["text"],
+            font=make_font(11),
+        )
+
+        # No textvariable: CTkEntry hides its placeholder when one is set.
+        self.search_entry = ctk.CTkEntry(
+            controls,
+            placeholder_text="Search name, type or tier...",
+            placeholder_text_color=P["muted"],
+            height=30,
+            **control_style
+        )
+        self.search_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.search_entry.bind("<KeyRelease>", lambda e: self.filter_items())
+
+        type_values = [self.ALL_TYPES] + sorted(
+            {str(item["type"]) for item in self.all_items},
+            key=str.lower
+        )
+        ctk.CTkOptionMenu(
+            controls,
+            values=type_values,
+            variable=self.type_var,
+            width=140,
+            height=30,
+            corner_radius=6,
+            fg_color=P["header_bg"],
+            button_color=P["header_bg"],
+            button_hover_color=P["select_bg"],
+            text_color=P["text"],
+            dropdown_fg_color=P["panel_bg"],
+            dropdown_hover_color=P["select_bg"],
+            dropdown_text_color=P["text"],
+            font=make_font(11),
+            dropdown_font=make_font(11),
+            command=lambda _v: self.filter_items()
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkSegmentedButton(
+            controls,
+            values=["All", "Owned", "Missing"],
+            variable=self.owned_var,
+            width=210,
+            height=30,
+            corner_radius=6,
+            border_width=2,
+            fg_color=P["border_dim"],
+            selected_color=P["select_bg"],
+            selected_hover_color=P["select_bg"],
+            unselected_color=P["panel_bg"],
+            unselected_hover_color=P["header_bg"],
+            text_color=P["gold_bright"],
+            font=make_font(11),
+            command=lambda _v: self.filter_items()
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkCheckBox(
+            controls,
+            text="Found only",
+            variable=self.found_only_var,
+            corner_radius=4,
+            border_width=1,
+            checkbox_width=18,
+            checkbox_height=18,
+            border_color=P["border"],
+            fg_color=P["select_bg"],
+            hover_color=P["header_bg"],
+            checkmark_color=P["gold_bright"],
+            text_color=P["gold"],
+            font=make_font(11),
+            command=self.filter_items
+        ).pack(side="left")
+
+        columns = ("Type", "Tier", "Found", "Owned", "Value")
+
+        # Rounded bronze-bordered panel around the list; the inner padding
+        # keeps the (square) Treeview inside the rounded corners.
+        tree_frame = ctk.CTkFrame(
+            main_frame,
+            fg_color=P["row_bg"],
+            corner_radius=8,
+            border_width=1,
+            border_color=P["border"],
+        )
+        tree_frame.pack(fill="both", expand=True)
 
         self.tree = ttk.Treeview(
-            main_frame,
+            tree_frame,
             columns=columns,
             show="tree headings",
             height=20,
             style="Collection.Treeview"
         )
 
-        self.tree.tag_configure(
-            "even",
-            background=self.tree_bg,
-            foreground=self.tree_fg
-        )
+        self.tree.tag_configure("even", background=self.tree_bg)
+        self.tree.tag_configure("odd", background=self.tree_alt_bg)
 
-        self.tree.tag_configure(
-            "odd",
-            background=self.tree_alt_bg,
-            foreground=self.tree_fg
-        )
+        # Foreground by ownership (Treeview can't colour a single cell):
+        # owned rows in unique-item colour, missing rows dimmed.
+        self.tree.tag_configure("owned", foreground=P["unique"])
+        self.tree.tag_configure("missing", foreground=P["unique_dim"])
+        self.tree.tag_configure("unknown", foreground=P["text"])
 
         self.tree.bind("<Double-1>", self.open_link)
         self.tree.bind("<Motion>", self.on_hover)
+        self.tree.bind("<Button-3>", self._show_context_menu)
+        self.tree.bind("<Return>", lambda e: self._open_selected("wiki"))
+
+        self._context_menu = tk.Menu(
+            self.tree, tearoff=0,
+            bg=P["panel_bg"], fg=P["text"],
+            activebackground=P["select_bg"], activeforeground=P["gold_bright"],
+            bd=1, relief="solid"
+        )
+        self._context_menu.add_command(
+            label="Open Wiki",
+            command=lambda: self._open_selected("wiki")
+        )
+        self._context_menu.add_command(
+            label="Open Trade",
+            command=lambda: self._open_selected("trade_url")
+        )
+        self._context_menu.add_separator()
+        self._context_menu.add_command(
+            label="Copy name",
+            command=self._copy_selected_name
+        )
 
         self.tree.heading("#0", text="Name", command=lambda: self.sort_by("#0"))
         self.tree.column("#0", width=250, anchor="w")
@@ -123,26 +258,20 @@ class CollectionPopup:
         self.tree.heading("Owned", text="Owned", command=lambda: self.sort_by("Owned"))
         self.tree.column("Owned", width=60, anchor="center")
 
-        self.tree.heading("Wiki", text="Wiki")
-        self.tree.column("Wiki", width=80, anchor="center")
-
-        self.tree.heading("Trade", text="Trade")
-        self.tree.column("Trade", width=80, anchor="center")
+        self.tree.heading("Value", text="Value", command=lambda: self.sort_by("Value"))
+        self.tree.column("Value", width=120, anchor="center")
 
         scrollbar = ttk.Scrollbar(
-            main_frame,
+            tree_frame,
             orient="vertical",
             command=self.tree.yview
         )
 
         self.tree.configure(yscrollcommand=scrollbar.set)
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=(6, 0), pady=6)
+        scrollbar.pack(side="right", fill="y", padx=(0, 6), pady=6)
 
         scrollbar.configure(style="Collection.Vertical.TScrollbar")
-
-        # Build the collection immediately from already-loaded terms.json.
-        self.load_items()
 
         self.all_items.sort(
             key=lambda x: (
@@ -150,13 +279,14 @@ class CollectionPopup:
                 str(x["tier"]).lower()
             )
         )
+        self._update_heading_arrows()
 
         # Icons already in memory (preloaded at startup) are applied before
         # the first draw, so most rows appear with their icon straight away.
         self._apply_cached_icons()
 
         # Names appear immediately.
-        self.refresh_tree()
+        self.filter_items()
 
         threading.Thread(
             target=self._load_icons_thread,
@@ -182,40 +312,20 @@ class CollectionPopup:
         style = ttk.Style()
         style.theme_use("default")
 
-        if self.theme_mode == "DARK":
-            bg = "#2f3136"
-            alt_bg = "#383c42"
-            fg = "#dcddde"
-            sel_bg = "#5865f2"
-            sel_fg = "#ffffff"
+        P = collection_palette(self.theme_mode)
 
-            heading_bg = "#40444b"
-            heading_fg = "#dcddde"
-
-            border_color = "#40444b"
-
-            scrollbar_bg = "#5865f2"
-            scrollbar_trough = "#2f3136"
-            scrollbar_arrow = "#dcddde"
-
-        else:
-            bg = "#ffffff"
-            alt_bg = "#f0f1f3"
-            fg = "#202124"
-            sel_bg = "#0078d7"
-            sel_fg = "#ffffff"
-
-            heading_bg = "#f5f5f5"
-            heading_fg = "#202124"
-
-            border_color = "#d6d6d6"
-
-            scrollbar_bg = "#c7c7c7"
-            scrollbar_trough = "#f0f0f0"
-            scrollbar_arrow = "#404040"
+        bg = P["row_bg"]
+        fg = P["text"]
+        heading_bg = P["header_bg"]
+        heading_hover_bg = P["select_bg"]
+        heading_fg = P["gold"]
+        border_color = P["border_dim"]
+        scrollbar_bg = P["border"]
+        scrollbar_trough = P["window_bg"]
+        scrollbar_arrow = P["gold"]
 
         self.tree_bg = bg
-        self.tree_alt_bg = alt_bg
+        self.tree_alt_bg = P["row_alt_bg"]
         self.tree_fg = fg
 
         style.configure(
@@ -223,16 +333,16 @@ class CollectionPopup:
             background=bg,
             fieldbackground=bg,
             foreground=fg,
-            rowheight=32,
+            rowheight=30,
             font=make_font(10),
-            borderwidth=1,
-            relief="solid"
+            borderwidth=0,
+            relief="flat"
         )
 
         style.map(
             "Collection.Treeview",
-            background=[("selected", sel_bg)],
-            foreground=[("selected", sel_fg)]
+            background=[("selected", P["select_bg"])],
+            foreground=[("selected", P["gold_bright"])]
         )
 
         style.configure(
@@ -241,18 +351,19 @@ class CollectionPopup:
             foreground=heading_fg,
             font=make_font(10, "bold"),
             borderwidth=1,
-            relief="solid"
+            relief="flat",
+            padding=(4, 6)
         )
 
         style.map(
             "Collection.Treeview.Heading",
             background=[
-                ("active", heading_bg),
-                ("pressed", heading_bg)
+                ("active", heading_hover_bg),
+                ("pressed", heading_hover_bg)
             ],
             foreground=[
-                ("active", heading_fg),
-                ("pressed", heading_fg)
+                ("active", P["gold_bright"]),
+                ("pressed", P["gold_bright"])
             ]
         )
 
@@ -262,8 +373,47 @@ class CollectionPopup:
             background=scrollbar_bg,
             arrowcolor=scrollbar_arrow,
             bordercolor=border_color,
-            relief="flat"
+            lightcolor=scrollbar_bg,
+            darkcolor=scrollbar_bg,
+            relief="flat",
+            arrowsize=12
         )
+        style.map(
+            "Collection.Vertical.TScrollbar",
+            background=[("active", P["gold"])]
+        )
+
+
+    def _load_currency_icons(self):
+        self._currency_icons = {}
+
+        def _load():
+            icons = {}
+            for key, name, url in (
+                ("Chaos", "Chaos Orb (Value Icon)", config.CHAOS_ORB_ICON_URL),
+                ("Divines", "Divine Orb (Value Icon)", config.DIVINE_ORB_ICON_URL),
+            ):
+                try:
+                    pil = get_icon(name=name, url=url, size=(22, 22),
+                                   parent=self.parent, return_pil=True)
+                except Exception:
+                    pil = None
+                if isinstance(pil, Image.Image):
+                    icons[key] = pil
+
+            def _apply():
+                for key, pil in icons.items():
+                    self._currency_icons[key] = ctk.CTkImage(
+                        light_image=pil, dark_image=pil, size=(22, 22)
+                    )
+                self._update_summary()
+
+            try:
+                self.parent.after(0, _apply)
+            except Exception:
+                pass
+
+        threading.Thread(target=_load, daemon=True).start()
 
     def on_hover(self, event):
         col = self.tree.identify_column(event.x)
@@ -279,12 +429,11 @@ class CollectionPopup:
             self.tree.config(cursor="")
             return
 
-        # #0 = Name
-        # #5 = Wiki
-        # #6 = Trade
-        if col in ("#0", "#5") and item.get("wiki"):
+        # #0 = Name -> Wiki
+        # #5 = Value -> Trade
+        if col == "#0" and item.get("wiki"):
             self.tree.config(cursor="hand2")
-        elif col == "#6" and item.get("trade_url"):
+        elif col == "#5" and item.get("trade_url"):
             self.tree.config(cursor="hand2")
         else:
             self.tree.config(cursor="")
@@ -298,6 +447,8 @@ class CollectionPopup:
             "COLLECTION_DATASET_ACTIVE",
             {}
         ) or {}
+
+        currency = getattr(self.tracker, "CURRENCY_DATASET", {}) or {}
 
         if CollectionPopup._cached_items is None:
             with CollectionPopup._cache_lock:
@@ -357,12 +508,31 @@ class CollectionPopup:
             else:
                 item["owned"] = "?"
 
+            price = currency.get(item["base_name"], {}) or {}
+            item["chaos"] = convert_to_float(price.get("chaos"))
+            item["value_text"] = self._format_chaos(item["chaos"])
+
             item["trade_url"] = generate_trade_url_from_values(
                 item["type"],
                 item["base_name"]
             )
 
             self.all_items.append(item)
+
+    @staticmethod
+    def _format_chaos(chaos):
+        """Format a chaos amount the same way the main tree does."""
+        if not chaos or chaos <= 0:
+            return ""
+
+        divine_equiv = convert_to_float(
+            get_setting("Application", "divine_equivalent", 183.5)
+        )
+
+        if divine_equiv > 0 and chaos >= divine_equiv * 0.99:
+            return f"{format_currency_value(chaos / divine_equiv)} Divines"
+
+        return f"{format_currency_value(chaos)} Chaos"
 
     def generate_trade_url(self, item):
         return generate_trade_url_from_values(
@@ -457,13 +627,13 @@ class CollectionPopup:
 
         self.tree.selection_set(row_id)
 
-        # Name or Wiki column -> Wiki
-        if col in ("#0", "#5"):
+        # Name column -> Wiki
+        if col == "#0":
             open_url(item.get("wiki"))
             return
 
-        # Trade column -> Trade
-        if col == "#6":
+        # Value column -> Trade
+        if col == "#5":
             open_url(item.get("trade_url"))
 
     def refresh_tree(self, filtered=None):
@@ -488,9 +658,11 @@ class CollectionPopup:
             img = item.get("_tk_img") or self.placeholder
 
             row_tag = "even" if i % 2 == 0 else "odd"
+            status_tag = {
+                "✔": "owned",
+                "✖": "missing"
+            }.get(item["owned"], "unknown")
 
-            wiki_text = "Open" if item.get("wiki") else ""
-            trade_text = "Open" if item.get("trade_url") else ""
 
             row_id = self.tree.insert(
                 "",
@@ -502,29 +674,229 @@ class CollectionPopup:
                     item["tier"],
                     item["found_count"],
                     item["owned"],
-                    wiki_text,
-                    trade_text
+                    item.get("value_text", "")
                 ),
-                tags=(row_tag,)
+                tags=(row_tag, status_tag)
             )
 
             self._row_item_map[row_id] = item
             item["_row_id"] = row_id
 
-    def filter_items(self):
-        query = self.search_var.get().lower().strip()
+    def _visible_items(self):
+        entry = getattr(self, "search_entry", None)
+        query = entry.get().lower().strip() if entry else ""
+        type_filter = self.type_var.get()
+        owned_filter = self.owned_var.get()
+        found_only = self.found_only_var.get()
 
-        filtered = [
-            item
-            for item in self.all_items
-            if query in item["name"].lower()
-               or query in str(item["type"]).lower()
-               or query in str(item["tier"]).lower()
-               or query in str(item["found_count"]).lower()
-               or query in item["owned"].lower()
+        result = []
+        for item in self.all_items:
+            if query and not (
+                query in item["name"].lower()
+                or query in str(item["type"]).lower()
+                or query in str(item["tier"]).lower()
+            ):
+                continue
+            if type_filter != self.ALL_TYPES and str(item["type"]) != type_filter:
+                continue
+            if owned_filter == "Owned" and item["owned"] != "✔":
+                continue
+            if owned_filter == "Missing" and item["owned"] != "✖":
+                continue
+            if found_only and not item.get("found_count"):
+                continue
+            result.append(item)
+
+        return result
+
+    def filter_items(self):
+        if not self._tree_alive():
+            return
+
+        visible = self._visible_items()
+        self.refresh_tree(visible)
+        self._update_summary(visible)
+
+    def _build_stat_bar(self, parent):
+        P = collection_palette(self.theme_mode)
+
+        # Single panel, square corners, thin bronze border.
+        bar_frame = ctk.CTkFrame(
+            parent,
+            fg_color=P["panel_bg"],
+            corner_radius=8,
+            border_width=1,
+            border_color=P["border"],
+        )
+        bar_frame.pack(fill="x", pady=(0, 2))
+
+        self._cards = {}
+        specs = [
+            ("collection", "Collection"),
+            ("owned", "Owned Value"),
+            ("missing", "Missing Value"),
+            ("found", "Found"),
         ]
 
-        self.refresh_tree(filtered)
+        col = 0
+        for idx, (key, title) in enumerate(specs):
+            if idx > 0:
+                # Vertical bronze rule between sections.
+                tk.Frame(bar_frame, bg=P["border_dim"], width=1).grid(
+                    row=0, column=col, sticky="ns", pady=10
+                )
+                col += 1
+
+            bar_frame.grid_columnconfigure(col, weight=1, uniform="stats")
+
+            section = ctk.CTkFrame(bar_frame, fg_color="transparent")
+            section.grid(row=0, column=col, sticky="nsew", padx=14, pady=(8, 10))
+            col += 1
+
+            ctk.CTkLabel(
+                section, text=title, anchor="center",
+                text_color=P["gold"], font=make_font(11, "bold")
+            ).pack(fill="x")
+
+            value = ctk.CTkLabel(
+                section, text="—", anchor="center", compound="left",
+                text_color=P["text"], font=make_font(18, "bold")
+            )
+            value.pack(fill="x", pady=(2, 0))
+
+            bar = None
+            if key == "collection":
+                bar = ctk.CTkProgressBar(
+                    section, height=6, corner_radius=3,
+                    border_width=1, border_color=P["border_dim"],
+                    fg_color=P["bar_track"], progress_color=P["bar_fill"]
+                )
+                bar.set(0)
+                bar.pack(fill="x", pady=(4, 0))
+
+            sub = ctk.CTkLabel(
+                section, text="", anchor="center",
+                text_color=P["muted"], font=make_font(11)
+            )
+            sub.pack(fill="x")
+
+            self._cards[key] = {"value": value, "sub": sub, "bar": bar}
+
+        self.filtered_note = ctk.CTkLabel(
+            parent, text="", anchor="e", height=18,
+            text_color=P["muted"], font=make_font(11)
+        )
+        self.filtered_note.pack(fill="x", pady=(0, 4))
+
+    def _set_card(self, key, value, sub="", icon=None):
+        card = self._cards[key]
+        # CTkLabel needs image="" (not None) to clear a previous image.
+        card["value"].configure(text=value, image=icon if icon else "")
+        card["sub"].configure(text=sub)
+
+    def _value_with_icon(self, chaos):
+        """Return (number text, icon) — the orb icon replaces the unit word."""
+        text = self._format_chaos(chaos) or "0 Chaos"
+        number, _, unit = text.rpartition(" ")
+        icon = getattr(self, "_currency_icons", {}).get(unit)
+        if icon is None:
+            return text, None
+        return f"{number} ", icon
+
+    def _update_summary(self, visible=None):
+        if not hasattr(self, "_cards") or not self._tree_alive():
+            return
+
+        if visible is None:
+            visible = self._visible_items()
+
+        total = len(visible)
+        has_ownership = any(item["owned"] != "?" for item in self.all_items)
+
+        # Collection progress
+        bar = self._cards["collection"]["bar"]
+        if has_ownership:
+            owned = sum(1 for i in visible if i["owned"] == "✔")
+            pct = (owned / total) if total else 0
+            self._set_card("collection", f"{owned} / {total}", f"{pct * 100:.1f}% complete")
+            bar.set(pct)
+        else:
+            self._set_card("collection", f"— / {total}", "ownership unknown")
+            bar.set(0)
+
+        # Values
+        if has_ownership:
+            owned_value = sum(i.get("chaos", 0) for i in visible if i["owned"] == "✔")
+            missing_value = sum(i.get("chaos", 0) for i in visible if i["owned"] == "✖")
+            text, icon = self._value_with_icon(owned_value)
+            self._set_card("owned", text, "in owned items", icon)
+            text, icon = self._value_with_icon(missing_value)
+            self._set_card("missing", text, "to complete", icon)
+        else:
+            self._set_card("owned", "—", "ownership unknown")
+            self._set_card("missing", "—", "ownership unknown")
+
+        # Found
+        found_unique = sum(1 for i in visible if i.get("found_count"))
+        drops = sum(i.get("found_count") or 0 for i in visible)
+        self._set_card("found", f"{found_unique} unique", f"{drops:,} total drops")
+
+        if total != len(self.all_items):
+            self.filtered_note.configure(text=f"Filtered from {len(self.all_items)} items")
+        else:
+            self.filtered_note.configure(text="")
+
+    def _update_heading_arrows(self):
+        for col, label in self.HEADINGS.items():
+            if col == self._sort_column:
+                arrow = " ▲" if self._sort_ascending else " ▼"
+                self.tree.heading(col, text=label + arrow)
+            else:
+                self.tree.heading(col, text=label)
+
+    def _selected_item(self):
+        selection = self.tree.selection()
+        if not selection:
+            return None
+        return self._row_item_map.get(selection[0])
+
+    def _open_selected(self, key):
+        item = self._selected_item()
+        if item and item.get(key):
+            open_url(item.get(key))
+
+    def _copy_selected_name(self):
+        item = self._selected_item()
+        if not item:
+            return
+        try:
+            self.tree.clipboard_clear()
+            self.tree.clipboard_append(item["base_name"])
+        except Exception:
+            pass
+
+    def _show_context_menu(self, event):
+        row_id = self.tree.identify_row(event.y)
+        if not row_id:
+            return
+
+        self.tree.selection_set(row_id)
+        self.tree.focus(row_id)
+        item = self._row_item_map.get(row_id) or {}
+
+        self._context_menu.entryconfigure(
+            "Open Wiki",
+            state="normal" if item.get("wiki") else "disabled"
+        )
+        self._context_menu.entryconfigure(
+            "Open Trade",
+            state="normal" if item.get("trade_url") else "disabled"
+        )
+
+        try:
+            self._context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self._context_menu.grab_release()
 
     def sort_by(self, col):
         if self._sort_column == col:
@@ -559,6 +931,9 @@ class CollectionPopup:
                 "?": 2
             }.get(x["owned"], 2)
 
+        elif col == "Value":
+            key_func = lambda x: x.get("chaos", 0)
+
         else:
             key_func = None
 
@@ -569,7 +944,9 @@ class CollectionPopup:
             )
 
             self._sort_column = col
-            self.refresh_tree()
+            self._update_heading_arrows()
+            # Re-apply current search/filters instead of showing everything.
+            self.filter_items()
 
     def _load_found_counts_thread(self):
         try:
@@ -638,3 +1015,10 @@ class CollectionPopup:
             row_id = item.get("_row_id")
             if row_id and self.tree.exists(row_id):
                 self.tree.set(row_id, "Found", item["found_count"])
+
+        # "Found only" depends on these counts, so re-filter if it's on;
+        # otherwise just refresh the summary.
+        if self.found_only_var.get():
+            self.filter_items()
+        else:
+            self._update_summary()

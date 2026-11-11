@@ -5,6 +5,7 @@ from PIL import Image
 
 from blueprint_data import BlueprintIndex, CATEGORIES, load_blueprint_info, refresh_blueprint_info
 from fonts import make_font
+from gui.palette import POE_PALETTE, themed
 from img_utils import get_cached_icon, get_icons_parallel
 from win_utils import center_window_on_parent, prepare_popup
 
@@ -34,13 +35,13 @@ LIST_ICON = 24
 CHIP_ICON = 18
 HEADER_ICON = 56
 
-CARD_COLOR = ("#f4f6f8", "#2b2d31")
-LIST_COLOR = ("#eceff2", "#232428")
-SELECTED_COLOR = ("#d0d7e2", "#3a3d44")
-HOVER_COLOR = ("#dfe4ea", "#313338")
-CHIP_COLOR = ("#e3e7ec", "#383a40")
-CHIP_HOVER = ("#cfd6df", "#45474f")
-MUTED_TEXT = ("gray35", "gray65")
+CARD_COLOR = themed(("#f4f6f8", "#2b2d31"), POE_PALETTE["panel_bg"])
+LIST_COLOR = themed(("#eceff2", "#232428"), POE_PALETTE["window_bg"])
+SELECTED_COLOR = themed(("#d0d7e2", "#3a3d44"), POE_PALETTE["select_bg"])
+HOVER_COLOR = themed(("#dfe4ea", "#313338"), POE_PALETTE["header_bg"])
+CHIP_COLOR = themed(("#e3e7ec", "#383a40"), POE_PALETTE["border_dim"])
+CHIP_HOVER = themed(("#cfd6df", "#45474f"), POE_PALETTE["border"])
+MUTED_TEXT = themed(("gray35", "gray65"), POE_PALETTE["muted"])
 
 DETAIL_WRAP = 560
 CHIPS_PER_ROW = 3

@@ -9,10 +9,11 @@ from fonts import make_font
 from gui.heist_icons import BP_ENCHANTMENT_ICONS, location_icon
 from img_utils import get_cached_icon, get_icon
 from settings import set_setting
+from gui.palette import POE_PALETTE, themed
 from win_utils import center_window_on_parent, prepare_popup
 
-MUTED_TEXT = ("gray35", "gray65")
-CARD_COLOR = ("#f4f6f8", "#2b2d31")
+MUTED_TEXT = themed(("gray35", "gray65"), POE_PALETTE["muted"])
+CARD_COLOR = themed(("#f4f6f8", "#2b2d31"), POE_PALETTE["panel_bg"])
 
 HEADER_ICON = 52
 FIELD_ICON = 26

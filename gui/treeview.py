@@ -4,6 +4,7 @@ import customtkinter as ctk
 
 from config import ROW_HEIGHT
 from fonts import make_font
+from gui.palette import tree_palette
 from settings import get_setting
 
 
@@ -27,7 +28,7 @@ class CustomTreeview:
 
         # Configure headings and column widths
         for col in self.columns_config:
-            tree.heading(col["id"], text=col["label"])
+            tree.heading(col["id"], text=col["label"], anchor="center")
             tree.column(col["id"], width=col["width"], anchor="center", stretch=True)
 
         display_cols = [
@@ -51,56 +52,47 @@ class CustomTreeview:
         style = ttk.Style()
         style.theme_use("default")
 
-        if self.theme_mode == "DARK":
-            bg = "#40444b"
-            alt_bg = "#36393f"
-            fg = "#dcddde"
-            sel_bg = "#5865f2"
-            sel_fg = "#ffffff"
-            border_color = "#36393f"
-            heading_bg = "#40444b"
-        else:
-            bg = "white"
-            alt_bg = "#e8eaed"
-            fg = "#000000"
-            sel_bg = "#0078d7"
-            sel_fg = "#ffffff"
-            border_color = "#e0e0e0"
-            heading_bg = "white"
-
-        self.bg = bg
-        self.alt_bg = alt_bg
-        self.fg = fg
+        pal = tree_palette(self.theme_mode)
+        self.bg = pal["bg"]
+        self.alt_bg = pal["alt_bg"]
+        self.fg = pal["fg"]
+        self.hover_bg = pal["hover_bg"]
 
         style.configure(
             "Treeview",
-            background=bg,
-            fieldbackground=bg,
-            foreground=fg,
+            background=pal["bg"],
+            fieldbackground=pal["bg"],
+            foreground=pal["fg"],
             rowheight=ROW_HEIGHT,
             font=make_font(11),
-            borderwidth=1,
-            relief="solid",
-            highlightthickness=1 if self.theme_mode == "LIGHT" else 0,
-            highlightbackground=border_color,
-            highlightcolor=border_color,
+            borderwidth=0,
+            relief="flat",
+            highlightthickness=0,
         )
+        style.layout("Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
 
         style.map(
             "Treeview",
-            background=[("selected", sel_bg)],
-            foreground=[("selected", sel_fg)],
+            background=[("selected", pal["sel_bg"])],
+            foreground=[("selected", pal["sel_fg"])],
         )
 
         style.configure(
             "Treeview.Heading",
-            background=heading_bg,
-            foreground=fg,
+            background=pal["heading_bg"],
+            foreground=pal["heading_fg"],
             font=make_font(11, "bold"),
-            borderwidth=1,
-            relief="solid",
+            borderwidth=0,
+            relief="flat",
+            padding=(6, 8),
         )
-
+        # Without this the default theme flashes headings light grey on hover.
+        style.map(
+            "Treeview.Heading",
+            background=[("pressed", pal["heading_hover_bg"]), ("active", pal["heading_hover_bg"])],
+            foreground=[("active", pal["fg"])],
+            relief=[("pressed", "flat"), ("active", "flat")],
+        )
 
     def _add_scrollbars(self):
         v_scroll = ctk.CTkScrollbar(self.parent, command=self.tree.yview)
@@ -112,8 +104,30 @@ class CustomTreeview:
         h_scroll.grid(row=1, column=0, sticky="ew")
 
     def _setup_tags(self):
+        self.tree.tag_configure("hover", background=self.hover_bg)
         self.tree.tag_configure("odd", background=self.bg, foreground=self.fg)
         self.tree.tag_configure("even", background=self.alt_bg, foreground=self.fg)
+
+        self._hover_iid = None
+        self.tree.bind("<Motion>", self._on_motion, add="+")
+        self.tree.bind("<Leave>", lambda e: self._set_hover(None), add="+")
+        self.tree.bind("<ButtonRelease-1>", lambda e: self._set_hover(None), add="+")
+
+    def _on_motion(self, event):
+        iid = self.tree.identify_row(event.y)
+        if iid and iid in self.tree.selection():
+            iid = None  # keep the selection colour visible
+        self._set_hover(iid or None)
+
+    def _set_hover(self, iid):
+        if iid == self._hover_iid:
+            return
+        call, widget = self.tree.tk.call, self.tree._w
+        if self._hover_iid and self.tree.exists(self._hover_iid):
+            call(widget, "tag", "remove", "hover", self._hover_iid)
+        self._hover_iid = iid
+        if iid:
+            call(widget, "tag", "add", "hover", iid)
 
     def insert_row(self, values: dict, iid=None, tags=None):
         row_count = len(self.tree.get_children())

@@ -2,13 +2,13 @@ import json
 import threading
 import urllib.parse
 import webbrowser
-import os
 
 import customtkinter as ctk
 from PIL import Image
 from customtkinter import CTkImage
 
 from config import LEAGUE
+from gui.palette import POE_PALETTE, themed
 from img_utils import get_cached_icon, get_icons_parallel
 from win_utils import center_window_on_parent, prepare_popup
 
@@ -22,8 +22,13 @@ ENCHANT_MODS = {
     "enchant.stat_1123534836": "Heist Targets are always Thieves' Trinkets",
     "enchant.stat_4182516619": "Heist Targets are always Experimented Items",
 }
+# Short labels for the dropdown, e.g. "Currency or Scarabs".
+ENCHANT_SHORT = {k: v.replace("Heist Targets are always ", "") for k, v in ENCHANT_MODS.items()}
+ENCHANT_BY_TEXT = {v: k for k, v in ENCHANT_SHORT.items()}
 
-ENCHANT_DISPLAY = list(ENCHANT_MODS.keys())
+ENCHANT_ANY = "Any"
+ENCHANT_NONE = "None"
+ENCHANT_SPECIFIC = "Specific"
 
 # ---------------- BLUEPRINTS ----------------
 
@@ -53,6 +58,30 @@ BLUEPRINT_ICONS = {
     "Blueprint: Underbelly": f"{ASSET_BASE}/underbelly.png",
 }
 
+WINGS_RANGE = (1, 4)
+ILVL_RANGE = (50, 100)
+
+DEFAULT_WINGS = ("4", "4")
+DEFAULT_ILVL = ("83", "83")
+
+ILVL_PRESETS = [
+    ("83", ("83", "83")),
+    ("83+", ("83", "")),
+    ("75–82", ("75", "82")),
+    ("Any", ("", "")),
+]
+
+
+def _range_filter(lo, hi):
+    """Trade API range dict; omits unset bounds. Returns None if both unset."""
+    f = {}
+    if lo is not None:
+        f["min"] = lo
+    if hi is not None:
+        f["max"] = hi
+    return f or None
+
+
 # ---------------- TRADE URL | QUERY ----------------
 def build_blueprint_trade_url(
     blueprint_type,
@@ -64,79 +93,46 @@ def build_blueprint_trade_url(
     enchant=None,
     exclude_enchants=False
 ):
-
-    stats = [
-        {
-            "type": "and",
-            "filters": [],
-            "disabled": False
-        }
-    ]
-
-    # ---------------- HEIST ENCHANTS ----------------
+    """Build a trade search URL. Pass None for a bound to leave it open."""
+    stats = [{"type": "and", "filters": [], "disabled": False}]
 
     if enchant:
         stats.append({
             "type": "and",
-            "filters": [
-                {
-                    "id": enchant,
-                    "disabled": False
-                }
-            ],
+            "filters": [{"id": enchant, "disabled": False}],
             "disabled": False
         })
-
     elif exclude_enchants:
         stats.append({
             "type": "not",
-            "filters": [
-                {"id": eid, "disabled": False}
-                for eid in ENCHANT_MODS.keys()
-            ],
+            "filters": [{"id": eid, "disabled": False} for eid in ENCHANT_MODS],
             "disabled": False
         })
 
+    filters = {}
+
+    wings = _range_filter(wings_min, wings_max)
+    if wings:
+        filters["heist_filters"] = {
+            "disabled": False,
+            "filters": {"heist_wings": wings, "heist_max_wings": dict(wings)}
+        }
+
+    ilvl = _range_filter(ilvl_min, ilvl_max)
+    if ilvl:
+        filters["misc_filters"] = {
+            "disabled": False,
+            "filters": {"ilvl": ilvl}
+        }
+
     query = {
         "query": {
-            "status": {
-                "option": "securable"
-            },
-
+            "status": {"option": "securable"},
             "type": blueprint_type,
-
             "stats": stats,
-
-            "filters": {
-                "heist_filters": {
-                    "disabled": False,
-                    "filters": {
-                        "heist_wings": {
-                            "min": wings_min,
-                            "max": wings_max
-                        },
-                        "heist_max_wings": {
-                            "min": wings_min,
-                            "max": wings_max
-                        }
-                    }
-                },
-
-                "misc_filters": {
-                    "disabled": False,
-                    "filters": {
-                        "ilvl": {
-                            "min": ilvl_min,
-                            "max": ilvl_max
-                        }
-                    }
-                }
-            }
+            "filters": filters,
         },
-
-        "sort": {
-            "price": "asc"
-        }
+        "sort": {"price": "asc"}
     }
 
     return (
@@ -145,16 +141,19 @@ def build_blueprint_trade_url(
         f"?q={urllib.parse.quote(json.dumps(query))}"
     )
 
+
 # ---------------- UI ----------------
 
 class QuickTradePopup:
 
     ICON_SIZE = 32
-    CARD_W = 100
-    CARD_H = 78
+    WIDTH = 500
 
-    COLLAPSED_HEIGHT = 390
-    EXPANDED_HEIGHT = 640
+    TILE_COLOR = themed(("gray90", "gray13"), POE_PALETTE["row_bg"])
+    TILE_HOVER = themed(("gray80", "gray25"), POE_PALETTE["header_bg"])
+    TILE_SELECTED_BORDER = themed(("#3B8ED0", "#1F6AA5"), POE_PALETTE["gold"])
+
+    ERROR_COLOR = ("#C0392B", "#E57373")
 
     def __init__(self, parent):
         self.parent = parent
@@ -162,13 +161,12 @@ class QuickTradePopup:
         self.popup = ctk.CTkToplevel(parent)
         prepare_popup(self.popup)
         self.popup.title("Quick Trade")
-        self.popup.geometry(f"500x{self.EXPANDED_HEIGHT}")
         self.popup.resizable(False, False)
-
         self.popup.transient(parent.winfo_toplevel())
 
-        self.main = ctk.CTkScrollableFrame(self.popup)
+        self.main = ctk.CTkFrame(self.popup, fg_color="transparent")
         self.main.pack(fill="both", expand=True, padx=8, pady=8)
+        self.main.grid_columnconfigure(0, weight=1)
 
         self.filters_open = True
 
@@ -180,6 +178,7 @@ class QuickTradePopup:
 
         self.icons = {}
         self.icon_labels = {}
+        self.tiles = {}
 
         # Use icons already in memory before the first draw.
         for name in BLUEPRINT_ICONS:
@@ -188,16 +187,17 @@ class QuickTradePopup:
                 self.icons[name] = self._to_ctk(cached)
 
         self._build()
+        self._refresh_selection()
+        self._update_summary()
 
-        threading.Thread(
-            target=self._wait_and_load_icons,
-            daemon=True
-        ).start()
+        threading.Thread(target=self._wait_and_load_icons, daemon=True).start()
 
-        center_window_on_parent(
-            self.popup,
-            self.parent
-        )
+        self._built = True
+        self._fit_window()
+        center_window_on_parent(self.popup, self.parent)
+
+        self.popup.bind("<Return>", lambda e: self.search())
+        self.popup.bind("<Escape>", lambda e: self.popup.destroy())
 
         self.popup.grab_set()
         self.popup.focus_force()
@@ -218,11 +218,7 @@ class QuickTradePopup:
             if name not in self.icons
         ]
 
-        loaded = get_icons_parallel(
-            missing,
-            size=(self.ICON_SIZE, self.ICON_SIZE)
-        )
-
+        loaded = get_icons_parallel(missing, size=(self.ICON_SIZE, self.ICON_SIZE))
         if not loaded:
             return
 
@@ -238,8 +234,7 @@ class QuickTradePopup:
         except Exception:
             return
 
-        # Swap images on the existing tiles instead of rebuilding the UI,
-        # which used to stack a second copy of every widget and reset filters.
+        # Swap images on the existing tiles instead of rebuilding the UI.
         for name, pil_img in loaded.items():
             ctk_img = self._to_ctk(pil_img)
             self.icons[name] = ctk_img
@@ -250,26 +245,76 @@ class QuickTradePopup:
 
     # ---------------- BUILD UI ----------------
 
-    def _build(self):
+    def _filter_row(self, label):
+        """Add a 'Label | content' row to the filter panel; returns the content frame."""
+        r = self._next_filter_row
+        self._next_filter_row += 1
 
+        ctk.CTkLabel(
+            self.filter_frame, text=label, font=("Segoe UI", 11, "bold"), anchor="w"
+        ).grid(row=r, column=0, sticky="w", padx=(14, 8), pady=4)
+
+        content = ctk.CTkFrame(self.filter_frame, fg_color="transparent")
+        content.grid(row=r, column=1, sticky="ew", padx=(0, 14), pady=4)
+        return content
+
+    def _range_row(self, label, defaults, presets):
+        """Min/max entries plus preset buttons, all on one row."""
+        row = self._filter_row(label)
+
+        lo = ctk.CTkEntry(row, width=42, placeholder_text="min")
+        hi = ctk.CTkEntry(row, width=42, placeholder_text="max")
+        lo.insert(0, defaults[0])
+        hi.insert(0, defaults[1])
+
+        lo.pack(side="left")
+        ctk.CTkLabel(row, text="–", width=14).pack(side="left")
+        hi.pack(side="left", padx=(0, 10))
+
+        self._default_border = lo.cget("border_color")
+
+        for entry in (lo, hi):
+            entry.bind("<KeyRelease>", lambda e: self._update_summary())
+
+        for text, values in presets:
+            ctk.CTkButton(
+                row, text=text, width=44, height=26,
+                command=lambda v=values: self._set_range(lo, hi, v)
+            ).pack(side="left", padx=2)
+
+        return lo, hi
+
+    def _build(self):
         row = 0
 
         # HEADER
         header = ctk.CTkFrame(self.main, corner_radius=10)
         header.grid(row=row, column=0, sticky="ew", pady=(0, 6))
+        header.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(header, text="Quick Search", font=("Segoe UI", 16, "bold")).pack(
-            anchor="w", padx=12, pady=(6, 0)
+        ctk.CTkLabel(header, text="Quick Search", font=("Segoe UI", 16, "bold")).grid(
+            row=0, column=0, sticky="w", padx=12, pady=(6, 0)
         )
+        ctk.CTkLabel(
+            header, text=f"League: {LEAGUE}", font=("Segoe UI", 10),
+            text_color=("gray45", "gray70")
+        ).grid(row=0, column=1, sticky="e", padx=12, pady=(6, 0))
 
-        ctk.CTkLabel(header, text="iLvl 83 with 4/4 revealed wings", font=("Segoe UI", 10),
-                     text_color=("gray45", "gray70")).pack(anchor="w", padx=12, pady=(0, 6))
+        self.summary_label = ctk.CTkLabel(
+            header, text="", font=("Segoe UI", 10), height=18,
+            text_color=("gray45", "gray70"), anchor="w", justify="left"
+        )
+        self.summary_label.grid(row=1, column=0, columnspan=2, sticky="w", padx=12)
 
+        ctk.CTkLabel(
+            header, text="Click a blueprint to search with these filters.",
+            font=("Segoe UI", 9), height=16, text_color=("gray45", "gray60")
+        ).grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
         row += 1
 
         # GRID
         grid = ctk.CTkFrame(self.main, fg_color="transparent")
-        grid.grid(row=row, column=0, sticky="ew")
+        grid.grid(row=row, column=0, sticky="ew", pady=(0, 6))
         row += 1
 
         for i in range(3):
@@ -279,284 +324,250 @@ class QuickTradePopup:
             r, c = divmod(i, 3)
 
             frame = ctk.CTkFrame(
-                grid,
-                corner_radius=10,
-                fg_color=("gray90", "gray13")
+                grid, corner_radius=10, fg_color=self.TILE_COLOR,
+                border_width=2, border_color=self.TILE_COLOR
             )
-
             frame.grid(row=r, column=c, padx=3, pady=3, sticky="nsew")
+            self.tiles[b] = frame
 
-            icon = self.icons.get(b, self.placeholder)
-
-            icon_label = ctk.CTkLabel(frame, text="", image=icon)
-            icon_label.pack(expand=True)
+            icon_label = ctk.CTkLabel(
+                frame, text="", image=self.icons.get(b, self.placeholder), height=self.ICON_SIZE
+            )
+            icon_label.pack(pady=(6, 0))
             self.icon_labels[b] = icon_label
 
             text_label = ctk.CTkLabel(
-                frame,
-                text=b.replace("Blueprint: ", ""),
-                font=("Segoe UI", 9)
+                frame, text=b.replace("Blueprint: ", ""), font=("Segoe UI", 9), height=16
             )
-            text_label.pack()
-
-            def bind_tile(widget, name=b):
-                widget.bind("<Button-1>", lambda e, n=name: self._select_blueprint(n))
-                widget.configure(cursor="hand2")
+            text_label.pack(pady=(0, 6))
 
             def on_enter(e, f=frame):
-                f.configure(fg_color=("gray80", "gray25"))
+                f.configure(fg_color=self.TILE_HOVER)
 
             def on_leave(e, f=frame):
-                f.configure(fg_color=("gray90", "gray13"))
+                f.configure(fg_color=self.TILE_COLOR)
 
             for w in (frame, icon_label, text_label):
-                bind_tile(w)
+                w.bind("<Button-1>", lambda e, n=b: self._select_blueprint(n))
                 w.bind("<Enter>", on_enter)
                 w.bind("<Leave>", on_leave)
-
+                w.configure(cursor="hand2")
 
         # ---------------- FILTER TOGGLE ----------------
 
-        self.toggle = ctk.CTkButton(
-            self.main,
-            text="Filters ▼",
-            command=self._toggle_filters
-        )
+        self.toggle = ctk.CTkButton(self.main, text="Filters ▼", height=26, command=self._toggle_filters)
         self.toggle.grid(row=row, column=0, sticky="ew")
         row += 1
 
         # ---------------- FILTER PANEL ----------------
 
         self.filter_frame = ctk.CTkFrame(self.main, corner_radius=12)
-        self.filter_frame.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+        self.filter_frame.grid(row=row, column=0, sticky="ew", pady=(6, 0))
+        self.filter_frame.grid_columnconfigure(1, weight=1)
         self.filter_row = row
+        self._next_filter_row = 0
 
         # Blueprint
-        ctk.CTkLabel(self.filter_frame, text="Blueprint", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=14)
-
         self.layout_var = ctk.StringVar(value=BLUEPRINT_LAYOUTS[0])
-
-        ctk.CTkComboBox(
-            self.filter_frame,
+        ctk.CTkOptionMenu(
+            self._filter_row("Blueprint"),
             values=BLUEPRINT_LAYOUTS,
-            variable=self.layout_var
-        ).pack(fill="x", padx=14, pady=(4, 10))
+            variable=self.layout_var,
+            height=28,
+            command=lambda _: (self._refresh_selection(), self._update_summary())
+        ).pack(fill="x")
 
-        # ---------------- WINGS ----------------
+        # Wings
+        wing_presets = [(f"{n}/{n}", (str(n), str(n)))
+                        for n in range(WINGS_RANGE[0], WINGS_RANGE[1] + 1)]
+        wing_presets.append(("Any", ("", "")))
+        self.wings_min, self.wings_max = self._range_row("Wings", DEFAULT_WINGS, wing_presets)
 
-        ctk.CTkLabel(
-            self.filter_frame,
-            text="Number of revealed wings (1–4)",
-            font=("Segoe UI", 11, "bold")
-        ).pack(anchor="w", padx=14)
+        # Item level
+        self.ilvl_min, self.ilvl_max = self._range_row("Item Level", DEFAULT_ILVL, ILVL_PRESETS)
 
-        w = ctk.CTkFrame(self.filter_frame, fg_color="transparent")
-        w.pack(fill="x", padx=14)
+        # Enchant
+        enchant_row = self._filter_row("Enchant")
+        self.enchant_mode = ctk.StringVar(value=ENCHANT_NONE)
+        ctk.CTkSegmentedButton(
+            enchant_row,
+            values=[ENCHANT_ANY, ENCHANT_NONE, ENCHANT_SPECIFIC],
+            variable=self.enchant_mode,
+            height=28,
+            command=lambda _: self._on_enchant_mode()
+        ).pack(side="left")
 
-        self.wings_min = ctk.CTkEntry(w, width=80)
-        self.wings_max = ctk.CTkEntry(w, width=80)
-
-        self.wings_min.insert(0, "4")
-        self.wings_max.insert(0, "4")
-
-        ctk.CTkLabel(w, text="Min").pack(side="left")
-        self.wings_min.pack(side="left", padx=(5, 15))
-
-        ctk.CTkLabel(w, text="Max").pack(side="left")
-        self.wings_max.pack(side="left", padx=(5, 0))
-
-        # ---------------- WING PRESETS ----------------
-
-        presets = ctk.CTkFrame(self.filter_frame, fg_color="transparent")
-        presets.pack(fill="x", padx=14, pady=(6, 0))
-
-        ctk.CTkLabel(
-            presets,
-            text="Quick:",
-            font=("Segoe UI", 10)
-        ).pack(side="left", padx=(0, 6))
-
-        for n in range(3, 5):
-            ctk.CTkButton(
-                presets,
-                text=f"{n}/{n}",
-                width=55,
-                command=lambda x=n: self._set_wings(x)
-            ).pack(side="left", padx=3)
-
-        # ---------------- ILVL (REAL 50–100) ----------------
-
-        ctk.CTkLabel(self.filter_frame, text="Item Level (50–100)", font=("Segoe UI", 11, "bold")).pack(
-            anchor="w", padx=14, pady=(10, 0)
-        )
-
-        il = ctk.CTkFrame(self.filter_frame, fg_color="transparent")
-        il.pack(fill="x", padx=14)
-
-        self.ilvl_min = ctk.CTkEntry(il)
-        self.ilvl_max = ctk.CTkEntry(il)
-
-        self.ilvl_min.insert(0, "83")
-
-        self.ilvl_max.insert(0, "83")
-
-        ctk.CTkLabel(il, text="Min").pack(side="left")
-        self.ilvl_min.pack(side="left", padx=(5, 15))
-
-        ctk.CTkLabel(il, text="Max").pack(side="left")
-        self.ilvl_max.pack(side="left", padx=(5, 0))
-
-        # ---------------- ENCHANT ----------------
-
-        self.enchant_var = ctk.BooleanVar()
-        self.enchant_select = ctk.StringVar()
-
-        e = ctk.CTkFrame(self.filter_frame, fg_color="transparent")
-        e.pack(fill="x", padx=14, pady=(10, 0))
-
-        self.enchant_cb = ctk.CTkCheckBox(
-            e,
-            text="Enchanted",
-            variable=self.enchant_var,
-            command=self._toggle_enchant
-        )
-        self.enchant_cb.pack(side="left")
-
-        self.enchant_menu = ctk.CTkComboBox(
-            e,
-            values=list(ENCHANT_MODS.values()),
-            state="disabled",
+        self.enchant_select = ctk.StringVar(value=next(iter(ENCHANT_SHORT.values())))
+        self.enchant_menu = ctk.CTkOptionMenu(
+            enchant_row,
+            values=list(ENCHANT_SHORT.values()),
             variable=self.enchant_select,
-            width=280
+            height=28,
+            dynamic_resizing=False,
+            command=lambda _: self._update_summary()
         )
-        self.enchant_menu.pack(side="left", padx=10)
+        self.enchant_menu.pack(side="left", fill="x", expand=True, padx=(8, 0))
 
-        # ---------------- SEARCH ----------------
+        # Error (only shown when there are errors) + search
+        self.error_label = ctk.CTkLabel(
+            self.filter_frame, text="", text_color=self.ERROR_COLOR,
+            font=("Segoe UI", 10), anchor="w", justify="left", wraplength=440
+        )
+        self.error_row = self._next_filter_row
+        self._next_filter_row += 1
 
         ctk.CTkButton(
-            self.filter_frame,
-            text="Search",
-            command=self.search
-        ).pack(fill="x", padx=14, pady=10)
+            self.filter_frame, text="Search", command=self.search
+        ).grid(row=self._next_filter_row, column=0, columnspan=2, sticky="ew", padx=14, pady=(6, 12))
+
+        self._on_enchant_mode()
+
+    # ---------------- FILTER HELPERS ----------------
+
+    def _set_range(self, lo_entry, hi_entry, values):
+        for entry, value in ((lo_entry, values[0]), (hi_entry, values[1])):
+            entry.delete(0, "end")
+            if value:
+                entry.insert(0, value)
+        self._update_summary()
+
+    def _on_enchant_mode(self):
+        specific = self.enchant_mode.get() == ENCHANT_SPECIFIC
+        self.enchant_menu.configure(state="normal" if specific else "disabled")
+        self._update_summary()
+
+    def _parse_range(self, lo_entry, hi_entry, bounds, name, errors):
+        """Return (lo, hi) as ints or None; append messages to errors."""
+        result = []
+        for entry in (lo_entry, hi_entry):
+            text = entry.get().strip()
+            value = None
+            ok = True
+            if text:
+                try:
+                    value = int(text)
+                    ok = bounds[0] <= value <= bounds[1]
+                except ValueError:
+                    ok = False
+            if not ok:
+                errors.append(f"{name} must be a number between {bounds[0]} and {bounds[1]}.")
+                value = None
+            entry.configure(border_color=self._default_border if ok else self.ERROR_COLOR)
+            result.append(value)
+
+        lo, hi = result
+        if lo is not None and hi is not None and lo > hi:
+            errors.append(f"{name}: min can't be greater than max.")
+            hi_entry.configure(border_color=self.ERROR_COLOR)
+        return lo, hi
+
+    def _collect_filters(self):
+        """Read and validate the form. Returns (kwargs, errors)."""
+        errors = []
+        wings = self._parse_range(self.wings_min, self.wings_max, WINGS_RANGE, "Wings", errors)
+        ilvl = self._parse_range(self.ilvl_min, self.ilvl_max, ILVL_RANGE, "Item level", errors)
+
+        mode = self.enchant_mode.get()
+        enchant = ENCHANT_BY_TEXT.get(self.enchant_select.get()) if mode == ENCHANT_SPECIFIC else None
+        if mode == ENCHANT_SPECIFIC and enchant is None:
+            errors.append("Pick an enchant.")
+
+        kwargs = dict(
+            wings_min=wings[0], wings_max=wings[1],
+            ilvl_min=ilvl[0], ilvl_max=ilvl[1],
+            enchant=enchant,
+            exclude_enchants=(mode == ENCHANT_NONE),
+        )
+        return kwargs, list(dict.fromkeys(errors))
+
+    @staticmethod
+    def _describe_range(lo, hi, unit_fmt):
+        if lo is None and hi is None:
+            return None
+        if lo == hi:
+            return unit_fmt(str(lo))
+        if hi is None:
+            return unit_fmt(f"{lo}+")
+        if lo is None:
+            return unit_fmt(f"≤{hi}")
+        return unit_fmt(f"{lo}–{hi}")
+
+    def _update_summary(self):
+        kwargs, errors = self._collect_filters()
+        self._show_errors(errors)
+
+        parts = [
+            self._describe_range(kwargs["ilvl_min"], kwargs["ilvl_max"], lambda s: f"iLvl {s}") or "Any iLvl",
+            self._describe_range(
+                kwargs["wings_min"], kwargs["wings_max"],
+                lambda s: f"{s}/{s} wings" if s.isdigit() else f"{s} wings"
+            ) or "Any wings",
+        ]
+        mode = self.enchant_mode.get()
+        if mode == ENCHANT_ANY:
+            parts.append("Any enchant")
+        elif mode == ENCHANT_NONE:
+            parts.append("No enchants")
+        else:
+            parts.append(f"Targets: {self.enchant_select.get()}")
+
+        self.summary_label.configure(text=" · ".join(parts))
+
+    def _refresh_selection(self):
+        selected = self.layout_var.get()
+        for name, frame in self.tiles.items():
+            frame.configure(
+                border_color=self.TILE_SELECTED_BORDER if name == selected else self.TILE_COLOR
+            )
 
     # ---------------- LOGIC ----------------
 
+    def _fit_window(self):
+        """Size the popup to its content so nothing needs scrolling."""
+        self.popup.update_idletasks()
+        height = self.main.winfo_reqheight() + 16  # main's pady
+        self.popup.geometry(f"{self.WIDTH}x{height}")
+
+    def _show_errors(self, errors):
+        text = "\n".join(errors)
+        if text == self.error_label.cget("text"):
+            return
+        self.error_label.configure(text=text)
+        if errors:
+            self.error_label.grid(row=self.error_row, column=0, columnspan=2,
+                                  sticky="ew", padx=14, pady=(2, 0))
+        else:
+            self.error_label.grid_remove()
+        if getattr(self, "_built", False):
+            self._fit_window()
+
     def _toggle_filters(self):
-
         if self.filters_open:
-
             self.filter_frame.grid_remove()
             self.toggle.configure(text="Filters ▶")
-
-            self.popup.geometry(f"500x{self.COLLAPSED_HEIGHT}")
-
         else:
-
-            self.filter_frame.grid(
-                row=self.filter_row,
-                column=0,
-                sticky="ew",
-                pady=(0, 10)
-            )
-
+            self.filter_frame.grid(row=self.filter_row, column=0, sticky="ew", pady=(6, 0))
             self.toggle.configure(text="Filters ▼")
 
-            self.popup.geometry(f"500x{self.EXPANDED_HEIGHT}")
-
         self.filters_open = not self.filters_open
-
-    def _toggle_enchant(self):
-        self.enchant_menu.configure(state="normal" if self.enchant_var.get() else "disabled")
-
-    def _wmin(self, v):
-        v = int(round(v))
-        self.wmin_val.configure(text=str(v))
-
-    def _wmax(self, v):
-        v = int(round(v))
-        self.wmax_val.configure(text=str(v))
+        self._fit_window()
 
     def search(self):
-        try:
-            wings_min = int(self.wings_min.get())
-            wings_max = int(self.wings_max.get())
-        except:
-            wings_min = wings_max = 4
+        kwargs, errors = self._collect_filters()
+        self._show_errors(errors)
+        if errors:
+            if not self.filters_open:
+                self._toggle_filters()
+            return
 
-        enchant_text = self.enchant_select.get()
-
-        enchant = None
-        for k, v in ENCHANT_MODS.items():
-            if v == enchant_text:
-                enchant = k
-                break
-
-        url = build_blueprint_trade_url(
-            self.layout_var.get(),
-            wings_min=wings_min,
-            wings_max=wings_max,
-            ilvl_min=int(self.ilvl_min.get()),
-            ilvl_max=int(self.ilvl_max.get()),
-            enchant=enchant if self.enchant_var.get() else None,
-            exclude_enchants=not self.enchant_var.get()
-        )
-        webbrowser.open(url)
+        webbrowser.open(build_blueprint_trade_url(self.layout_var.get(), **kwargs))
 
     def _select_blueprint(self, blueprint):
-
-        # Quick-search defaults
         self.layout_var.set(blueprint)
+        self._refresh_selection()
+        self._update_summary()
+        self.search()
 
-        self.wings_min.delete(0, "end")
-        self.wings_max.delete(0, "end")
-
-        self.wings_min.insert(0, "4")
-        self.wings_max.insert(0, "4")
-
-        self.ilvl_min.delete(0, "end")
-        self.ilvl_max.delete(0, "end")
-
-        self.ilvl_min.insert(0, "83")
-        self.ilvl_max.insert(0, "83")
-
-        self._open_search()
-
-    def _open_search(self):
-        try:
-            wings_min = int(self.wings_min.get())
-            wings_max = int(self.wings_max.get())
-        except:
-            wings_min = wings_max = 4
-
-        enchant = None
-
-        if self.enchant_var.get():
-
-            enchant_text = self.enchant_select.get()
-
-            for k, v in ENCHANT_MODS.items():
-                if v == enchant_text:
-                    enchant = k
-                    break
-
-        url = build_blueprint_trade_url(
-            self.layout_var.get(),
-            wings_min=wings_min,
-            wings_max=wings_max,
-            ilvl_min=int(self.ilvl_min.get()),
-            ilvl_max=int(self.ilvl_max.get()),
-            enchant=enchant,
-            exclude_enchants=not self.enchant_var.get()
-        )
-
-        webbrowser.open(url)
-
-    def _set_wings(self, value):
-        self.wings_min.delete(0, "end")
-        self.wings_max.delete(0, "end")
-
-        self.wings_min.insert(0, str(value))
-        self.wings_max.insert(0, str(value))
 
 def show_quick_trade_popup(parent):
     QuickTradePopup(parent)

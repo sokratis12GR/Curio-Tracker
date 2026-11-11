@@ -258,21 +258,22 @@ def start_main_app(root, theme_mode, theme_manager):
         text="Open Collection",
         command=lambda: CollectionPopup(parent=root, tracker=tracker).show()
     )
-    lbl.grid(row=0, column=1, sticky="nsew", pady=(5, 2), padx=(5, 0))
+    # Wider gap separates the app menu group from the feature buttons
+    lbl.grid(row=0, column=1, sticky="nsew", pady=5, padx=(16, 0))
 
     lbl_bp = CTkButton(
         top_frame,
         text="Blueprints Information",
         command=lambda: show_blueprint_encyclopedia_popup(top_frame, tracker=tracker)
     )
-    lbl_bp.grid(row=0, column=2, sticky="nsew", pady=(5, 2), padx=(5, 0))
+    lbl_bp.grid(row=0, column=2, sticky="nsew", pady=5, padx=(5, 0))
 
     quick_trade_btn = CTkButton(
         top_frame,
         text="Quick Trade",
         command=lambda: show_quick_trade_popup(top_frame)
     )
-    quick_trade_btn.grid(row=0, column=3, sticky="nsew", pady=(5, 2), padx=(5, 0))
+    quick_trade_btn.grid(row=0, column=3, sticky="nsew", pady=5, padx=(5, 0))
 
     def load_quick_trade_icon():
         name, url = next(iter(BLUEPRINT_ICONS.items()))
@@ -298,11 +299,12 @@ def start_main_app(root, theme_mode, theme_manager):
     actions_frame = ActionsFrame(actions_frame, tree_manager, theme_manager)
 
     toggle_frame = layout['toggle_frame']
-    tree_toggles = TreeToggles(toggle_frame, tree, tree_manager)
-    tree_toggles.frame.grid(row=1, column=0, sticky="e", padx=5)
+    tree_toggles = TreeToggles(toggle_frame, tree, tree_manager, theme_manager)
+    toggle_frame.grid_rowconfigure(0, weight=1)
+    tree_toggles.frame.grid(row=0, column=0, sticky="", padx=5)
     total_frame = TotalFrame(layout['total_frame'], tree_manager)
     tree_manager.total_frame = total_frame
-    total_frame.frame.pack(anchor="w")
+    total_frame.frame.pack(fill="x", expand=True, padx=6, pady=6)
 
     left_controls = LeftFrameControls(
         parent=left_frame,
