@@ -29,7 +29,6 @@ OCR_COLOR_RANGES = tuple(
         (c.replica_l_hsv, c.replica_u_hsv),
         (c.rare_l_hsv, c.rare_u_hsv),
         (c.currency_l_hsv, c.currency_u_hsv),
-        (c.scarab_l_hsv, c.scarab_u_hsv),
         (c.enchant_l_hsv, c.enchant_u_hsv),
     )
 )

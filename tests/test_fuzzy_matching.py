@@ -15,7 +15,7 @@ TERMS = {
     "Honed Cleaver": c.EXPERIMENTAL_TYPE,
     "Headhunter": c.REPLICA_TYPE,
     "Abyssus": c.REPLICA_TYPE,
-    "Breach Scarab of the Hive": c.SCARAB_TYPE,
+    "Tempering Orb": c.CURRENCY_TYPE,
     "Orb of Annulment": c.CURRENCY_TYPE,
     "8% increased Explicit Speed Modifier magnitudes": c.WEAPON_ENCHANT_TYPE,
 }
@@ -69,7 +69,7 @@ class FuzzyMatchingTests(unittest.TestCase):
         self.assertEqual(match("Headhuntr\nLeather Belt")[0], ["Headhunter"])
 
     def test_garbled_multi_word_terms_still_match(self):
-        self.assertEqual(match("Breach Scarab 0f the Hlve")[0], ["Breach Scarab of the Hive"])
+        self.assertEqual(match("Blessinq 0f Chayu1a")[0], ["Blessing of Chayula"])
         self.assertEqual(match("Orb of Annulrnent")[0], ["Orb of Annulment"])
 
     def test_enchants_never_fuzzy_matched(self):

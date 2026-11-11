@@ -29,7 +29,7 @@ Each capture has a toast in the top right as a notification which shows the capt
 
 **F2** captures the entire screen, reads the Curios on it and saves the data as well as adding it to the display tree. It checks for duplicates within the last 60 seconds (adjustable) and ignores them.
 
-**F4** opens the snippet tool, allowing you to capture a selected region. This bypasses the duplicate check and is recommended for capturing Currency/Scarabs.
+**F4** opens the snippet tool, allowing you to capture a selected region. This bypasses the duplicate check and is recommended for capturing Currency.
 
 ### Example Usage
 

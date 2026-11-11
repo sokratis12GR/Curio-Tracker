@@ -184,7 +184,6 @@ body:
       description: If applicable, which type of Curio reward was affected?
       options:
         - Replicas / Replacements
-        - Scarabs
         - Currencies
         - Enchants
         - Not sure

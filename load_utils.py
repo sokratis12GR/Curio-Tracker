@@ -322,6 +322,10 @@ def load_csv_from_url(url, row_parser=None, skip_header=True):
 _REMOTE_TERMS_CACHE = None
 
 
+def is_removed_scarab(name, type_name):
+    return type_name == c.SCARAB_TYPE or "scarab" in name.lower()
+
+
 def load_remote_terms(url=c.all_terms_url):
     global _REMOTE_TERMS_CACHE
 
@@ -336,8 +340,9 @@ def load_remote_terms(url=c.all_terms_url):
     for entry in data:
         name = entry.get("Name", "").strip()
         type_name = entry.get("Type", "").strip()
-        if name:
-            parsed[smart_title_case(name)] = type_name
+        if not name or is_removed_scarab(name, type_name):
+            continue
+        parsed[smart_title_case(name)] = type_name
 
     _REMOTE_TERMS_CACHE = parsed
     print(f"Successfully loaded cached JSON ({len(parsed)} terms).")

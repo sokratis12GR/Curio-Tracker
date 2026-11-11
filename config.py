@@ -127,7 +127,7 @@ ENABLE_LOGGING = True
 USE_JSON_INSTEAD = False
 
 # Update these every league.
-FIXED_LADDER_IDENTIFIER = "Keepers"
+FIXED_LADDER_IDENTIFIER = "Covens"
 LEAGUES_TO_FETCH = [
     LEAGUE,
     f"Hardcore {LEAGUE}",
@@ -229,7 +229,7 @@ REPLICA_TYPE = "Replica"
 EXPERIMENTAL_TYPE = "Experimental"
 WEAPON_ENCHANT_TYPE = "Weapon Enchants"
 ARMOR_ENCHANT_TYPE = "Armor Enchants"
-SCARAB_TYPE = "Scarab"
+SCARAB_TYPE = "Scarab" #3.30 removal - keeping for data map parity.
 CURRENCY_TYPE = "Currency"
 
 # Fuzzy matching (failed-capture review fallback only)

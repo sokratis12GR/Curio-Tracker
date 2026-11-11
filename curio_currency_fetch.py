@@ -29,7 +29,7 @@ HEADERS = {
     ),
     "Accept": "application/json",
 }
-VALID_TYPES = ["Currency", "Scarab", "Replica", "Replacement", "Experimental"]
+VALID_TYPES = ["Currency", "Replica", "Replacement", "Experimental"]
 
 ITEMS_TYPE_MAP = get_datasets()["terms"]
 
@@ -37,7 +37,6 @@ ITEMS_TYPE_MAP["Chaos Orb"] = "Currency"
 
 CATEGORIES_API = {
     "Currency": "exchange",
-    "Scarabs": "exchange",
     "Unique Flasks": "stash",
     "Unique Jewels": "stash",
     "Unique Accessories": "stash",
@@ -49,7 +48,6 @@ CATEGORIES_API = {
 
 ITEM_TYPE_MAP = {
     "Currency": "Currency",
-    "Scarabs": "Scarab",
     "Unique Flasks": "UniqueFlask",
     "Unique Jewels": "UniqueJewel",
     "Unique Accessories": "UniqueAccessory",
