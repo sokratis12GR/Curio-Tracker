@@ -23,13 +23,16 @@ def create_settings_menu(tabview, tracker, theme_manager, tree_manager: TreeMana
             show_settings_popup(tabview, tracker, theme_manager, tree_manager)
         elif choice == "Data Tools":
             show_data_tools_popup(tabview, tree_manager)
+        elif choice == "Tutorial":
+            from gui.popups.tutorial import show_tutorial_popup
+            show_tutorial_popup(tabview)
         elif choice == "Exit":
             tabview.winfo_toplevel().destroy()
 
         menu_dropdown.set("File")
 
     file_menu_items = ["Keybinds", "About", "Settings",
-                       "Data Tools",
+                       "Data Tools", "Tutorial",
                        "Exit"]
 
     menu_dropdown = ctk.CTkOptionMenu(

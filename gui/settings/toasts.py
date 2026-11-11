@@ -40,6 +40,14 @@ class ToastSettingsMixin:
 
         row += 1
 
+        ctk.CTkLabel(frame, text="Monitor:").grid(row=row, column=0, sticky="w")
+
+        ctk.CTkComboBox(frame, variable=self.toast_monitor_var, values=self.toast_monitor_choices,
+                        width=self.width, state="readonly",
+                        command=lambda v: toasts.set_toast_monitor(v, self.parent)).grid(row=row, column=1, sticky="w")
+
+        row += 1
+
         ctk.CTkLabel(frame, text="Y Offset (px):").grid(row=row, column=0, sticky="w")
 
         y_offset_entry = ctk.CTkEntry(frame, textvariable=self.toasts_y_offset_var, width=self.width)
@@ -67,6 +75,12 @@ class ToastSettingsMixin:
         duration_entry.grid(row=row, column=1, sticky="w", pady=(4, 0))
 
         self.toasts_duration_var.trace_add("write", self._update_toasts_duration)
+
+        row += 1
+
+        ctk.CTkCheckBox(frame, text="Fade Out", variable=self.toast_fade_out_var,
+                        command=lambda: toasts.set_toast_fade_out(self.toast_fade_out_var.get())).grid(
+            row=row, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         row += 1
 
@@ -396,6 +410,12 @@ class ToastSettingsMixin:
         except ValueError:
             return
 
+        clamped = max(c.TOAST_DURATION_MIN, min(c.TOAST_DURATION_MAX, dur))
+
+        if clamped != dur:
+            self.toasts_duration_var.set(str(clamped))
+            return
+
         toasts.set_toast_duration(dur)
 
     def _toggle_toasts(self):
@@ -462,6 +482,12 @@ class ToastSettingsMixin:
         toasts.set_toast_image_height(default_image_height)
         toasts.set_toast_font_size(default_font_size)
         toasts.set_toast_headline_font_size(default_headline_font_size)
+
+        self.toast_fade_out_var.set(c.DEFAULT_TOAST_FADE_OUT)
+        self.toast_monitor_var.set(c.DEFAULT_TOAST_MONITOR)
+        toasts.set_toast_fade_out(c.DEFAULT_TOAST_FADE_OUT)
+        toasts.set_toast_monitor(c.DEFAULT_TOAST_MONITOR)
+
         self._update_toast_custom_visibility()
 
         try:

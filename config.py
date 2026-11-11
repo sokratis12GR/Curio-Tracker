@@ -298,6 +298,7 @@ all_terms_url = "https://sokratis.space/curio_tracker/terms.json"
 experimental_items_url = "https://sokratis.space/curio_tracker/experimental_items.json"
 enchantments_trade_url = "https://sokratis.space/curio_tracker/enchantments_trade.json"
 blueprint_info_url = "https://sokratis.space/curio_tracker/blueprint_info.json"
+tutorial_url = "https://sokratis.space/curio_tracker/tutorial.json"
 
 site_cache_lock_file_name = "fetch/site_cache.lock"
 
@@ -306,6 +307,7 @@ terms_cache_file_name = "fetch/terms.json"
 experimental_items_cache_file_name = "fetch/experimental_items.json"
 enchantments_trade_cache_file_name = "fetch/enchantments_trade.json"
 blueprint_info_cache_file_name = "fetch/blueprint_info.json"
+tutorial_cache_file_name = "fetch/tutorial.json"
 
 target_application = "Path of Exile"
 not_found_target_txt = "Path of Exile window not found."
@@ -346,6 +348,11 @@ DEFAULT_TOAST_POSITION = "top_right"
 DEFAULT_TOAST_Y_OFFSET = 80
 DEFAULT_TOAST_X_OFFSET = 0
 DEFAULT_TOAST_DURATION = 5
+TOAST_DURATION_MIN = 1
+TOAST_DURATION_MAX = 120
+MAX_VISIBLE_TOASTS = 5
+DEFAULT_TOAST_FADE_OUT = True
+DEFAULT_TOAST_MONITOR = "Primary"
 DEFAULT_TOAST_ENABLE = True
 DEFAULT_TOP_RIGHT_CAPTURE_PERCENT = 0.01
 

@@ -1,0 +1,32 @@
+{
+  "pages": [
+    {
+      "title": "Welcome to Heist Curio Tracker!",
+      "body": "This tool reads the Curio Displays in Grand Heist wings and saves them as reward data, so you can analyze the loot from your runs.\n\nYou can reopen this tutorial anytime from File > Tutorial."
+    },
+    {
+      "title": "Step 1: Set Up Your Profile",
+      "body": "Open File > Settings and expand \"Player & League\".\n\n• PoE Profile: enter your account name with its tag, e.g. player#1234. It is saved with every record as \"Logged By\".\n\n• Pricing League: choose the league used for poe.ninja prices."
+    },
+    {
+      "title": "Step 2: Collection (Optional)",
+      "body": "In \"Player & League\" you can enable PoELadder | Collection to see which items you already own.\n\n• Click \"How to setup\" for the PoE Ladder instructions.\n• Tick \"Enable PoELadder | Collection\", pick your league, then press \"Fetch Collection\"."
+    },
+    {
+      "title": "Step 3: Capture the Blueprint Layout",
+      "body": "Once you are inside the Blueprint, press {layout_capture_key} while the area info in the top-right of your screen is visible (Blueprint name and Monster Level).\n\nA toast confirms the Layout and Area Level. Do this once per Blueprint; every curio you capture afterwards is tagged with it.\n\nIf it fails, press it again. The capture area can be adjusted in File > Settings > Capture / OCR."
+    },
+    {
+      "title": "Step 4: Capturing Curios",
+      "body": "In a wing, go to the Curio Display room and press:\n\n• {capture_key}: capture every curio on screen\n• {snippet_key}: draw a region around specific curios (allows duplicates)\n\nNo need to wait. Capture and keep moving. A toast (notification) in the top-right shows what was saved, its value, rarity and whether you own it."
+    },
+    {
+      "title": "Step 5: Fixing Mistakes",
+      "body": "• {duplicate_latest_key}: duplicate the latest entry\n• {delete_latest_key}: delete the latest entry\n• {exit_key}: close the tool\n\nAll hotkeys can be changed in File > Keybinds."
+    },
+    {
+      "title": "You're All Set!",
+      "body": "Your data is saved in ./saved/ as matches.csv or matches.json (switch with the \"Data\" button at the top).\n\nLoad it into Curio Stats for probabilities and rarest finds:\nhttps://sokratis.space/curio_tracker/stats/\n\nGood luck with your heists!"
+    }
+  ]
+}

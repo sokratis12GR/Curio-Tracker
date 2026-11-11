@@ -21,6 +21,42 @@ def grab_screen(bbox=None):
         return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
 
+def get_monitors():
+    """Return monitors as a list of dicts: left, top, width, height, primary.
+
+    The primary monitor is listed first. Returns an empty list if detection fails.
+    """
+    monitors = []
+
+    try:
+        if IS_WINDOWS:
+            import win32api
+
+            for handle, _dc, _rect in win32api.EnumDisplayMonitors():
+                info = win32api.GetMonitorInfo(handle)
+                left, top, right, bottom = info["Monitor"]
+                monitors.append({
+                    "left": left, "top": top,
+                    "width": right - left, "height": bottom - top,
+                    "primary": bool(info.get("Flags", 0) & 1),
+                })
+        else:
+            import mss
+
+            with mss.mss() as sct:
+                for i, m in enumerate(sct.monitors[1:]):
+                    monitors.append({
+                        "left": m["left"], "top": m["top"],
+                        "width": m["width"], "height": m["height"],
+                        "primary": i == 0,
+                    })
+    except Exception:
+        return []
+
+    monitors.sort(key=lambda m: (not m["primary"], m["left"], m["top"]))
+    return monitors
+
+
 def grab_clipboard_image():
     from PIL import ImageGrab
 

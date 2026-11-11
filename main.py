@@ -126,6 +126,9 @@ def main():
 
     apply_theme(theme_mode)
 
+    from gui.popups.tutorial import is_first_run, refresh_tutorial
+    first_run = is_first_run()
+
     root = CTk()
 
     init_font_var(root)
@@ -186,6 +189,7 @@ def main():
                 threading.Thread(target=fetch_tiers.run_fetch_curios),
                 threading.Thread(target=fetch_collection.run_fetch_curios_threaded, args=(player,)),
                 threading.Thread(target=fetch_currency.run_fetch),
+                threading.Thread(target=refresh_tutorial),
             ]
 
             for fetch_thread in fetch_threads:
@@ -213,14 +217,15 @@ def main():
         start_main_app(
             root,
             theme_mode,
-            theme_manager
+            theme_manager,
+            first_run=first_run
         )
 
     threading.Thread(target=initialize_app, daemon=True).start()
     root.mainloop()
 
 
-def start_main_app(root, theme_mode, theme_manager):
+def start_main_app(root, theme_mode, theme_manager, first_run=False):
     root.title(f"Heist Curio Tracker - v{get_version()}")
     root.geometry("1200x720")
     root.resizable(True, True)
@@ -344,6 +349,10 @@ def start_main_app(root, theme_mode, theme_manager):
     except Exception as e:
         if DEBUGGING:
             print(f"[WARN] Could not initialize controller thread: {e}")
+
+    if first_run:
+        from gui.popups.tutorial import show_tutorial_popup
+        root.after(500, lambda: show_tutorial_popup(root))
 
     root.after(
         2000,

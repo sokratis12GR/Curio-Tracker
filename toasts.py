@@ -1,15 +1,16 @@
+import time
 import tkinter as tk
-import urllib.request
 from dataclasses import dataclass
-from io import BytesIO
 from typing import Optional
 
 import customtkinter as ctk
 from PIL import Image, ImageTk
 
+import config as c
 import currency_utils
 import fonts
 import ocr_utils as utils
+import platform_compat
 from logger import log_message
 from renderer import render_item, get_border_color
 from settings import get_setting, set_setting
@@ -18,7 +19,12 @@ from tree_manager import TreeManager
 
 TOASTS = []
 TOAST_MARGIN, TOAST_SPACING, TOAST_PADDING = 10, 6, 4
-TOASTS_DURATION = get_setting('Application', 'toasts_duration_seconds', 5)
+TOAST_ALPHA = 0.98
+FADE_STEPS, FADE_STEP_MS = 10, 25
+TOASTS_DURATION = max(
+    c.TOAST_DURATION_MIN,
+    int(get_setting('Application', 'toasts_duration_seconds', c.DEFAULT_TOAST_DURATION)),
+)
 ARE_TOASTS_ENABLED = get_setting('Application', 'are_toasts_enabled', True)
 TOAST_POSITION = get_setting("Application", "toast_position", "top_right")
 TOAST_Y_OFFSET = int(get_setting("Application", "toast_y_offset", 80))
@@ -28,18 +34,12 @@ TOAST_IMAGE_HEIGHT = int(get_setting("Application", "toast_image_height", 40))
 TOAST_FONT_SIZE = int(get_setting("Application", "toast_font_size", 11))
 TOAST_HEADLINE_FONT_SIZE = int(get_setting("Application", "toast_headline_font_size", 10))
 COLLECTION_MISSING_COLOR = get_setting("Application", "collection_missing_color", "#00FF00")
+TOAST_FADE_OUT = bool(get_setting("Application", "toast_fade_out", c.DEFAULT_TOAST_FADE_OUT))
+TOAST_MONITOR = str(get_setting("Application", "toast_monitor", c.DEFAULT_TOAST_MONITOR))
 
 TOAST_FONT = None
 TOAST_HEADLINE_FONT = None
 EXAMPLE_TOAST = None
-
-EXAMPLE_IMAGE_URL = (
-    "https://web.poecdn.com/gen/image/"
-    "WzI1LDE0LHsiZiI6IjJESXRlbXMvQmVsdHMvQmF0ZWRCcmVhdGgiLCJzY2FsZSI6MX1d/"
-    "726ab7c1f0/BatedBreath.png"
-)
-
-EXAMPLE_SOURCE_IMAGE = None
 
 
 def get_toast_font():
@@ -63,26 +63,52 @@ def get_toast_headline_font():
     return TOAST_HEADLINE_FONT
 
 
+def get_monitor_choices():
+    """Values for the settings Monitor dropdown."""
+    names = ["Primary"]
+    for i, m in enumerate(platform_compat.get_monitors(), start=1):
+        suffix = " (Primary)" if m["primary"] else ""
+        names.append(f"Monitor {i}: {m['width']}x{m['height']}{suffix}")
+    return names
+
+
+def get_target_monitor(root):
+    """(left, top, width, height) of the monitor toasts should appear on."""
+    monitors = platform_compat.get_monitors()
+
+    if TOAST_MONITOR.startswith("Monitor "):
+        try:
+            index = int(TOAST_MONITOR.split()[1].rstrip(":")) - 1
+            m = monitors[index]
+            return m["left"], m["top"], m["width"], m["height"]
+        except (ValueError, IndexError):
+            pass  # Monitor unplugged or invalid setting: fall back to primary.
+
+    if monitors:
+        m = monitors[0]
+        return m["left"], m["top"], m["width"], m["height"]
+
+    return 0, 0, root.winfo_screenwidth(), root.winfo_screenheight()
+
+
 def reposition(root):
-    screen_w = root.winfo_screenwidth()
-    screen_h = root.winfo_screenheight()
-
-    position = TOAST_POSITION
-    y_offset = TOAST_Y_OFFSET
-    x_offset = TOAST_X_OFFSET
-
     alive = [t for t in TOASTS if t.winfo_exists()]
     TOASTS[:] = alive
     if not TOASTS:
         return
 
+    mon_x, mon_y, screen_w, screen_h = get_target_monitor(root)
+
+    position = TOAST_POSITION
+    y_offset = TOAST_Y_OFFSET
+    x_offset = TOAST_X_OFFSET
+
     stack_down = position.startswith("top")
-    stack_up = position.startswith("bottom")
 
     if stack_down:
-        y = TOAST_MARGIN + y_offset
+        y = mon_y + TOAST_MARGIN + y_offset
     else:
-        y = screen_h - TOAST_MARGIN - y_offset
+        y = mon_y + screen_h - TOAST_MARGIN - y_offset
 
     for t in TOASTS:
         try:
@@ -92,9 +118,9 @@ def reposition(root):
 
             # X positioning
             if position.endswith("right"):
-                x = screen_w - w - TOAST_MARGIN - x_offset
+                x = mon_x + screen_w - w - TOAST_MARGIN - x_offset
             else:
-                x = TOAST_MARGIN + x_offset
+                x = mon_x + TOAST_MARGIN + x_offset
 
             # Y positioning
             if stack_down:
@@ -125,6 +151,8 @@ def create_toast(
     force_show=False,
     auto_close=True,
     headline=None,
+    border_color=None,
+    border_thickness=None,
 ):
     if not ARE_TOASTS_ENABLED and not force_show:
         return None
@@ -134,17 +162,20 @@ def create_toast(
 
     toast = tk.Toplevel(root)
     toast.overrideredirect(True)
-    toast.attributes("-alpha", 0.98)
+    toast.attributes("-alpha", TOAST_ALPHA)
     toast.attributes("-topmost", True)
     toast.attributes("-toolwindow", True)
 
-    missing_color = COLLECTION_MISSING_COLOR
-    border_color = missing_color if is_missing else "black"
-    border_thickness = 4 if is_missing else 0
+    bg, fg = "black", "white"
+
+    if border_color is None:
+        border_color = COLLECTION_MISSING_COLOR if is_missing else "black"
+    if border_thickness is None:
+        border_thickness = 4 if is_missing else 0
 
     frame = tk.Frame(
         toast,
-        bg="black",
+        bg=bg,
         padx=TOAST_PADDING,
         pady=TOAST_PADDING,
         highlightbackground=border_color,
@@ -152,23 +183,21 @@ def create_toast(
     )
     frame.pack()
 
-    record_number = getattr(item, "record_number", None)
-
     if image:
-        img_label = tk.Label(frame, image=image, bg="black")
+        img_label = tk.Label(frame, image=image, bg=bg)
         img_label.image = image
         img_label.pack(side="left", padx=(0, 5))
         toast.img_ref = image
 
-    text_frame = tk.Frame(frame, bg="black")
+    text_frame = tk.Frame(frame, bg=bg)
     text_frame.pack(side="left", anchor="center")
 
     if headline:
         headline_label = tk.Label(
             text_frame,
             text=headline,
-            bg="black",
-            fg="white",
+            bg=bg,
+            fg=fg,
             font=get_toast_headline_font(),
             anchor="center",
             justify="center",
@@ -178,9 +207,9 @@ def create_toast(
     text_label = tk.Label(
         text_frame,
         text=message,
-        bg="black",
+        bg=bg,
         font=get_toast_font(),
-        fg="white",
+        fg=fg,
         anchor="center",
         justify="center",
     )
@@ -203,8 +232,6 @@ def create_toast(
                 )
                 tree_manager.refresh_treeview(tracker=tracker)
 
-            root.focus_force()
-
         pickup_checkbox = ctk.CTkCheckBox(
             frame,
             text="",
@@ -218,54 +245,160 @@ def create_toast(
         pickup_checkbox.pack(side="right", padx=(10, 0))
 
     toast.lift()
-    root.focus_force()
 
-    TOASTS.append(toast)
-    reposition(root)
+    # Track the countdown so hovering can pause it.
+    state = {"after_id": None, "remaining": duration, "started": 0.0, "closing": False}
 
-    def close_toast():
+    def destroy_now():
         if toast in TOASTS:
             TOASTS.remove(toast)
 
         try:
             toast.destroy()
-        except Exception as e:
+        except tk.TclError as e:
             log_message(e)
 
         reposition(root)
 
+    def fade_out(step=FADE_STEPS):
+        try:
+            if step <= 0:
+                destroy_now()
+                return
+            toast.attributes("-alpha", TOAST_ALPHA * step / FADE_STEPS)
+            toast.after(FADE_STEP_MS, fade_out, step - 1)
+        except tk.TclError:
+            destroy_now()
+
+    def close_toast(immediate=False):
+        if state["closing"]:
+            return
+        state["closing"] = True
+        cancel_timer()
+        if immediate or not TOAST_FADE_OUT:
+            destroy_now()
+        else:
+            fade_out()
+
+    def start_timer():
+        if not auto_close or state["closing"]:
+            return
+        state["started"] = time.monotonic()
+        state["after_id"] = toast.after(max(0, int(state["remaining"])), close_toast)
+
+    def cancel_timer():
+        if state["after_id"] is not None:
+            try:
+                toast.after_cancel(state["after_id"])
+            except tk.TclError:
+                pass
+            state["after_id"] = None
+
+    def pointer_inside():
+        try:
+            px, py = toast.winfo_pointerxy()
+            x, y = toast.winfo_rootx(), toast.winfo_rooty()
+            return x <= px < x + toast.winfo_width() and y <= py < y + toast.winfo_height()
+        except tk.TclError:
+            return False
+
+    def on_enter(_event=None):
+        if state["after_id"] is None:
+            return
+        elapsed_ms = (time.monotonic() - state["started"]) * 1000
+        state["remaining"] = max(0, state["remaining"] - elapsed_ms)
+        cancel_timer()
+
+    def on_leave(_event=None):
+        # <Leave> also fires when moving between child widgets; only resume
+        # once the pointer has actually left the toast.
+        if state["after_id"] is None and not pointer_inside():
+            # Give the user a moment after moving away.
+            state["remaining"] = max(state["remaining"], 1000)
+            start_timer()
+
+    toast.bind("<Enter>", on_enter)
+    toast.bind("<Leave>", on_leave)
     if auto_close:
-        toast.after(duration, close_toast)
+        # The example preview is controlled from settings, so it isn't dismissable here.
+        toast.bind("<Button-3>", lambda _e: close_toast())
+
+    toast.close_toast = close_toast
+
+    TOASTS.append(toast)
+    enforce_toast_limit()
+    reposition(root)
+    start_timer()
 
     return toast
 
 
-def show(root, item, message=None, duration=None, tree_manager: TreeManager = None, tracker=None):
+def enforce_toast_limit():
+    """Close the oldest auto-closing toasts once the visible cap is exceeded."""
+    alive = [t for t in TOASTS if t.winfo_exists() and t is not EXAMPLE_TOAST]
+    excess = len(alive) - c.MAX_VISIBLE_TOASTS
+    for t in alive[:max(0, excess)]:
+        closer = getattr(t, "close_toast", None)
+        if closer is not None:
+            closer(immediate=True)
+
+
+def is_item_missing(item):
     owned = getattr(item, "owned", False)
-    type = getattr(item, "type", "")
-    record_number = getattr(item, "record_number", None)
-    is_missing = False
-    if not owned and utils.is_unique(type):
-        is_missing = True
+    return not owned and utils.is_unique(getattr(item, "type", ""))
+
+
+def build_item_message(
+    item,
+    include_record=False,
+    show_owned=None,
+    show_stack_size=None,
+    show_tier=None,
+    show_estimated_value=None,
+):
+    """Build a toast's text. Each ``show_*`` flag overrides its default when not None."""
+    item_text = utils.parse_item_name(item)
+    _, stack_size_txt = currency_utils.get_stack_size(item)
+    display_value = currency_utils.calculate_estimate_value(item)
+    five_link_value = currency_utils.calculate_five_link_estimate_value(item)
+    six_link_value = currency_utils.calculate_six_link_estimate_value(item)
+    tier = getattr(item, "tier", "")
+
+    def pick(override, default):
+        return default if override is None else override
+
+    parts = []
+
+    if pick(show_owned, is_item_missing(item)):
+        parts.append("Missing\n")
+
+    if include_record:
+        parts.append(f"Record: {getattr(item, 'record_number', None)}\n")
+
+    parts.append(item_text)
+
+    if pick(show_stack_size, bool(stack_size_txt)):
+        parts.append(f" | Stack Size: {stack_size_txt}")
+
+    if pick(show_tier, bool(tier)):
+        parts.append(f" | Tier: {tier}")
+
+    if pick(show_estimated_value, bool(display_value)):
+        if display_value:
+            parts.append(f"\nEstimated Value: {display_value}")
+        if five_link_value:
+            parts.append(f"\n5-L: {five_link_value}")
+        if six_link_value:
+            parts.append(f" | 6-L: {six_link_value}")
+
+    return "".join(parts)
+
+
+def show(root, item, message=None, duration=None, tree_manager: TreeManager = None, tracker=None):
+    is_missing = is_item_missing(item)
 
     if message is None:
-        item_text = utils.parse_item_name(item)
-        _, stack_size_txt = currency_utils.get_stack_size(item)
-        display_value = currency_utils.calculate_estimate_value(item)
-        five_link_value = currency_utils.calculate_five_link_estimate_value(item)
-        six_link_value = currency_utils.calculate_six_link_estimate_value(item)
-        tier = getattr(item, "tier", "")
-
-        added_owned_txt = "Missing\n" if is_missing else ""
-        added_record_number_txt = f"Record: {record_number}\n"
-        added_stack_size_txt = f" | Stack Size: {stack_size_txt}" if stack_size_txt else ""
-        added_tier_txt = f" | Tier: {tier}" if tier else ""
-        added_estimated_value_txt = f"\n Estimated Value: {display_value}" if display_value else ""
-        added_5_link_value_txt = f"\n5-L: {five_link_value}" if five_link_value else ""
-        added_6_link_value_txt = f" | 6-L: {six_link_value}" if six_link_value else ""
-
-        message = (added_owned_txt + added_record_number_txt + item_text + added_stack_size_txt + added_tier_txt +
-                   added_estimated_value_txt + added_5_link_value_txt + added_6_link_value_txt)
+        message = build_item_message(item, include_record=True)
 
     tk_img = render_toast_image(item)
 
@@ -290,79 +423,14 @@ class CustomToastOptions:
     headline: Optional[str] = None
 
 def show_custom(root, item, options: CustomToastOptions):
-    item_text = utils.parse_item_name(item)
-    _, stack_size_txt = currency_utils.get_stack_size(item)
-    display_value = currency_utils.calculate_estimate_value(item)
-    tier = getattr(item, "tier", "")
-    owned = getattr(item, "owned", False)
-    type_ = getattr(item, "type", "")
-    five_link_value = currency_utils.calculate_five_link_estimate_value(item)
-    six_link_value = currency_utils.calculate_six_link_estimate_value(item)
+    is_missing = is_item_missing(item)
 
-    is_missing = not owned and utils.is_unique(type_)
-
-    added_owned_txt = (
-        "Missing\n"
-        if (
-            options.show_owned
-            if options.show_owned is not None
-            else is_missing
-        )
-        else ""
-    )
-
-    added_stack_size_txt = (
-        f" | Stack Size: {stack_size_txt}"
-        if (
-            options.show_stack_size
-            if options.show_stack_size is not None
-            else bool(stack_size_txt)
-        )
-        else ""
-    )
-
-    added_tier_txt = (
-        f" | Tier: {tier}"
-        if (
-            options.show_tier
-            if options.show_tier is not None
-            else bool(tier)
-        )
-        else ""
-    )
-
-    show_value = (
-        options.show_estimated_value
-        if options.show_estimated_value is not None
-        else bool(display_value)
-    )
-
-    added_estimated_value_txt = (
-        f"\nEstimated Value: {display_value}"
-        if display_value and show_value
-        else ""
-    )
-
-    added_5_link_value_txt = (
-        f"\n5-L: {five_link_value}"
-        if five_link_value and show_value
-        else ""
-    )
-
-    added_6_link_value_txt = (
-        f" | 6-L: {six_link_value}"
-        if six_link_value and show_value
-        else ""
-    )
-
-    main_message = options.custom_message or (
-        added_owned_txt
-        + item_text
-        + added_stack_size_txt
-        + added_tier_txt
-        + added_estimated_value_txt
-        + added_5_link_value_txt
-        + added_6_link_value_txt
+    main_message = options.custom_message or build_item_message(
+        item,
+        show_owned=options.show_owned,
+        show_stack_size=options.show_stack_size,
+        show_tier=options.show_tier,
+        show_estimated_value=options.show_estimated_value,
     )
 
     tk_img = render_toast_image(item)
@@ -384,27 +452,14 @@ def show_custom(root, item, options: CustomToastOptions):
             else 3
         )
 
-    toast = create_toast(
+    return create_toast(
         root,
         main_message,
         image=tk_img,
-        is_missing=False,
         headline=options.headline,
+        border_color=border_color,
+        border_thickness=border_thickness,
     )
-
-    if toast:
-        try:
-            frame = toast.winfo_children()[0]
-            frame.configure(
-                highlightbackground=border_color,
-                highlightthickness=border_thickness,
-            )
-        except (tk.TclError, IndexError) as e:
-            log_message(f"[WARN] Failed to apply custom border: {e}")
-
-        reposition(root)
-
-    return toast
 
 
 @dataclass
@@ -548,33 +603,6 @@ def hide_example():
     EXAMPLE_TOAST = None
 
 
-def get_example_image():
-    global EXAMPLE_SOURCE_IMAGE
-
-    try:
-        if EXAMPLE_SOURCE_IMAGE is None:
-            with urllib.request.urlopen(EXAMPLE_IMAGE_URL, timeout=5) as response:
-                image_data = response.read()
-
-            EXAMPLE_SOURCE_IMAGE = Image.open(
-                BytesIO(image_data)
-            ).convert("RGBA")
-
-        resized = EXAMPLE_SOURCE_IMAGE.resize(
-            (
-                max(1, IMAGE_COL_WIDTH - 4),
-                max(1, TOAST_IMAGE_HEIGHT),
-            ),
-            Image.Resampling.LANCZOS,
-        )
-
-        return ImageTk.PhotoImage(resized)
-
-    except Exception as e:
-        log_message(f"[WARN] Failed to load example toast image: {e}")
-        return None
-
-
 def toggle_example(root):
     global EXAMPLE_TOAST
 
@@ -706,6 +734,24 @@ def set_toast_x_offset(offset: int, root=None):
         reposition(root)
 
     log_message(f"Toast X offset set to: {TOAST_X_OFFSET}px")
+
+
+def set_toast_fade_out(enabled: bool):
+    global TOAST_FADE_OUT
+    TOAST_FADE_OUT = bool(enabled)
+    set_setting("Application", "toast_fade_out", TOAST_FADE_OUT)
+    log_message(f"Toast fade-out enabled: {TOAST_FADE_OUT}")
+
+
+def set_toast_monitor(monitor: str, root=None):
+    global TOAST_MONITOR
+    TOAST_MONITOR = str(monitor)
+    set_setting("Application", "toast_monitor", TOAST_MONITOR)
+
+    if root is not None:
+        reposition(root)
+
+    log_message(f"Toast monitor set to: {TOAST_MONITOR}")
 
 
 def set_collection_missing_color(color: str):

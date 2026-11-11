@@ -155,6 +155,17 @@ class UnifiedSettingsSection(
             value=str(get_setting("Application", "toast_x_offset", c.DEFAULT_TOAST_X_OFFSET)))
         self.toasts_var = ctk.BooleanVar(value=toasts.ARE_TOASTS_ENABLED)
         self.toasts_duration_var = ctk.StringVar(value=str(toasts.TOASTS_DURATION))
+        self.toast_fade_out_var = ctk.BooleanVar(value=toasts.TOAST_FADE_OUT)
+        self.toast_monitor_choices = toasts.get_monitor_choices()
+        saved_monitor = toasts.TOAST_MONITOR
+        if saved_monitor not in self.toast_monitor_choices:
+            # Match by monitor number in case the resolution changed.
+            prefix = saved_monitor.split(":")[0] + ":"
+            saved_monitor = next(
+                (m for m in self.toast_monitor_choices if m.startswith(prefix)),
+                "Primary",
+            )
+        self.toast_monitor_var = ctk.StringVar(value=saved_monitor)
 
         saved_toast_size_preset = str(
             get_setting("Application", "toast_size_preset", c.DEFAULT_TOAST_SIZE_PRESET) or "").strip()
