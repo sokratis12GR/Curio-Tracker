@@ -32,7 +32,7 @@ def _bp_icon(slug):
 
 
 DEFAULT_BLUEPRINT_INFO = {
-    "version": 1,
+    "version": 2,
     "category_icons": {
         "locations": f"{CDN}/Currency/Heist/ContractItem.png",
         "jobs": f"{CDN}/Currency/Heist/HeistCoinCurrency.png",
@@ -95,32 +95,32 @@ DEFAULT_BLUEPRINT_INFO = {
         {"name": "Currency", "icon": _bp_icon("chest_currency"),
          "drops": "Basic currency"},
         {"name": "Divination Cards", "icon": _bp_icon("chest_divination_cards"),
-         "drops": "2x Stacked Decks, Divination Scarabs"},
+         "drops": "2x Stacked Decks, divination cards"},
         {"name": "Maps", "icon": _bp_icon("chest_maps"),
-         "drops": "Maps, basic currency usable with maps, Cartography Scarabs"},
+         "drops": "Maps, basic currency usable with maps"},
         {"name": "Map Fragments", "icon": _bp_icon("chest_map_fragments"),
-         "drops": "Scarabs, Sacrifice/Offering fragments, small chance for valuable map fragments"},
+         "drops": "Threads (replaced Scarabs/fragments in 3.30), small chance for valuable map fragments"},
         {"name": "Gems", "icon": _bp_icon("chest_gems"),
          "drops": "Skill gems (may have levels/quality), Gemcutter's Prisms"},
         {"name": "Uniques", "icon": _bp_icon("chest_uniques"),
-         "drops": "Unique items, Titanic Scarabs"},
+         "drops": "Unique items"},
         {"name": "Jewellery", "icon": _bp_icon("chest_jewellery"),
-         "drops": "Rings, amulets, jewels, belts (some veiled/fractured/corrupted/influenced), "
+         "drops": "Rings, amulets, jewels, belts (some corrupted/influenced), "
                   "jewellery divination cards"},
         {"name": "Armour", "icon": _bp_icon("chest_armour"),
-         "drops": "Armour (some veiled/fractured/20% quality/influenced/unique), "
+         "drops": "Armour (some 20% quality/influenced/unique), "
                   "armour divination cards and currency"},
         {"name": "Weapons", "icon": _bp_icon("chest_weapons"),
-         "drops": "Weapons (some veiled/fractured/20% quality/influenced/unique), "
+         "drops": "Weapons (some 20% quality/influenced/unique), "
                   "weapon divination cards and currency"},
         {"name": "Delirium", "icon": _bp_icon("chest_delirium"),
-         "drops": "Simulacrum Splinters, cluster jewels, delirium orbs, maps with delirium layers"},
+         "drops": "Simulacrum Splinters, cluster jewels, delirium orbs, Delirium-orbed maps"},
         {"name": "Gold", "icon": f"{CDN}/Currency/Ruthless/CoinPileTier3.png",
          "drops": "Gold"},
         {"name": "Blight", "icon": _bp_icon("chest_blight"),
-         "drops": "Oils, Blighted Maps, Blight Scarabs, maps with a Blight encounter"},
+         "drops": "Oils, Blighted Maps, maps with a Blight encounter"},
         {"name": "Essences", "icon": _bp_icon("chest_essences"),
-         "drops": "Essences, Essence Scarabs"},
+         "drops": "Essences"},
         {"name": "Random", "icon": _bp_icon("chest_random"),
          "drops": "Items that can drop from any reward chest type"},
     ],
@@ -141,6 +141,30 @@ DEFAULT_BLUEPRINT_INFO = {
          "description": "Blueprints start with only one wing revealed. Whakano, Niles, or Gianna can "
                         "use Blueprint Reveals plus Rogue's Markers to reveal more wings and reward "
                         "rooms before planning.",
+         "tips": []},
+        {"name": "Whakano's Shop", "icon": None,
+         "description": "From level 68, Whakano sells Contracts and rarely Blueprints for Gold. "
+                        "Their level is based on your Atlas completion, and the shop can be "
+                        "rerolled with Gold. Normal Contracts cost Orbs of Alchemy.",
+         "tips": []},
+        {"name": "Bonus Blueprint Reveal", "icon": None,
+         "description": "Completing a level 68+ Contract has a chance to award a bonus Blueprint "
+                        "reveal from Whakano. The chance is higher for higher level Contracts.",
+         "tips": []},
+        {"name": "Getting Blueprints & Markers", "icon": None,
+         "description": "Rogue's Markers, Contracts and Blueprints are no longer part of the core "
+                        "drop pool. Smuggler's Caches (always present in specific Maps) have a "
+                        "higher Blueprint chance and drop more Markers; Blueprints from those Maps "
+                        "can have special implicits. Contract reward room chests have a greatly "
+                        "increased Blueprint chance. Heist Targets vendor to Faustus for more "
+                        "Markers, up to 2x for level 83 Contracts.",
+         "tips": []},
+        {"name": "Rogue Gear & Modifiers", "icon": None,
+         "description": "Brooch/Trinket Item Rarity mods were lowered and Item Quantity mods can no "
+                        "longer roll. Gear that doubled Fragments now doubles Threads. Contract and "
+                        "Blueprint mods grant extra Item Rarity in place of Item Quantity. The "
+                        "corruption outcome now adds 2 explicit mods (up to 9) instead of rerolling "
+                        "to 8. The Heist Atlas passive cluster was removed.",
          "tips": []},
     ],
 }
