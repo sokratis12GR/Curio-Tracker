@@ -1,3 +1,4 @@
+import os
 import queue
 import shutil
 import subprocess
@@ -649,11 +650,19 @@ def show_update_popup(
         try:
             updater_path = deploy_updater()
 
+            env = os.environ.copy()
+            if getattr(sys, "frozen", False):
+                env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+                for key in ("_MEIPASS2", "_PYI_APPLICATION_HOME_DIR",
+                            "_PYI_ARCHIVE_FILE", "_PYI_PARENT_PROCESS_LEVEL"):
+                    env.pop(key, None)
+
             subprocess.Popen(
                 [str(updater_path)],
                 cwd=str(
                     updater_path.parent
-                )
+                ),
+                env=env
             )
 
             root.destroy()
