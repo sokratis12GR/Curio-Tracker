@@ -26,6 +26,7 @@ def create_layout(root):
     right_frame.grid_rowconfigure(1, weight=0)
     right_frame.grid_columnconfigure(0, weight=0)
     right_frame.grid_columnconfigure(1, weight=1)
+    right_frame.grid_columnconfigure(2, weight=0)  # Collapsible summary panel
 
     # Tree Frame
     tree_frame = CTkFrame(right_frame)
@@ -46,7 +47,13 @@ def create_layout(root):
     total_frame = CTkFrame(right_frame, corner_radius=8)
     total_frame.grid(row=2, column=1, sticky="nsew", pady=(GAP, 0))
 
+    # Session summary to the right of the tree (spans tree + bottom rows)
+    summary_frame = CTkFrame(right_frame, fg_color="transparent")
+    summary_frame.grid(row=0, column=2, rowspan=3, sticky="ns", padx=(GAP, 0))
+    summary_frame.grid_rowconfigure(0, weight=1)
+
     return {
+        "summary_frame": summary_frame,
         "top_frame": top_frame,
         "left_frame": left_frame,
         "right_frame": right_frame,

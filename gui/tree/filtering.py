@@ -136,6 +136,10 @@ class TreeFilteringMixin:
         self.total_frame.total_value_label.configure(text=total_text)
         self.total_frame.total_picked_label.configure(text=picked_text)
 
+        summary = getattr(self, "summary_frame", None)
+        if summary is not None:
+            summary.schedule_refresh()
+
     # ---------- Sorting ----------
     # @pyinstrument.profile()
     def sort_tree(self, column):

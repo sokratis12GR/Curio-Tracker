@@ -105,6 +105,7 @@ class TreeManager(TreeEditingMixin, TreeContextMenuMixin, TreeFilteringMixin):
         self.tree.bind("<Button-3>", self.show_context_menu) #EXPERIMENTAL
 
         self.total_frame = None
+        self.summary_frame = None
         self.col_vars = {}
         self.tree_lock = threading.Lock()
 
