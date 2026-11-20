@@ -39,7 +39,10 @@ class TreeToggles:
         # Bound once; handlers no-op while the popup is closed.
         root = self.frame.winfo_toplevel()
         root.bind("<Button-1>", self._on_root_click, add="+")
-        root.bind("<Configure>", lambda e: self._position_popup(), add="+")
+        # Toplevel bindings also fire for every child widget's <Configure>;
+        # only react when the window itself moves or resizes.
+        root.bind("<Configure>",
+                  lambda e: e.widget is root and self._position_popup(), add="+")
         root.bind("<Escape>", lambda e: self.close_menu_popup(), add="+")
 
     def _eligible_columns(self):

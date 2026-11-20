@@ -311,7 +311,8 @@ def start_main_app(root, theme_mode, theme_manager, first_run=False):
     total_frame = TotalFrame(layout['total_frame'], tree_manager)
     tree_manager.total_frame = total_frame
     total_frame.frame.pack(fill="x", expand=True, padx=6, pady=6)
-    tree_manager.summary_frame = SummaryFrame(layout['summary_frame'], tree_manager)
+    tree_manager.summary_frame = SummaryFrame(
+        layout['page_bar'], layout['summary_page'], layout['tracker_page'], tree_manager)
 
     left_controls = LeftFrameControls(
         parent=left_frame,
