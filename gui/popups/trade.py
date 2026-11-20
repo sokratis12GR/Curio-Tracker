@@ -16,7 +16,7 @@ TRADE_URL_BASE = "https://www.pathofexile.com/trade/search"
 
 # ---------------- ENCHANT MAPPING ----------------
 ENCHANT_MODS = {
-    "enchant.stat_4168369352": "Heist Targets are always Currency or Scarabs",
+    "enchant.stat_4168369352": "Heist Targets are always Currency or Threads",
     "enchant.stat_2619914138": "Heist Targets are always Replica Unique Items",
     "enchant.stat_3709545805": "Heist Targets are always Enchanted Armaments",
     "enchant.stat_1123534836": "Heist Targets are always Thieves' Trinkets",
@@ -28,6 +28,7 @@ ENCHANT_BY_TEXT = {v: k for k, v in ENCHANT_SHORT.items()}
 
 ENCHANT_ANY = "Any"
 ENCHANT_NONE = "None"
+ENCHANT_HAS = "Enchanted"
 ENCHANT_SPECIFIC = "Specific"
 
 # ---------------- BLUEPRINTS ----------------
@@ -91,12 +92,20 @@ def build_blueprint_trade_url(
     ilvl_min=83,
     ilvl_max=83,
     enchant=None,
-    exclude_enchants=False
+    exclude_enchants=False,
+    any_enchant=False
 ):
     """Build a trade search URL. Pass None for a bound to leave it open."""
     stats = [{"type": "and", "filters": [], "disabled": False}]
 
-    if enchant:
+    if any_enchant:
+        stats.append({
+            "type": "count",
+            "filters": [{"id": eid, "disabled": False} for eid in ENCHANT_MODS],
+            "value": {"min": 1},
+            "disabled": False
+        })
+    elif enchant:
         stats.append({
             "type": "and",
             "filters": [{"id": enchant, "disabled": False}],
@@ -391,7 +400,7 @@ class QuickTradePopup:
         self.enchant_mode = ctk.StringVar(value=ENCHANT_NONE)
         ctk.CTkSegmentedButton(
             enchant_row,
-            values=[ENCHANT_ANY, ENCHANT_NONE, ENCHANT_SPECIFIC],
+            values=[ENCHANT_ANY, ENCHANT_NONE, ENCHANT_HAS, ENCHANT_SPECIFIC],
             variable=self.enchant_mode,
             height=28,
             command=lambda _: self._on_enchant_mode()
@@ -477,6 +486,7 @@ class QuickTradePopup:
             ilvl_min=ilvl[0], ilvl_max=ilvl[1],
             enchant=enchant,
             exclude_enchants=(mode == ENCHANT_NONE),
+            any_enchant=(mode == ENCHANT_HAS),
         )
         return kwargs, list(dict.fromkeys(errors))
 
@@ -508,6 +518,8 @@ class QuickTradePopup:
             parts.append("Any enchant")
         elif mode == ENCHANT_NONE:
             parts.append("No enchants")
+        elif mode == ENCHANT_HAS:
+            parts.append("Any target enchant")
         else:
             parts.append(f"Targets: {self.enchant_select.get()}")
 

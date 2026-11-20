@@ -157,7 +157,7 @@ time_options = [
 
 BP_ENCHANTMENT_OPTIONS = [
     "None",
-    "Heist Targets are always Currency or Scarabs",
+    "Heist Targets are always Currency or Threads",
     "Heist Targets are always Replica Unique Items",
     "Heist Targets are always Enchanted Armaments",
     "Heist Targets are always Thieves' Trinkets",
