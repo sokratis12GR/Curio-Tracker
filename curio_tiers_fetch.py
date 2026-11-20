@@ -4,7 +4,7 @@ import requests
 import config
 from config import LEAGUE
 from fetch_state import should_skip_recent_run
-from load_utils import OUTPUT_TIERS_CSV, LOCK_FILE
+from load_utils import OUTPUT_TIERS_CSV
 from logger import log_message
 from shared_lock import update_lock
 

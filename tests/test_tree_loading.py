@@ -223,11 +223,21 @@ class TreeLoadingTests(unittest.TestCase):
     def test_clear_stops_running_load(self):
         items = [make_item(str(n), f"I{n}") for n in range(1, 3001)]
         done = []
-        self.tm.load_in_background(lambda: items, done.append)
-        self._pump_until(lambda: self.tree.get_children())
-        self.tm.clear_tree()
-        for _ in range(200):
-            self.root.update()
+        cleared = []
+        show_progress = self.tm._show_load_progress
+
+        def clear_mid_load(index, total):
+            show_progress(index, total)
+            if not cleared:
+                cleared.append(index)
+                self.tm.clear_tree()
+
+        self.tm._show_load_progress = clear_mid_load
+        with mock.patch("tree_manager.LOAD_SLICE_SECONDS", 0):
+            self.tm.load_in_background(lambda: items, done.append)
+            self._pump_until(lambda: cleared)
+            for _ in range(200):
+                self.root.update()
         self.assertEqual(done, [])
         self.assertEqual(self.tree.get_children(), ())
 

@@ -42,6 +42,10 @@ def set_tesseract_path():
 
     # 4. Last fallback: hardcoded/config path
     if not tesseract_bin or not os.path.isfile(tesseract_bin):
+        if not c.pytesseract_path:
+            log_message("[ERROR] Tesseract not found on PATH and no pytesseract_path is configured. "
+                        "Install Tesseract (e.g. `sudo apt install tesseract-ocr`) or set its path in settings.")
+            return
         tesseract_bin = os.path.normpath(c.pytesseract_path)
 
     # --- Apply and verify ---
@@ -51,7 +55,9 @@ def set_tesseract_path():
     tesseract_dir = os.path.dirname(tesseract_bin)
     tessdata_dir = os.path.join(tesseract_dir, "tessdata")
 
-    if os.path.isdir(tessdata_dir):
+    if tesseract_bin == path_from_system and not os.path.isdir(tessdata_dir):
+        log_message("[DEBUG] Using system Tesseract; it resolves its own tessdata.")
+    elif os.path.isdir(tessdata_dir):
         os.environ["TESSDATA_PREFIX"] = tessdata_dir
         log_message("[DEBUG] TESSDATA_PREFIX set to:", tessdata_dir)
         eng_path = os.path.join(tessdata_dir, "eng.traineddata")

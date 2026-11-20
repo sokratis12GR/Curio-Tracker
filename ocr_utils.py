@@ -1,7 +1,7 @@
 import math
 import re
 from datetime import datetime
-from difflib import get_close_matches, SequenceMatcher
+from difflib import SequenceMatcher
 from types import SimpleNamespace
 
 import config as c

@@ -1,4 +1,3 @@
-from collections import defaultdict
 
 
 def find_or_create_blueprint(nested: dict, player_name, league_name, blueprint_name, area_level, bp_enchantment):

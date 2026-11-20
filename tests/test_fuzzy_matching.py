@@ -17,6 +17,7 @@ TERMS = {
     "Abyssus": c.REPLICA_TYPE,
     "Tempering Orb": c.CURRENCY_TYPE,
     "Orb of Annulment": c.CURRENCY_TYPE,
+    "Orb of Chance": c.CURRENCY_TYPE,
     "8% increased Explicit Speed Modifier magnitudes": c.WEAPON_ENCHANT_TYPE,
 }
 

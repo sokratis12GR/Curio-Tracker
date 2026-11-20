@@ -5,6 +5,15 @@ on:
   push:
     tags:
       - "v*"
+  pull_request:
+    paths:
+      - "curio_tracker_linux.spec"
+      - "requirements*.txt"
+      - "requirements.lock"
+      - "platform_compat.py"
+      - "set_tesseract_path.py"
+      - "main.py"
+      - ".github/workflows/build-linux.yml"
 
 permissions:
   contents: write
@@ -29,23 +38,47 @@ jobs:
         run: |
           python3 -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/pip install -r requirements.txt
-          .venv/bin/pip install pyinstaller
+          .venv/bin/pip install -r requirements.lock pytest pyinstaller==6.18.0
+
+      - name: Run tests (includes real Tesseract OCR)
+        run: xvfb-run --auto-servernum .venv/bin/python -m pytest -rs
 
       - name: Build Linux binary
         run: .venv/bin/pyinstaller --clean curio_tracker_linux.spec
 
       - name: Smoke test (headless launch under Xvfb)
         run: |
+          export XDG_DATA_HOME="$RUNNER_TEMP/smoke-data"
+          LOG="$XDG_DATA_HOME/HeistCurioTracker/logs/tracker.log"
           chmod +x dist/HeistCurioTracker
-          xvfb-run --auto-servernum dist/HeistCurioTracker &
+          xvfb-run --auto-servernum dist/HeistCurioTracker > "$RUNNER_TEMP/smoke-stdout.txt" 2>&1 &
           APP_PID=$!
-          sleep 8
-          if ! kill -0 "$APP_PID" 2>/dev/null; then
-            echo "App exited unexpectedly during smoke test"
-            exit 1
+          for _ in $(seq 1 90); do
+            grep -q "Verified tesseract runs\|Could not run tesseract\|Tesseract not found" "$LOG" 2>/dev/null && break
+            kill -0 "$APP_PID" 2>/dev/null || break
+            sleep 1
+          done
+          sleep 5
+          ALIVE=1
+          kill -0 "$APP_PID" 2>/dev/null || ALIVE=0
+          kill "$APP_PID" 2>/dev/null || true
+
+          echo "::group::stdout/stderr"; cat "$RUNNER_TEMP/smoke-stdout.txt" || true; echo "::endgroup::"
+          echo "::group::tracker.log"; cat "$LOG" || true; echo "::endgroup::"
+
+          if [ "$ALIVE" = 0 ]; then
+            echo "::error::App exited during the smoke test"; exit 1
           fi
-          kill "$APP_PID"
+          if [ ! -s "$LOG" ]; then
+            echo "::error::App never wrote its log file; startup did not get far enough"; exit 1
+          fi
+          if grep -q "Traceback" "$LOG" "$RUNNER_TEMP/smoke-stdout.txt"; then
+            echo "::error::Python traceback during startup"; exit 1
+          fi
+          if ! grep -q "Verified tesseract runs" "$LOG"; then
+            echo "::error::Bundled app could not run Tesseract"; exit 1
+          fi
+          grep "\[ERROR\]" "$LOG" | sed 's/^/::warning::/' || true
 
       - name: Package artifact
         run: |

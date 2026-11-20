@@ -2,13 +2,12 @@
 
 from customtkinter import *
 
-from config import layout_keywords, time_options
+from config import time_options
 from gui.frames.blueprint_info import BlueprintInfoPopup
 from gui.popups.custom_load import CustomLoader
 from gui.frames.info import InfoPanelPopup
 from fonts import make_font
 from gui.palette import DANGER_COLOR, DANGER_HOVER, MUTED_TEXT, SEPARATOR_COLOR
-from settings import set_setting
 
 
 class LeftFrameControls:

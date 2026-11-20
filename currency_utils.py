@@ -1,5 +1,4 @@
-from config import LEAGUE
-from ocr_utils import is_currency_or_scarab, format_currency_value, parse_item_name
+from ocr_utils import is_currency_or_scarab, format_currency_value
 from settings import get_setting
 
 

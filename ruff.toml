@@ -1,0 +1,10 @@
+target-version = "py313"
+line-length = 120
+extend-exclude = ["build", "dist", "tesseract", "updater", "SandboxTest", "heist_icons_upload", "snippets", "saved"]
+
+[lint]
+select = ["F", "E722"]
+ignore = ["F403", "F405", "F841"]
+
+[lint.per-file-ignores]
+"curio_tracker.py" = ["F401"]
