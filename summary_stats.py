@@ -82,6 +82,7 @@ class Reward:
     tier: str = ""
     name: str = ""
     img: str = ""
+    league: str = ""
 
 
 UNIQUE_TYPES = ("Replica", "Replacement")

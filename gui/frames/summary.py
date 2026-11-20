@@ -68,8 +68,9 @@ UP_COLOR = ("#1a7f37", "#3ba55d")
 DOWN_COLOR = ("#c62828", "#ed4245")
 
 
-FILTER_DIMS = (("blueprint", "Blueprint"), ("area_level", "Area level"),
-               ("item_type", "Type"), ("tier", "Tier"))
+DATE_LABEL = "%d %b %Y %H:%M"
+FILTER_DIMS = (("league", "League"), ("year", "Year"), ("blueprint", "Blueprint"),
+               ("area_level", "Area level"), ("item_type", "Type"), ("tier", "Tier"))
 TABLE_FILTERS = {"blueprints": "blueprint", "levels": "area_level",
                  "types": "item_type", "tiers": "tier"}
 
@@ -495,7 +496,7 @@ class SummaryFrame:
                  height=24).grid(row=0, column=0, padx=(0, 8))
         self.filter_menus = {}
         for col, (dim, label) in enumerate(FILTER_DIMS, start=1):
-            menu = CTkOptionMenu(bar, values=[_any(label)], width=130, height=24,
+            menu = CTkOptionMenu(bar, values=[_any(label)], width=116, height=24,
                                  font=make_font(11), dynamic_resizing=False,
                                  fg_color=SEPARATOR_COLOR, button_color=SEPARATOR_COLOR,
                                  button_hover_color=ACCENT_COLOR, text_color=TEXT_COLOR,
@@ -550,6 +551,8 @@ class SummaryFrame:
     def _update_filter_options(self, rewards):
         found = {dim: set() for dim, _ in FILTER_DIMS}
         for r in rewards:
+            found["league"].add(r.league)
+            found["year"].add(str(r.time.year))
             found["blueprint"].add(r.blueprint)
             found["area_level"].add(r.area_level)
             found["item_type"].add(r.item_type or "Unknown")
@@ -564,6 +567,15 @@ class SummaryFrame:
             if options != menu._options:
                 menu._options = options
                 menu.configure(values=options)
+
+    def _scoped(self, rewards):
+        """Apply the league and year filters, which narrow rewards before wings are built."""
+        league, year = self.filters.get("league"), self.filters.get("year")
+        if league is None and year is None:
+            return rewards
+        return [r for r in rewards
+                if (league is None or r.league == league)
+                and (year is None or str(r.time.year) == year)]
 
     def _predicates(self):
         """(wing_keep, keep) for summarize(), or None where no filter applies."""
@@ -796,6 +808,7 @@ class SummaryFrame:
                 item_type=str(getattr(item, "type", "") or ""),
                 tier=str(getattr(item, "tier", "") or ""),
                 img=str(getattr(item, "img", "") or ""),
+                league=str(getattr(item, "league", "") or "Unknown"),
             ))
         return rewards
 
@@ -829,20 +842,21 @@ class SummaryFrame:
         else:
             session_rewards = ss.select_session(rewards, self.session_mode, None, self.idle * 2)
         self._update_filter_options(session_rewards)
+        session_rewards = self._scoped(session_rewards)
         wing_keep, keep = self._predicates()
         opts = dict(idle=self.idle, min_wing=self.min_wing, wing_keep=wing_keep, keep=keep)
         s = ss.summarize(session_rewards, now=now, session_start=session_start, **opts)
         prev = None
         if window is not None:
-            prev_rewards = ss.in_window(rewards, ss.previous_window(window))
+            prev_rewards = self._scoped(ss.in_window(rewards, ss.previous_window(window)))
             if prev_rewards:
                 prev = ss.summarize(prev_rewards, now=now, **opts)
 
         if self.session_mode == ss.SESSION_CUSTOM and window is not None:
-            end = "now" if self.custom_range[1] is None else window[1].strftime('%d %b %H:%M')
-            since = f"{window[0].strftime('%d %b %H:%M')} → {end}"
+            end = "now" if self.custom_range[1] is None else window[1].strftime(DATE_LABEL)
+            since = f"{window[0].strftime(DATE_LABEL)} → {end}"
         elif s.start:
-            since = f"Started {s.start.strftime('%d %b %H:%M')}"
+            since = f"Started {s.start.strftime(DATE_LABEL)}"
         else:
             since = "No rewards yet"
         self.since_label.configure(text=since)
@@ -936,7 +950,7 @@ class SummaryFrame:
         if self.session_mode == ss.SESSION_ALL:
             a = s
         else:
-            a = ss.summarize(rewards, now=now, **opts)
+            a = ss.summarize(self._scoped(rewards), now=now, **opts)
         self.lbl_all_wings.configure(text=str(a.wings))
         self.lbl_all_avg.configure(text=dur(a.avg_wing))
         self.lbl_all_per_wing.configure(text=fmt(a.chaos_per_wing))
@@ -1147,7 +1161,7 @@ class SummaryFrame:
             if len(name) > NAME_MAX:
                 name = name[:NAME_MAX - 1] + "…"
             meta = [ss.tier_label(r.tier) if r.item_type in ss.UNIQUE_TYPES and r.tier else "",
-                    r.item_type, r.time.strftime("%d %b %H:%M")]
+                    r.item_type, r.time.strftime(DATE_LABEL)]
             name_lbl.configure(text=name)
             meta_lbl.configure(text=" · ".join(m for m in meta if m))
             value_lbl.configure(text=fmt(r.chaos))
@@ -1281,7 +1295,7 @@ class SummaryFrame:
             w = self._spark_wings[hovered]
             self._tooltip(c, hovered * slot + slot / 2, 0, [
                 f"{ss.format_duration(w.duration)} · {w.blueprint} L{w.area_level}",
-                w.start.strftime("%d %b %H:%M")], width)
+                w.start.strftime(DATE_LABEL)], width)
 
     def _draw_trend(self, hover_x=None):
         """Cumulative value over time as a 2px line, with a hover crosshair."""
@@ -1315,7 +1329,7 @@ class SummaryFrame:
             y = bottom - frac * (bottom - top)
             c.create_line(left, y, right, y, fill=grid, width=1)
         c.create_text(left, top - 2, text=self._fmt(vmax), anchor="sw", fill=muted, font=font)
-        time_fmt = "%d %b" if span > 86400 else "%H:%M"
+        time_fmt = "%d %b %Y" if span > 86400 else "%H:%M"
         c.create_text(left, TREND_HEIGHT - 1, text=t0.strftime(time_fmt), anchor="sw",
                       fill=muted, font=font)
         c.create_text(right, TREND_HEIGHT - 1, text=t1.strftime(time_fmt), anchor="se",
@@ -1335,4 +1349,4 @@ class SummaryFrame:
             c.create_line(px, top, px, bottom, fill=muted, dash=(2, 2))
             c.create_oval(px - 4, py - 4, px + 4, py + 4, fill=accent, outline=surface, width=2)
             t, v = series[i]
-            self._tooltip(c, px, 0, [t.strftime("%d %b %H:%M"), f"Total {self._fmt(v)}"], width)
+            self._tooltip(c, px, 0, [t.strftime(DATE_LABEL), f"Total {self._fmt(v)}"], width)
