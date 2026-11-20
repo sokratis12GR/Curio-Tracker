@@ -213,8 +213,7 @@ def main():
         progress.stop()
         loading.destroy()
 
-        root.deiconify()
-
+        # start_main_app shows the window once its widgets are built.
         start_main_app(
             root,
             theme_mode,
@@ -361,6 +360,8 @@ def start_main_app(root, theme_mode, theme_manager, first_run=False):
         2000,
         lambda: check_for_updates(root)
     )
+
+    root.deiconify()
 
     root.mainloop()
 

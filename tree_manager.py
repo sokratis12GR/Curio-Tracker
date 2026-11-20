@@ -26,6 +26,7 @@ from tree_utils import get_item_name_str, generate_item_id
 SECONDS_PER_ROW = 0.000075
 # How long each UI-thread insert slice may run before yielding.
 LOAD_SLICE_SECONDS = 0.03
+PROGRESS_UPDATE_SECONDS = 0.15
 
 
 def format_load_estimate(row_count):
@@ -466,6 +467,11 @@ class TreeManager(TreeEditingMixin, TreeContextMenuMixin, TreeFilteringMixin):
             on_done(total)
 
     def _show_load_progress(self, done, total):
+        # Each label change re-lays out the window; cap how often it happens.
+        now = time.perf_counter()
+        if now - getattr(self, "_last_progress_at", 0.0) < PROGRESS_UPDATE_SECONDS:
+            return
+        self._last_progress_at = now
         frame = getattr(self, "total_frame", None)
         if frame:
             frame.total_value_label.configure(text=f"Loading {done:,} / {total:,}")

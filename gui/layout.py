@@ -31,14 +31,14 @@ def create_layout(root):
     page_bar.grid_columnconfigure(1, weight=1)
 
     # Tracker page (tree + actions + toggles + totals)
-    tracker_page = CTkFrame(right_frame, fg_color="transparent")
+    tracker_page = CTkFrame(right_frame, fg_color="transparent", corner_radius=0)
     tracker_page.grid(row=1, column=0, sticky="nsew")
     tracker_page.grid_rowconfigure(0, weight=1)
     tracker_page.grid_rowconfigure(1, weight=0)
     tracker_page.grid_columnconfigure(0, weight=0)
     tracker_page.grid_columnconfigure(1, weight=1)
 
-    tree_frame = CTkFrame(tracker_page)
+    tree_frame = CTkFrame(tracker_page, corner_radius=0)
     tree_frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
     tree_frame.grid_rowconfigure(0, weight=1)
     tree_frame.grid_columnconfigure(0, weight=1)
@@ -55,7 +55,7 @@ def create_layout(root):
     total_frame.grid(row=2, column=1, sticky="nsew", pady=(GAP, 0))
 
     # Summary page shares the cell; only one page is gridded at a time.
-    summary_page = CTkFrame(right_frame, fg_color="transparent")
+    summary_page = CTkFrame(right_frame, fg_color="transparent", corner_radius=0)
     summary_page.grid_rowconfigure(0, weight=1)
     summary_page.grid_columnconfigure(0, weight=1)
 

@@ -112,6 +112,7 @@ class TotalFrame:
             anchor="w",
             padx=4,
             height=24,
+            width=170,
         )
         value.grid(row=1, column=0, sticky="w", padx=8, pady=(0, 6))
         return value
