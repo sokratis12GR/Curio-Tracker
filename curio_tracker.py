@@ -29,7 +29,13 @@ from logger import log_message
 from ocr_utils import build_parsed_item
 from settings import get_setting, set_setting
 from thread_utils import get_background_worker
-from tracking.ocr_capture import extract_currency_value, get_ocr_bbox, ocr_from_image, prepare_ocr_mask
+from tracking.ocr_capture import (
+    extract_currency_value,
+    extract_stack_sizes,
+    get_ocr_bbox,
+    ocr_from_image,
+    prepare_ocr_mask,
+)
 from tracking.recent_terms import (
     clear_recent_terms,
     is_duplicate_recent_entry,
@@ -131,7 +137,7 @@ TIERS_DATASET = datasets["tiers"]
 owned_items = {}
 
 
-def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
+def process_text(root, text, allow_dupes=False, matched_terms=None, image_np=None, ocr_mask=None) -> None:
     global stack_sizes, attempt
     results = []
 
@@ -141,6 +147,17 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
     raw_lines = text.splitlines()
     title_lines = tuple(line.title() for line in raw_lines)
 
+    stack_terms = [
+        match["term"] for match in matched_terms
+        if utils.is_currency_or_scarab(term_types.get(utils.smart_title_case(match["term"])))
+    ]
+    positional_ratios = {}
+    if image_np is not None and stack_terms:
+        try:
+            positional_ratios = extract_stack_sizes(image_np, stack_terms, ocr_mask)
+        except Exception as e:
+            log_message(f"[Stack Size] Positional read failed: {e}")
+
     for match in matched_terms:
         term_title = match["term"]
         duplicate = match["duplicate"]
@@ -149,8 +166,11 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
 
         item_type = term_types.get(utils.smart_title_case(term_title))
 
-        # Extract stack size / currency ratio
-        ratio = extract_currency_value(raw_lines, title_lines, term_title, term_types)
+        ratio = positional_ratios.get(term_title) or extract_currency_value(
+            raw_lines, title_lines, term_title, term_types
+        )
+        if term_title in stack_terms and not ratio:
+            log_message(f"[Stack Size] Unreadable for {term_title}, defaulting to 1.")
         if ratio:
             stack_size = f"{ratio[0]}"
             stack_sizes[term_title] = stack_size
@@ -196,7 +216,7 @@ def process_text(root, text, allow_dupes=False, matched_terms=None) -> None:
         attempt += 1
 
 
-def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None) -> None:
+def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None, image_np=None, ocr_mask=None) -> None:
     global stack_sizes, parsed_items, data_mgr
     parsed_items = []
 
@@ -210,7 +230,7 @@ def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None) ->
 
     t1 = time.perf_counter()
 
-    process_text(root, text, allow_dupes, matched_terms)
+    process_text(root, text, allow_dupes, matched_terms, image_np=image_np, ocr_mask=ocr_mask)
 
     t2 = time.perf_counter()
 
@@ -701,7 +721,9 @@ def capture_once(root):
         full_text,
         utils.now_timestamp(),
         allow_dupes=False,
-        matched_terms=matched_terms
+        matched_terms=matched_terms,
+        image_np=screenshot_np,
+        ocr_mask=ocr_mask
     )
 
     write_end = time.perf_counter()
@@ -761,7 +783,7 @@ def capture_snippet(root, on_done):
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         os.makedirs(c.saves_dir, exist_ok=True)
-        write_entry(root, full_text, timestamp, allow_dupes=True)
+        write_entry(root, full_text, timestamp, allow_dupes=True, image_np=screenshot_np)
 
         if on_done:
             on_done(parsed_items)
@@ -815,7 +837,7 @@ def capture_snippet(root, on_done):
                 full_text, _ = ocr_from_image(screenshot_np, scale=2)
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 os.makedirs(c.saves_dir, exist_ok=True)
-                write_entry(root, full_text, timestamp, allow_dupes=True)
+                write_entry(root, full_text, timestamp, allow_dupes=True, image_np=screenshot_np)
 
                 if on_done:
                     on_done(list(parsed_items))

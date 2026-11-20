@@ -29,7 +29,7 @@ from set_tesseract_path import set_tesseract_path
 
 set_tesseract_path()
 
-from tracking.ocr_capture import ocr_from_image, prepare_ocr_mask
+from tracking.ocr_capture import extract_stack_sizes, ocr_from_image, prepare_ocr_mask
 from tracking.term_matching import PRECOMP_TERMS, get_matched_terms, review_failed_capture
 
 # Fail fast if the app module can't resolve the functions capture_once calls.
@@ -68,11 +68,20 @@ def run_pipeline(image_rgb):
         utils.find_review_fuzzy_terms(text, PRECOMP_TERMS, rejected=rejected)
     t3 = time.perf_counter()
 
+    stack_terms = [
+        m["term"] for m in matched
+        if utils.is_currency_or_scarab(curio_tracker.term_types.get(utils.smart_title_case(m["term"])))
+    ]
+    stacks = extract_stack_sizes(image_rgb, stack_terms, mask) if stack_terms else {}
+    stacks.update({t: None for t in stack_terms if t not in stacks})
+    t4 = time.perf_counter()
+
     timings["filter"] = (t1 - t0) * 1000
     timings["ocr1"] = (t2 - t1) * 1000
-    timings["total"] = (t3 - t0) * 1000
+    timings["stack"] = (t4 - t3) * 1000
+    timings["total"] = (t4 - t0) * 1000
     terms = sorted({m["term"] for m in matched})
-    return terms, stage, rejected, text, timings
+    return terms, stage, rejected, text, timings, stacks
 
 
 def main():
@@ -114,7 +123,7 @@ def main():
 
         for invert in modes:
             c.OCR_INVERT_FOR_TESSERACT = invert
-            terms, stage, rejected, text, t = run_pipeline(image_rgb)
+            terms, stage, rejected, text, t, stacks = run_pipeline(image_rgb)
             s = stats[invert]
             s["ocr1"] += t["ocr1"]
             s["total"] += t["total"]
@@ -132,6 +141,9 @@ def main():
             label = f"invert={'on ' if invert else 'off'} " if args.compare_invert else ""
             print(f"  {label}{verdict} | matched={terms} | via={stage} | "
                   f"filter={t['filter']:.0f}ms ocr={t['ocr1']:.0f}ms total={t['total']:.0f}ms")
+            for term, ratio in stacks.items():
+                shown = f"{ratio[0]}/{ratio[1]}" if ratio else "unreadable"
+                print(f"      stack {term}: {shown} ({t['stack']:.0f}ms)")
             for r in rejected:
                 print(f"      rejected '{r['term']}' ~ '{r['candidate']}' "
                       f"{r['similarity']:.3f} ({r['reason']})")

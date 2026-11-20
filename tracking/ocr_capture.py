@@ -1,5 +1,6 @@
 import re
 import time
+from difflib import SequenceMatcher
 
 import cv2
 import numpy as np
@@ -22,6 +23,12 @@ OCR_DIGIT_TRANSLATION = str.maketrans({
 })
 
 STACK_RATIO_PATTERN = re.compile(r"\b(\d{1,3})\s*[/|\\\-]\s*(\d{2})\b")
+STACK_BAND_RATIO_PATTERN = re.compile(r"(\d{1,2})\s*/\s*(20|30|40)\b")
+
+STACK_TEXT_L_HSV = np.array([0, 0, 95], dtype=np.uint8)
+STACK_TEXT_U_HSV = np.array([180, 40, 255], dtype=np.uint8)
+STACK_BAND_SCALE = 3
+TITLE_BOX_MIN_SIMILARITY = 0.8
 
 OCR_COLOR_RANGES = tuple(
     (np.asarray(lo, dtype=np.uint8), np.asarray(hi, dtype=np.uint8))
@@ -358,13 +365,121 @@ def extract_currency_value(lines, title_lines, matched_term, term_types):
             except ValueError:
                 continue
 
-            if maximum in VALID_STACK_MAX_VALUES and 0 <= current <= maximum:
+            if maximum in VALID_STACK_MAX_VALUES and 1 <= current <= maximum:
                 return current, maximum
 
-            # Fallback fix: take last digit of current if it's obviously wrong
-            if maximum in VALID_STACK_MAX_VALUES:
-                current_last = int(str(current)[-1])
-                if current_last <= maximum:
-                    return current_last, maximum
+    return None
 
-    return 1, 20
+
+def _to_rgb(image_np):
+    if image_np.ndim == 3 and image_np.shape[-1] == 4:
+        return cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
+    return image_np
+
+
+#############################################################################
+# Finds the on-screen box of each term's title line in the filtered mask.   #
+# Returns {term: [(left, top, right, bottom), ...]} in image coordinates.   #
+#############################################################################
+def locate_title_boxes(ocr_mask, terms, scale=1):
+    if scale != 1:
+        ocr_mask = cv2.resize(
+            ocr_mask,
+            (ocr_mask.shape[1] * scale, ocr_mask.shape[0] * scale),
+            interpolation=cv2.INTER_LANCZOS4
+        )
+    tess_input = ocr_mask
+    tess_config = "--psm 6"
+    if c.OCR_INVERT_FOR_TESSERACT:
+        tess_input = cv2.bitwise_not(ocr_mask)
+        tess_config += " -c tessedit_do_invert=0"
+
+    data = pytesseract.image_to_data(tess_input, config=tess_config, output_type=pytesseract.Output.DICT)
+
+    lines = {}
+    for i, word in enumerate(data["text"]):
+        if word.strip():
+            key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+            lines.setdefault(key, []).append(i)
+
+    boxes = {}
+    for term in terms:
+        term_words = term.lower().split()
+        term_joined = " ".join(term_words)
+        found = []
+        for indices in lines.values():
+            words = [re.sub(r"[^a-z0-9%']", "", data["text"][i].lower()) for i in indices]
+            for start in range(len(words) - len(term_words) + 1):
+                candidate = " ".join(words[start:start + len(term_words)])
+                if SequenceMatcher(None, candidate, term_joined).ratio() < TITLE_BOX_MIN_SIMILARITY:
+                    continue
+                selected = indices[start:start + len(term_words)]
+                left = min(data["left"][i] for i in selected)
+                right = max(data["left"][i] + data["width"][i] for i in selected)
+                top = int(np.median([data["top"][i] for i in selected]))
+                height = int(np.median([data["height"][i] for i in selected]))
+                found.append((left // scale, top // scale, right // scale, (top + height) // scale))
+        boxes[term] = found
+    return boxes
+
+
+#############################################################################
+# Reads the neutral-grey "Stack Size: N/MM" line directly below a title.    #
+# Returns (current, maximum) or None.                                       #
+#############################################################################
+def read_stack_size_below(image_np, title_box):
+    left, top, right, bottom = title_box
+    height = bottom - top
+    width = right - left
+    if height <= 0 or width <= 0:
+        return None
+
+    y0 = bottom + int(0.4 * height)
+    y1 = min(image_np.shape[0], bottom + int(3.2 * height))
+    x0 = max(0, left - width // 2)
+    x1 = min(image_np.shape[1], right + width // 2)
+    crop = image_np[y0:y1, x0:x1]
+    if crop.size == 0:
+        return None
+
+    hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+    mask = cv2.inRange(hsv, STACK_TEXT_L_HSV, STACK_TEXT_U_HSV)
+    mask = cv2.resize(mask, None, fx=STACK_BAND_SCALE, fy=STACK_BAND_SCALE, interpolation=cv2.INTER_LANCZOS4)
+
+    text = pytesseract.image_to_string(cv2.bitwise_not(mask), config="--psm 6 -c tessedit_do_invert=0")
+    match = STACK_BAND_RATIO_PATTERN.search(text.translate(OCR_DIGIT_TRANSLATION))
+
+    if c.DEBUGGING:
+        log_message(f"[Stack Size] band text: {text.strip()!r}")
+
+    if not match:
+        return None
+    current, maximum = int(match.group(1)), int(match.group(2))
+    return (current, maximum) if 1 <= current <= maximum else None
+
+
+#############################################################################
+# Reads stack sizes for the given currency/scarab terms by locating each    #
+# title and OCR-ing the neutral-grey stack line beneath it.                 #
+# Returns {term: (current, maximum)} for the terms that could be read.      #
+#############################################################################
+def extract_stack_sizes(image_np, terms, ocr_mask=None):
+    if image_np is None or not terms:
+        return {}
+
+    image_np = _to_rgb(image_np)
+    if ocr_mask is None:
+        _, ocr_mask = prepare_ocr_mask(image_np)
+
+    results = {}
+    for scale in (1, 2):
+        pending = [term for term in terms if term not in results]
+        if not pending:
+            break
+        for term, boxes in locate_title_boxes(ocr_mask, pending, scale).items():
+            for box in boxes:
+                ratio = read_stack_size_below(image_np, box)
+                if ratio:
+                    results[term] = ratio
+                    break
+    return results
