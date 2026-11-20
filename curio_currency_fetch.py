@@ -156,6 +156,19 @@ def normalize_exchange_data(data):
     return normalized_lines
 
 
+POE_CDN = "https://web.poecdn.com"
+
+
+def line_icon_url(line):
+    """Return a full icon URL for a poe.ninja line (stash lines use "icon", exchange lines a relative "image")."""
+    if not line:
+        return ""
+    icon = line.get("icon") or line.get("image") or ""
+    if icon.startswith("/"):
+        icon = POE_CDN + icon
+    return icon
+
+
 def build_lookup_dict(category_data):
     lookup = defaultdict(list)
     for lines in category_data.values():
@@ -328,15 +341,28 @@ def fetch_all_items(league: str):
             "Divine Value": divine_value,
             "five_link_value": five_link_value,
             "six_link_value": six_link_value,
-            "League": league
+            "League": league,
+            "Icon": config.CHAOS_ORB_ICON_URL if csv_name == "Chaos Orb" else line_icon_url(line),
         })
 
     return all_rows
 
 
 # === WRAPPER FUNCTION TO CALL ===
+def _cached_csv_missing_icons():
+    try:
+        with open(OUTPUT_CURRENCY_CSV, encoding="utf-8-sig") as f:
+            return "Icon" not in f.readline().strip().split(",")
+    except OSError:
+        return False
+
+
 def run_fetch(force=False):
     global IS_FETCHING
+
+    if not force and _cached_csv_missing_icons():
+        log_message("[INFO] Cached currency data has no icons, refetching.")
+        force = True
 
     # --- Skip if recent ---
     if should_skip_recent_run(

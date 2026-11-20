@@ -24,6 +24,7 @@ from config import data_file_base
 from csv_manager import CSVManager
 from data_manager import BaseDataManager
 from json_manager import JSONManager
+from img_utils import get_item_icon_url
 from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
@@ -285,7 +286,7 @@ def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None, im
             divine_value=currency_data.get("divine"),
             tier=tier_data.get("tier", ""),
             wiki=tier_data.get("wiki", ""),
-            img=tier_data.get("img", ""),
+            img=get_item_icon_url(tier_data, currency_data),
             five_l_val=currency_data.get("five_link"),
             six_l_val=currency_data.get("six_link"),
             picked=False,
@@ -452,7 +453,7 @@ def insert_item(root, term_title, item_type=None, data_manager=None):
         divine_value=currency_data.get("divine"),
         tier=tier_data.get("tier", ""),
         wiki=tier_data.get("wiki", ""),
-        img=tier_data.get("img", ""),
+        img=get_item_icon_url(tier_data, currency_data),
         five_l_val=currency_data.get("five_link"),
         six_l_val=currency_data.get("six_link"),
         picked=False,
@@ -577,7 +578,7 @@ def parse_items_from_rows(rows):
             item_data_set = TIERS_DATASET.get(term_title, {})
             tier = item_data_set.get("tier", "")
             wiki = item_data_set.get("wiki", "")
-            img = item_data_set.get("img", "")
+            img = get_item_icon_url(item_data_set, estimated_value)
             duplicate = False  # Just predefining
             # Build parsed item directly from CSV header values
             item = build_parsed_item(

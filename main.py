@@ -15,6 +15,7 @@ from PIL import Image as PILImage
 from customtkinter import CTkImage
 
 from gui.popups.trade import show_quick_trade_popup, BLUEPRINT_ICONS
+from gui.popups.top_values import show_top_values_popup
 from img_utils import preload_all_icons, get_icon
 from logger import log_message
 from update_checker import check_for_updates
@@ -279,6 +280,13 @@ def start_main_app(root, theme_mode, theme_manager, first_run=False):
         command=lambda: show_quick_trade_popup(top_frame)
     )
     quick_trade_btn.grid(row=0, column=3, sticky="nsew", pady=5, padx=(5, 0))
+
+    top_values_btn = CTkButton(
+        top_frame,
+        text="Most Valuable",
+        command=lambda: show_top_values_popup(top_frame, tracker)
+    )
+    top_values_btn.grid(row=0, column=4, sticky="nsew", pady=5, padx=(5, 0))
 
     def load_quick_trade_icon():
         name, url = next(iter(BLUEPRINT_ICONS.items()))

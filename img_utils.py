@@ -8,7 +8,9 @@ import requests
 from PIL import Image, ImageTk
 
 import ocr_utils as utils
+import config
 from load_utils import get_datasets, get_resource_path
+from settings import get_setting
 
 # Temp folder for caching icons
 ICON_CACHE_DIR = Path(tempfile.gettempdir()) / "curio_icons"
@@ -157,6 +159,11 @@ def get_icons_parallel(requests_list, size=(24, 24)):
     return results
 
 
+def get_item_icon_url(tier_data, currency_data):
+    """Return the poeladder icon for an item, falling back to the poe.ninja icon (Currency, Experimental)."""
+    return (tier_data or {}).get("img") or (currency_data or {}).get("img") or ""
+
+
 def preload_all_icons(parent=None, size=(24, 24), placeholder=None):
     datasets = get_datasets(load_external=False)
     tiers = datasets.get("tiers", {})
@@ -176,6 +183,14 @@ def preload_all_icons(parent=None, size=(24, 24), placeholder=None):
         url = tiers.get(name, {}).get("img")
         if url:
             to_fetch.append((display_name, url))
+
+    league = get_setting("Application", "data_league", config.LEAGUE)
+    league_prices = datasets.get("currency", {}).get(league, {})
+    for name, type_name in terms.items():
+        if type_name in ("Currency", "Experimental"):
+            url = league_prices.get(name, {}).get("img")
+            if url:
+                to_fetch.append((name, url))
 
     # Downloads + decoding only; PIL results are cached per size and Tk
     # images are created lazily on the main thread by the caller.
