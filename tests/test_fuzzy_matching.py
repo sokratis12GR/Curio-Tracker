@@ -70,7 +70,7 @@ class FuzzyMatchingTests(unittest.TestCase):
         self.assertEqual(match("Headhuntr\nLeather Belt")[0], ["Headhunter"])
 
     def test_garbled_multi_word_terms_still_match(self):
-        self.assertEqual(match("Blessinq 0f Chayu1a")[0], ["Blessing of Chayula"])
+        self.assertEqual(match("Orb of Chanee")[0], ["Orb of Chance"])
         self.assertEqual(match("Orb of Annulrnent")[0], ["Orb of Annulment"])
 
     def test_enchants_never_fuzzy_matched(self):

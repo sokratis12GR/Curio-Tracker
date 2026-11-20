@@ -319,11 +319,14 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True, prep
         )
 
         if c.OCR_DEBUGGING:
-            cv2.namedWindow("Filtered Mask", cv2.WINDOW_NORMAL)
-            cv2.imshow("Filtered Mask", image_np_filtered)
-            cv2.moveWindow("Filtered Mask", 100, 100)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            try:
+                cv2.namedWindow("Filtered Mask", cv2.WINDOW_NORMAL)
+                cv2.imshow("Filtered Mask", image_np_filtered)
+                cv2.moveWindow("Filtered Mask", 100, 100)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+            except cv2.error as e:
+                log_message("[DEBUG] OCR preview window unavailable:", e)
 
     return formatted_text, image_np
 

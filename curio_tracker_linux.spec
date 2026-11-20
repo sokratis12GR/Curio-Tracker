@@ -56,9 +56,22 @@ a = Analysis(
     ] + collect_submodules('Xlib'),
     hookspath=['.'],
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'matplotlib', 'lxml', 'bs4', 'html5lib', 'jinja2', 'IPython',
+        'scipy', 'fsspec', 'sqlite3', 'pytest', '_pytest',
+    ],
     cipher=block_cipher
 )
+
+# ---- Drop bundled files the app never uses ----
+_UNUSED = ('opencv_videoio_ffmpeg', 'PIL/_avif')
+
+def _is_unused(entry):
+    name = entry[0].replace('\\', '/')
+    return any(token in name for token in _UNUSED)
+
+a.binaries = [b for b in a.binaries if not _is_unused(b)]
+a.datas = [d for d in a.datas if not _is_unused(d)]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 

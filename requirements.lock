@@ -26,9 +26,9 @@ numpy==2.4.2
     # via
     #   -c D:/User/AppData/Local/Temp/curio_constraints.txt
     #   -r requirements.txt
-    #   opencv-python
+    #   opencv-python-headless
     #   pandas
-opencv-python==4.13.0.92
+opencv-python-headless==4.13.0.92
     # via
     #   -c D:/User/AppData/Local/Temp/curio_constraints.txt
     #   -r requirements.txt
