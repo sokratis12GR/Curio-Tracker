@@ -222,7 +222,48 @@ def prepare_ocr_mask(image_np):
     return image_np, image_np_filtered
 
 
-def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True, prepared_mask=None):
+#############################################################################
+# Rebuilds image_to_string-style text from image_to_data output: words      #
+# joined by spaces, lines by newlines, blocks/paragraphs by a blank line.   #
+#############################################################################
+def _text_from_data(data):
+    parts = []
+    previous = None
+    for i, word in enumerate(data["text"]):
+        if data["level"][i] != 5:
+            continue
+        key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+        if previous is None:
+            pass
+        elif key != previous:
+            parts.append("\n\n" if key[:2] != previous[:2] else "\n")
+        else:
+            parts.append(" ")
+        parts.append(word)
+        previous = key
+    return "".join(parts) + "\n"
+
+
+#############################################################################
+# Extracts word boxes from image_to_data output, mapped back to the         #
+# unscaled image. Each entry: (text, left, top, right, bottom, line_key).   #
+#############################################################################
+def _words_from_data(data, scale=1):
+    words = []
+    for i, word in enumerate(data["text"]):
+        if data["level"][i] != 5 or not word.strip():
+            continue
+        left, top = data["left"][i], data["top"][i]
+        right, bottom = left + data["width"][i], top + data["height"][i]
+        words.append((
+            word,
+            left // scale, top // scale, right // scale, bottom // scale,
+            (data["block_num"][i], data["par_num"][i], data["line_num"][i]),
+        ))
+    return words
+
+
+def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True, prepared_mask=None, layout_out=None):
     t0 = time.perf_counter()
 
     if apply_filter and prepared_mask is not None:
@@ -285,11 +326,21 @@ def ocr_from_image(image_np, scale=1, psm=6, lang="eng", apply_filter=True, prep
         tess_input = cv2.bitwise_not(image_np_filtered)
         tess_config += " -c tessedit_do_invert=0"
 
-    text = pytesseract.image_to_string(
-        tess_input,
-        config=tess_config,
-        lang=lang
-    )
+    if layout_out is None:
+        text = pytesseract.image_to_string(
+            tess_input,
+            config=tess_config,
+            lang=lang
+        )
+    else:
+        data = pytesseract.image_to_data(
+            tess_input,
+            config=tess_config,
+            lang=lang,
+            output_type=pytesseract.Output.DICT
+        )
+        text = _text_from_data(data)
+        layout_out.extend(_words_from_data(data, scale))
 
     t4 = time.perf_counter()
 
@@ -378,56 +429,41 @@ def _to_rgb(image_np):
 
 
 #############################################################################
-# Finds the on-screen box of each term's title line in the filtered mask.   #
+# Finds the on-screen box of each term's title line from OCR word boxes     #
+# (see ocr_from_image's layout_out).                                        #
 # Returns {term: [(left, top, right, bottom), ...]} in image coordinates.   #
 #############################################################################
-def locate_title_boxes(ocr_mask, terms, scale=1):
-    if scale != 1:
-        ocr_mask = cv2.resize(
-            ocr_mask,
-            (ocr_mask.shape[1] * scale, ocr_mask.shape[0] * scale),
-            interpolation=cv2.INTER_LANCZOS4
-        )
-    tess_input = ocr_mask
-    tess_config = "--psm 6"
-    if c.OCR_INVERT_FOR_TESSERACT:
-        tess_input = cv2.bitwise_not(ocr_mask)
-        tess_config += " -c tessedit_do_invert=0"
-
-    data = pytesseract.image_to_data(tess_input, config=tess_config, output_type=pytesseract.Output.DICT)
-
+def locate_title_boxes(words, terms):
     lines = {}
-    for i, word in enumerate(data["text"]):
-        if word.strip():
-            key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
-            lines.setdefault(key, []).append(i)
+    for word in words:
+        lines.setdefault(word[5], []).append(word)
 
     boxes = {}
     for term in terms:
         term_words = term.lower().split()
         term_joined = " ".join(term_words)
         found = []
-        for indices in lines.values():
-            words = [re.sub(r"[^a-z0-9%']", "", data["text"][i].lower()) for i in indices]
-            for start in range(len(words) - len(term_words) + 1):
-                candidate = " ".join(words[start:start + len(term_words)])
+        for line_words in lines.values():
+            cleaned = [re.sub(r"[^a-z0-9%']", "", w[0].lower()) for w in line_words]
+            for start in range(len(cleaned) - len(term_words) + 1):
+                candidate = " ".join(cleaned[start:start + len(term_words)])
                 if SequenceMatcher(None, candidate, term_joined).ratio() < TITLE_BOX_MIN_SIMILARITY:
                     continue
-                selected = indices[start:start + len(term_words)]
-                left = min(data["left"][i] for i in selected)
-                right = max(data["left"][i] + data["width"][i] for i in selected)
-                top = int(np.median([data["top"][i] for i in selected]))
-                height = int(np.median([data["height"][i] for i in selected]))
-                found.append((left // scale, top // scale, right // scale, (top + height) // scale))
+                selected = line_words[start:start + len(term_words)]
+                left = min(w[1] for w in selected)
+                right = max(w[3] for w in selected)
+                top = int(np.median([w[2] for w in selected]))
+                height = int(np.median([w[4] - w[2] for w in selected]))
+                found.append((left, top, right, top + height))
         boxes[term] = found
     return boxes
 
 
 #############################################################################
-# Reads the neutral-grey "Stack Size: N/MM" line directly below a title.    #
-# Returns (current, maximum) or None.                                       #
+# Builds the upscaled black-on-white mask of the neutral-grey band where    #
+# "Stack Size: N/MM" sits directly below a title. Returns None if empty.    #
 #############################################################################
-def read_stack_size_below(image_np, title_box):
+def _stack_band(image_np, title_box):
     left, top, right, bottom = title_box
     height = bottom - top
     width = right - left
@@ -435,7 +471,7 @@ def read_stack_size_below(image_np, title_box):
         return None
 
     y0 = bottom + int(0.4 * height)
-    y1 = min(image_np.shape[0], bottom + int(3.2 * height))
+    y1 = min(image_np.shape[0], bottom + int(2.4 * height))
     x0 = max(0, left - width // 2)
     x1 = min(image_np.shape[1], right + width // 2)
     crop = image_np[y0:y1, x0:x1]
@@ -445,13 +481,11 @@ def read_stack_size_below(image_np, title_box):
     hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
     mask = cv2.inRange(hsv, STACK_TEXT_L_HSV, STACK_TEXT_U_HSV)
     mask = cv2.resize(mask, None, fx=STACK_BAND_SCALE, fy=STACK_BAND_SCALE, interpolation=cv2.INTER_LANCZOS4)
+    return cv2.bitwise_not(mask)
 
-    text = pytesseract.image_to_string(cv2.bitwise_not(mask), config="--psm 6 -c tessedit_do_invert=0")
+
+def _parse_stack_ratio(text):
     match = STACK_BAND_RATIO_PATTERN.search(text.translate(OCR_DIGIT_TRANSLATION))
-
-    if c.DEBUGGING:
-        log_message(f"[Stack Size] band text: {text.strip()!r}")
-
     if not match:
         return None
     current, maximum = int(match.group(1)), int(match.group(2))
@@ -459,27 +493,84 @@ def read_stack_size_below(image_np, title_box):
 
 
 #############################################################################
+# Reads every stack band in a single Tesseract call: bands are stacked      #
+# vertically with white gaps and each OCR'd word is assigned back to its    #
+# band by vertical position. Returns one (current, maximum) or None per box.#
+#############################################################################
+def read_stack_sizes_below(image_np, title_boxes):
+    bands = [_stack_band(image_np, box) for box in title_boxes]
+    present = [band for band in bands if band is not None]
+    if not present:
+        return [None] * len(title_boxes)
+
+    gap = 20 * STACK_BAND_SCALE
+    sheet_width = max(band.shape[1] for band in present) + 2 * gap
+    rows = [np.full((gap, sheet_width), 255, dtype=np.uint8)]
+    spans = []
+    y = gap
+    for band in bands:
+        if band is None:
+            spans.append(None)
+            continue
+        row = np.full((band.shape[0], sheet_width), 255, dtype=np.uint8)
+        row[:, gap:gap + band.shape[1]] = band
+        rows.extend((row, np.full((gap, sheet_width), 255, dtype=np.uint8)))
+        spans.append((y, y + band.shape[0]))
+        y += band.shape[0] + gap
+
+    data = pytesseract.image_to_data(
+        np.vstack(rows),
+        config="--psm 6 -c tessedit_do_invert=0",
+        output_type=pytesseract.Output.DICT
+    )
+
+    band_words = [[] for _ in bands]
+    for i, word in enumerate(data["text"]):
+        if data["level"][i] != 5 or not word.strip():
+            continue
+        center = data["top"][i] + data["height"][i] / 2
+        for index, span in enumerate(spans):
+            if span and span[0] - gap / 2 <= center < span[1] + gap / 2:
+                band_words[index].append((data["left"][i], word))
+                break
+
+    results = []
+    for words in band_words:
+        text = " ".join(word for _, word in sorted(words))
+        if c.DEBUGGING:
+            log_message(f"[Stack Size] band text: {text!r}")
+        results.append(_parse_stack_ratio(text))
+    return results
+
+
+#############################################################################
 # Reads stack sizes for the given currency/scarab terms by locating each    #
 # title and OCR-ing the neutral-grey stack line beneath it.                 #
+# `words` should be the layout from the OCR pass that matched the terms;    #
+# without it a 1x layout pass is run here.                                  #
 # Returns {term: (current, maximum)} for the terms that could be read.      #
 #############################################################################
-def extract_stack_sizes(image_np, terms, ocr_mask=None):
+def extract_stack_sizes(image_np, terms, words=None, ocr_mask=None):
     if image_np is None or not terms:
         return {}
 
     image_np = _to_rgb(image_np)
-    if ocr_mask is None:
-        _, ocr_mask = prepare_ocr_mask(image_np)
+    if words is None:
+        words = []
+        ocr_from_image(image_np, prepared_mask=ocr_mask, layout_out=words)
+
+    candidates = [
+        (term, box)
+        for term, boxes in locate_title_boxes(words, terms).items()
+        for box in boxes
+    ]
+    if not candidates:
+        return {}
+
+    ratios = read_stack_sizes_below(image_np, [box for _, box in candidates])
 
     results = {}
-    for scale in (1, 2):
-        pending = [term for term in terms if term not in results]
-        if not pending:
-            break
-        for term, boxes in locate_title_boxes(ocr_mask, pending, scale).items():
-            for box in boxes:
-                ratio = read_stack_size_below(image_np, box)
-                if ratio:
-                    results[term] = ratio
-                    break
+    for (term, _), ratio in zip(candidates, ratios):
+        if ratio and term not in results:
+            results[term] = ratio
     return results

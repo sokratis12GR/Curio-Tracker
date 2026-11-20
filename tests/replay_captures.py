@@ -46,7 +46,8 @@ def run_pipeline(image_rgb):
     t0 = time.perf_counter()
     _, mask = prepare_ocr_mask(image_rgb)
     t1 = time.perf_counter()
-    text, _ = ocr_from_image(image_rgb, prepared_mask=mask)
+    words = []
+    text, _ = ocr_from_image(image_rgb, prepared_mask=mask, layout_out=words)
     t2 = time.perf_counter()
     matched = get_matched_terms(text, allow_dupes=True)
     stage = "exact"
@@ -55,8 +56,9 @@ def run_pipeline(image_rgb):
     if not matched:
         # Call the real review function (as capture_once does) so the
         # harness exercises the same code path as the app.
+        words = []
         text, matched = review_failed_capture(
-            image_rgb, scale=2, allow_dupes=True, prepared_mask=mask
+            image_rgb, scale=2, allow_dupes=True, prepared_mask=mask, layout_out=words
         )
         # Re-derive which review stage matched, for reporting only.
         if not matched:
@@ -72,7 +74,8 @@ def run_pipeline(image_rgb):
         m["term"] for m in matched
         if utils.is_currency_or_scarab(curio_tracker.term_types.get(utils.smart_title_case(m["term"])))
     ]
-    stacks = extract_stack_sizes(image_rgb, stack_terms, mask) if stack_terms else {}
+    t3 = time.perf_counter()
+    stacks = extract_stack_sizes(image_rgb, stack_terms, words) if stack_terms else {}
     stacks.update({t: None for t in stack_terms if t not in stacks})
     t4 = time.perf_counter()
 

@@ -277,7 +277,7 @@ def get_review_fuzzy_matches(text, allow_dupes=False, threshold=None) -> List[Di
 #    Returns:                                                               #
 #        tuple: OCR text and any matched terms found during the review.      #
 #############################################################################
-def review_failed_capture(image_np, scale=2, allow_dupes=False, prepared_mask=None):
+def review_failed_capture(image_np, scale=2, allow_dupes=False, prepared_mask=None, layout_out=None):
     review_start = time.perf_counter()
 
     if c.DEBUGGING:
@@ -290,7 +290,8 @@ def review_failed_capture(image_np, scale=2, allow_dupes=False, prepared_mask=No
     full_text, filtered = ocr_from_image(
         image_np,
         scale=scale,
-        prepared_mask=prepared_mask
+        prepared_mask=prepared_mask,
+        layout_out=layout_out
     )
 
     ocr_end = time.perf_counter()

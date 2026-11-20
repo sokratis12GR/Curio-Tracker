@@ -137,7 +137,7 @@ TIERS_DATASET = datasets["tiers"]
 owned_items = {}
 
 
-def process_text(root, text, allow_dupes=False, matched_terms=None, image_np=None, ocr_mask=None) -> None:
+def process_text(root, text, allow_dupes=False, matched_terms=None, image_np=None, ocr_words=None) -> None:
     global stack_sizes, attempt
     results = []
 
@@ -150,11 +150,12 @@ def process_text(root, text, allow_dupes=False, matched_terms=None, image_np=Non
     stack_terms = [
         match["term"] for match in matched_terms
         if utils.is_currency_or_scarab(term_types.get(utils.smart_title_case(match["term"])))
+        and (allow_dupes or not match["duplicate"])
     ]
     positional_ratios = {}
     if image_np is not None and stack_terms:
         try:
-            positional_ratios = extract_stack_sizes(image_np, stack_terms, ocr_mask)
+            positional_ratios = extract_stack_sizes(image_np, stack_terms, ocr_words)
         except Exception as e:
             log_message(f"[Stack Size] Positional read failed: {e}")
 
@@ -216,7 +217,7 @@ def process_text(root, text, allow_dupes=False, matched_terms=None, image_np=Non
         attempt += 1
 
 
-def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None, image_np=None, ocr_mask=None) -> None:
+def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None, image_np=None, ocr_words=None) -> None:
     global stack_sizes, parsed_items, data_mgr
     parsed_items = []
 
@@ -230,7 +231,7 @@ def write_entry(root, text, timestamp, allow_dupes=False, matched_terms=None, im
 
     t1 = time.perf_counter()
 
-    process_text(root, text, allow_dupes, matched_terms, image_np=image_np, ocr_mask=ocr_mask)
+    process_text(root, text, allow_dupes, matched_terms, image_np=image_np, ocr_words=ocr_words)
 
     t2 = time.perf_counter()
 
@@ -695,7 +696,8 @@ def capture_once(root):
     # Build the HDR/color-filter mask once; the review pass reuses it.
     _, ocr_mask = prepare_ocr_mask(screenshot_np)
 
-    full_text, filtered = ocr_from_image(screenshot_np, prepared_mask=ocr_mask)
+    ocr_words = []
+    full_text, filtered = ocr_from_image(screenshot_np, prepared_mask=ocr_mask, layout_out=ocr_words)
 
     ocr_end = time.perf_counter()
 
@@ -708,7 +710,10 @@ def capture_once(root):
     review_start = time.perf_counter()
 
     if not matched_terms:
-        full_text, matched_terms = review_failed_capture(screenshot_np, scale=2, allow_dupes=False, prepared_mask=ocr_mask)
+        ocr_words = []
+        full_text, matched_terms = review_failed_capture(
+            screenshot_np, scale=2, allow_dupes=False, prepared_mask=ocr_mask, layout_out=ocr_words
+        )
 
     review_end = time.perf_counter()
 
@@ -723,7 +728,7 @@ def capture_once(root):
         allow_dupes=False,
         matched_terms=matched_terms,
         image_np=screenshot_np,
-        ocr_mask=ocr_mask
+        ocr_words=ocr_words
     )
 
     write_end = time.perf_counter()
@@ -779,11 +784,12 @@ def capture_snippet(root, on_done):
             return
 
         screenshot_np = np.array(img)
-        full_text, _ = ocr_from_image(screenshot_np)
+        ocr_words = []
+        full_text, _ = ocr_from_image(screenshot_np, layout_out=ocr_words)
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         os.makedirs(c.saves_dir, exist_ok=True)
-        write_entry(root, full_text, timestamp, allow_dupes=True, image_np=screenshot_np)
+        write_entry(root, full_text, timestamp, allow_dupes=True, image_np=screenshot_np, ocr_words=ocr_words)
 
         if on_done:
             on_done(parsed_items)
@@ -834,10 +840,11 @@ def capture_snippet(root, on_done):
 
             # OCR off the Tk thread, on the same worker as hotkey captures.
             def ocr_and_write():
-                full_text, _ = ocr_from_image(screenshot_np, scale=2)
+                ocr_words = []
+                full_text, _ = ocr_from_image(screenshot_np, scale=2, layout_out=ocr_words)
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 os.makedirs(c.saves_dir, exist_ok=True)
-                write_entry(root, full_text, timestamp, allow_dupes=True, image_np=screenshot_np)
+                write_entry(root, full_text, timestamp, allow_dupes=True, image_np=screenshot_np, ocr_words=ocr_words)
 
                 if on_done:
                     on_done(list(parsed_items))
