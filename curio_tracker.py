@@ -28,6 +28,7 @@ from load_utils import get_datasets
 from logger import log_message
 from ocr_utils import build_parsed_item
 from settings import get_setting, set_setting
+from thread_utils import get_background_worker
 from tracking.ocr_capture import extract_currency_value, get_ocr_bbox, ocr_from_image, prepare_ocr_mask
 from tracking.recent_terms import (
     clear_recent_terms,
@@ -720,20 +721,19 @@ def capture_once(root):
         )
 
 
+def is_win11():
+    if platform.system().lower() != "windows":
+        return False
+    try:
+        return int(platform.version().split(".")[-1]) >= 22000
+    except (ValueError, IndexError):
+        return False
+
+
 def capture_snippet(root, on_done):
     validate_attempt(c.capturing_prompt)
-    system = platform.system().lower()
 
-    is_win11 = False
-
-    if system == "windows":
-        try:
-            build = int(platform.version().split(".")[-1])
-            is_win11 = build >= 22000
-        except (ValueError, IndexError):
-            pass
-
-    if is_win11:
+    if is_win11():
         pyperclip.copy("")
 
         subprocess.Popen(["explorer", "ms-screenclip:"])
@@ -810,13 +810,17 @@ def capture_snippet(root, on_done):
                 log_message(c.snippet_txt_failed)
                 return
 
-            full_text, filtered = ocr_from_image(screenshot_np, scale=2)
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            os.makedirs(c.saves_dir, exist_ok=True)
-            write_entry(root, full_text, timestamp, allow_dupes=True)
+            # OCR off the Tk thread, on the same worker as hotkey captures.
+            def ocr_and_write():
+                full_text, _ = ocr_from_image(screenshot_np, scale=2)
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                os.makedirs(c.saves_dir, exist_ok=True)
+                write_entry(root, full_text, timestamp, allow_dupes=True)
 
-            if on_done:
-                on_done(filtered)
+                if on_done:
+                    on_done(list(parsed_items))
+
+            get_background_worker().submit(ocr_and_write, label="snippet-ocr")
 
         canvas.bind("<Button-1>", on_mouse_down)
         canvas.bind("<B1-Motion>", on_mouse_drag)

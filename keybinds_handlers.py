@@ -8,6 +8,7 @@ import toasts
 from logger import log_message
 from ocr_utils import parse_item_name
 from settings import get_setting
+from thread_utils import get_background_worker, ui_call
 from tree_manager import TreeManager
 
 exit_event = threading.Event()
@@ -62,10 +63,13 @@ def handle_snippet(root, tree_manager: TreeManager, controls):
 
         root.after(0, show_items)
 
-    def run_capture():
+    # Win11 waits on the Snipping Tool (up to 30s) and runs OCR, so it
+    # stays on this background thread. The fallback draws a Tk overlay,
+    # which must be created on the main thread.
+    if tracker.is_win11():
         tracker.capture_snippet(root, on_done=process_items)
-
-    root.after(0, run_capture)
+    else:
+        root.after(0, lambda: tracker.capture_snippet(root, on_done=process_items))
 
 
 def handle_layout_capture(root, tree_manager, controls):
@@ -266,16 +270,32 @@ def handle_cycle_bp_enchantment(root):
         if c.DEBUGGING:
             print(e)
 
+#############################################################
+# Handlers are invoked on the keyboard/controller listener  #
+# thread, which must return quickly (Windows drops slow     #
+# low-level hooks). Each handler is therefore routed:       #
+#  - in_background: OCR/screen work, serialized on a single #
+#    worker so captures never overlap.                      #
+#  - on_ui: touches the tree/widgets, run on the Tk thread. #
+#############################################################
 def register_handlers(root, tree_manager, controls):
+    worker = get_background_worker()
+
+    def in_background(name, fn):
+        return lambda: worker.submit(fn, label=name)
+
+    def on_ui(fn):
+        return lambda: ui_call(root, fn)
+
     return {
-        'capture': lambda: handle_capture(root, tree_manager, controls),
-        'snippet': lambda: handle_snippet(root, tree_manager, controls),
-        'layout_capture': lambda: handle_layout_capture(root, tree_manager, controls),
+        'capture': in_background('capture', lambda: handle_capture(root, tree_manager, controls)),
+        'snippet': in_background('snippet', lambda: handle_snippet(root, tree_manager, controls)),
+        'layout_capture': in_background('layout_capture', lambda: handle_layout_capture(root, tree_manager, controls)),
         'exit': lambda: handle_exit(root),
-        'duplicate_latest': lambda: handle_duplicate_latest(root, tree_manager, controls),
-        'delete_latest': lambda: handle_delete_latest(root, tree_manager, controls),
-        'show_highest_value': lambda: handle_show_highest_value(root, tree_manager, controls),
+        'duplicate_latest': on_ui(lambda: handle_duplicate_latest(root, tree_manager, controls)),
+        'delete_latest': on_ui(lambda: handle_delete_latest(root, tree_manager, controls)),
+        'show_highest_value': on_ui(lambda: handle_show_highest_value(root, tree_manager, controls)),
         'debug': lambda: handle_debugging_toggle(),
-        'cycle_bp_enchantment': lambda: handle_cycle_bp_enchantment(root)
+        'cycle_bp_enchantment': on_ui(lambda: handle_cycle_bp_enchantment(root))
     }
 

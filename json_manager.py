@@ -6,6 +6,25 @@ from config import data_file_base, csv_record_header, csv_time_header
 from data_manager import BaseDataManager, max_record_number, shift_records_after_delete
 from json_utils import rows_to_nested_json, nested_json_to_rows, find_or_create_blueprint
 from logger import log_message
+from thread_utils import atomic_write
+
+EMPTY_JSON = {
+    "RewardTypes": {
+        "1": "Trinket",
+        "2": "Replacement",
+        "3": "Replica",
+        "4": "Experimented Base Type",
+        "5": "Weapon Enchantment",
+        "6": "Armor Enchantment",
+        "7": "Scarab",
+        "8": "Currency"
+    },
+    "Players": []
+}
+
+
+def _dump_json(path, data, ensure_ascii=False):
+    atomic_write(path, lambda f: json.dump(data, f, ensure_ascii=ensure_ascii, indent=2))
 
 
 class JSONManager(BaseDataManager):
@@ -23,16 +42,9 @@ class JSONManager(BaseDataManager):
             with self.file_path.open("r", encoding="utf-8") as f:
                 nested = json.load(f)
 
-                changed = self.upgrade_json_enchantments(nested)
-
-                if changed:
-                    with self.file_path.open("w", encoding="utf-8") as out:
-                        json.dump(
-                            nested,
-                            out,
-                            ensure_ascii=False,
-                            indent=2
-                        )
+            # Written after the read handle is closed (os.replace needs it).
+            if self.upgrade_json_enchantments(nested):
+                _dump_json(self.file_path, nested)
 
             return nested_json_to_rows(nested)
         except Exception as e:
@@ -54,9 +66,7 @@ class JSONManager(BaseDataManager):
 
     def save_dict(self, root, rows, fieldnames):
         try:
-            nested = rows_to_nested_json(rows)
-            with self.file_path.open("w", encoding="utf-8") as f:
-                json.dump(nested, f, ensure_ascii=False, indent=2)
+            _dump_json(self.file_path, rows_to_nested_json(rows))
         except Exception as e:
             log_message(f"[ERROR] JSON save failed: {e}")
 
@@ -102,17 +112,7 @@ class JSONManager(BaseDataManager):
             if rows:
                 self.save_dict(root, rows, fieldnames=list(rows[0].keys()))
             else:
-                with self.file_path.open("w", encoding="utf-8") as f:
-                    json.dump({"RewardTypes": {
-                        "1": "Trinket",
-                        "2": "Replacement",
-                        "3": "Replica",
-                        "4": "Experimented Base Type",
-                        "5": "Weapon Enchantment",
-                        "6": "Armor Enchantment",
-                        "7": "Scarab",
-                        "8": "Currency"
-                    }, "Players": []}, f, indent=2)
+                _dump_json(self.file_path, EMPTY_JSON, ensure_ascii=True)
 
             if delete:
                 self._set_last_record_number(max_record_number(rows))
@@ -170,8 +170,7 @@ class JSONManager(BaseDataManager):
             # Append reward directly
             blueprint["Rewards"].append(reward_entry)
 
-        with self.file_path.open("w", encoding="utf-8") as f:
-            json.dump(nested_json, f, ensure_ascii=False, indent=2)
+        _dump_json(self.file_path, nested_json)
 
         self._set_last_record_number(
             max(self.last_record_number, max_record_number(rows))
@@ -240,18 +239,4 @@ class JSONManager(BaseDataManager):
 
     def ensure_data_file(self):
         if not self.file_path.exists():
-            base_json = {
-                "RewardTypes": {
-                    "1": "Trinket",
-                    "2": "Replacement",
-                    "3": "Replica",
-                    "4": "Experimented Base Type",
-                    "5": "Weapon Enchantment",
-                    "6": "Armor Enchantment",
-                    "7": "Scarab",
-                    "8": "Currency"
-                },
-                "Players": []
-            }
-            with open(self.file_path, "w", encoding="utf-8") as f:
-                json.dump(base_json, f, indent=2)
+            _dump_json(self.file_path, EMPTY_JSON, ensure_ascii=True)

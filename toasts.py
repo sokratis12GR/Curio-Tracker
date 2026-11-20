@@ -14,6 +14,7 @@ import platform_compat
 from logger import log_message
 from renderer import render_item, get_border_color
 from settings import get_setting, set_setting
+from thread_utils import ui_thread
 from tree_manager import TreeManager
 
 
@@ -394,6 +395,9 @@ def build_item_message(
     return "".join(parts)
 
 
+# show/show_message/show_custom are called from hotkey and capture
+# threads; @ui_thread moves them onto the Tk main thread.
+@ui_thread
 def show(root, item, message=None, duration=None, tree_manager: TreeManager = None, tracker=None):
     is_missing = is_item_missing(item)
 
@@ -406,6 +410,7 @@ def show(root, item, message=None, duration=None, tree_manager: TreeManager = No
                         tree_manager=tree_manager, tracker=tracker)
 
 
+@ui_thread
 def show_message(root, message, duration=None):
     return create_toast(root, message, duration=duration)
 
@@ -422,6 +427,7 @@ class CustomToastOptions:
     custom_message: Optional[str] = None
     headline: Optional[str] = None
 
+@ui_thread
 def show_custom(root, item, options: CustomToastOptions):
     is_missing = is_item_missing(item)
 

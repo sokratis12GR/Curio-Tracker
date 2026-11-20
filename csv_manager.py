@@ -6,6 +6,7 @@ from config import *
 from data_manager import BaseDataManager, max_record_number, shift_records_after_delete
 from load_utils import load_csv
 from logger import log_message
+from thread_utils import atomic_write
 
 
 class CSVManager(BaseDataManager):
@@ -40,11 +41,13 @@ class CSVManager(BaseDataManager):
         return load_csv(self.file_path, as_dict=True, skip_header=False)
 
     def save_dict(self, root, rows, fieldnames):
+        def write(f):
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
         try:
-            with self.file_path.open("w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(rows)
+            atomic_write(self.file_path, write, newline="")
             self._remember_file_state()
         except PermissionError as e:
             import toasts
