@@ -1,8 +1,10 @@
+import os
 import sys
 import threading
-from tkinter import TclError
+from tkinter import TclError, Toplevel
 
 import config as c
+import curio_keybinds
 import curio_tracker as tracker
 import toasts
 from logger import log_message
@@ -77,31 +79,48 @@ def handle_layout_capture(root, tree_manager, controls):
     # root.after(0, controls.refresh_blueprint_info)
 
 
+def _terminate():
+    try:
+        curio_keybinds.stop_global_listener()
+    except Exception:
+        pass
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    os._exit(0)
+
+
+def fast_exit(root):
+    """Hide every window at once and end the process without Tk's slow per-widget teardown."""
+    try:
+        for window in [root, *root.winfo_children()]:
+            if isinstance(window, Toplevel) or window is root:
+                try:
+                    window.withdraw()
+                except TclError:
+                    pass
+        root.update_idletasks()
+    except Exception:
+        pass
+    _terminate()
+
+
 def handle_exit(root):
     tracker.log_message(c.exiting_prompt)
 
     exit_event.set()
 
-    try:
-        def safe_quit_destroy(*args):
-            try:
-                root.quit()
-                root.destroy()
-            except TclError:
-                pass
+    if threading.current_thread() is threading.main_thread():
+        fast_exit(root)
+        return
 
-        if threading.current_thread() is threading.main_thread():
-            safe_quit_destroy()
-        else:
-            root.after(0, safe_quit_destroy)
-    except Exception as e:
-        if c.DEBUGGING:
-            print(f"[WARN] handle_exit GUI shutdown failed: {e}")
-
+    threading.Timer(1.0, _terminate).start()
     try:
-        sys.exit(0)
-    except SystemExit:
-        pass
+        root.after(0, lambda: fast_exit(root))
+    except Exception:
+        _terminate()
 
 
 def handle_debugging_toggle():
@@ -284,12 +303,20 @@ def register_handlers(root, tree_manager, controls):
     def in_background(name, fn):
         return lambda: worker.submit(fn, label=name)
 
+    def preempting_snippet(name, fn):
+        submit = in_background(name, fn)
+
+        def trigger():
+            tracker.cancel_pending_snippet()
+            submit()
+        return trigger
+
     def on_ui(fn):
         return lambda: ui_call(root, fn)
 
     return {
-        'capture': in_background('capture', lambda: handle_capture(root, tree_manager, controls)),
-        'snippet': in_background('snippet', lambda: handle_snippet(root, tree_manager, controls)),
+        'capture': preempting_snippet('capture', lambda: handle_capture(root, tree_manager, controls)),
+        'snippet': preempting_snippet('snippet', lambda: handle_snippet(root, tree_manager, controls)),
         'layout_capture': in_background('layout_capture', lambda: handle_layout_capture(root, tree_manager, controls)),
         'exit': lambda: handle_exit(root),
         'duplicate_latest': on_ui(lambda: handle_duplicate_latest(root, tree_manager, controls)),

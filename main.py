@@ -107,7 +107,7 @@ from gui.layout import create_layout
 from gui.menus import create_settings_menu
 from gui.toggles import TreeToggles
 from gui.treeview import CustomTreeview
-from keybinds_handlers import register_handlers
+from keybinds_handlers import fast_exit, register_handlers
 from set_tesseract_path import set_tesseract_path
 from settings import get_setting
 from themes import CTkThemes, apply_theme
@@ -234,16 +234,7 @@ def start_main_app(root, theme_mode, theme_manager, first_run=False):
     if platform.startswith("win"):
         root.after(200, lambda: root.iconbitmap(get_resource_path("assets/icon.ico")))
 
-    def on_closing():
-        try:
-            for after_id in root.tk.eval("after info").split():
-                root.after_cancel(after_id)
-        except Exception:
-            pass
-
-        root.destroy()
-
-    root.protocol("WM_DELETE_WINDOW", on_closing)
+    root.protocol("WM_DELETE_WINDOW", lambda: fast_exit(root))
 
     tracker.poe_user = get_setting("User", "poe_user", tracker.poe_user)
     tracker.blueprint_layout = get_setting("Blueprint", "layout", tracker.blueprint_layout)

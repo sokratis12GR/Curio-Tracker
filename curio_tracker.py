@@ -3,6 +3,7 @@ import os
 import platform
 import re
 import subprocess
+import threading
 import time
 import tkinter as tk
 from datetime import datetime, timedelta
@@ -758,10 +759,21 @@ def is_win11():
         return False
 
 
+SNIP_TIMEOUT_SECONDS = 5
+SNIP_POLL_SECONDS = 0.25
+_snip_cancel = threading.Event()
+
+
+def cancel_pending_snippet():
+    """Abort a pending Win11 snip wait so a newly queued capture runs immediately."""
+    _snip_cancel.set()
+
+
 def capture_snippet(root, on_done):
     validate_attempt(c.capturing_prompt)
 
     if is_win11():
+        _snip_cancel.clear()
         pyperclip.copy("")
 
         subprocess.Popen(["explorer", "ms-screenclip:"])
@@ -769,12 +781,13 @@ def capture_snippet(root, on_done):
         log_message("[INFO] Waiting for user to complete snip...")
 
         img = None
-        for _ in range(60):  # up to 30 seconds
-            time.sleep(0.5)
+        deadline = time.monotonic() + SNIP_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            if _snip_cancel.wait(SNIP_POLL_SECONDS):
+                break
             try:
                 img = platform_compat.grab_clipboard_image()
             except Exception:
-                # If grabclipboard fails or returns invalid content, treat as cancel
                 img = None
             if img:
                 break
