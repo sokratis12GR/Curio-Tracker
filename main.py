@@ -125,6 +125,7 @@ def main():
     theme_manager = CTkThemes(
         default_mode=theme_mode
     )
+    theme_mode = theme_manager.current_mode
 
     apply_theme(theme_mode)
 

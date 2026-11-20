@@ -27,12 +27,12 @@ def create_layout(root):
     right_frame.grid_columnconfigure(0, weight=1)
 
     page_bar = CTkFrame(right_frame, fg_color="transparent")
-    page_bar.grid(row=0, column=0, sticky="we", pady=(0, GAP))
+    page_bar.grid(row=0, column=0, sticky="we", padx=MARGIN, pady=(MARGIN, GAP))
     page_bar.grid_columnconfigure(1, weight=1)
 
     # Tracker page (tree + actions + toggles + totals)
     tracker_page = CTkFrame(right_frame, fg_color="transparent", corner_radius=0)
-    tracker_page.grid(row=1, column=0, sticky="nsew")
+    tracker_page.grid(row=1, column=0, sticky="nsew", padx=MARGIN, pady=(0, MARGIN))
     tracker_page.grid_rowconfigure(0, weight=1)
     tracker_page.grid_rowconfigure(1, weight=0)
     tracker_page.grid_columnconfigure(0, weight=0)

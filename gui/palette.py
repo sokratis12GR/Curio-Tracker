@@ -6,9 +6,10 @@ appearance modes, so POE runs on CTk's dark mode with its own colour theme
 active theme is read once at import time.
 """
 
+import custom_themes
 from settings import get_setting
 
-THEME_MODES = ("LIGHT", "DARK", "POE")
+THEME_MODES = custom_themes.BUILTIN_MODES
 
 
 def normalize_mode(mode) -> str:
@@ -16,8 +17,25 @@ def normalize_mode(mode) -> str:
     return mode if mode in THEME_MODES else "DARK"
 
 
-# Theme the app was started with (POE changes need a restart).
-ACTIVE_MODE = normalize_mode(get_setting("Application", "theme_mode", "DARK"))
+# Theme the app was started with (user theme name or built-in mode) and the
+# built-in mode it is based on. Changes to either need a restart.
+ACTIVE_THEME = str(get_setting("Application", "theme_mode", "DARK") or "DARK")
+ACTIVE_MODE, ACTIVE_COLORS = custom_themes.resolve(ACTIVE_THEME)
+COLOR_MAP = custom_themes.color_map(ACTIVE_MODE, ACTIVE_COLORS)
+_SLOT = 0 if ACTIVE_MODE == "LIGHT" else 1
+
+
+def recolor(value):
+    """Apply the active user theme / accent to a colour, (light, dark) tuple or dict."""
+    if isinstance(value, str):
+        return COLOR_MAP.get(value.lower(), value)
+    if isinstance(value, tuple) and len(value) == 2:
+        out = list(value)
+        out[_SLOT] = recolor(out[_SLOT])
+        return tuple(out)
+    if isinstance(value, dict):
+        return {k: recolor(v) for k, v in value.items()}
+    return value
 
 
 def is_poe() -> bool:
@@ -25,10 +43,11 @@ def is_poe() -> bool:
 
 
 def themed(light_dark: tuple, poe):
-    """(light, dark) tuple for CTk; in POE mode the dark slot becomes `poe`."""
+    """(light, dark) tuple for CTk; in POE mode the dark slot becomes `poe`.
+    The active user theme / accent colour is applied to the result."""
     if is_poe():
-        return (light_dark[0], poe)
-    return light_dark
+        return (light_dark[0], recolor(poe))
+    return recolor(light_dark)
 
 
 # Path of Exile–inspired palette. Colours only — no GGG art.
@@ -131,6 +150,13 @@ TREE_PALETTE = {
     },
 }
 
+if COLOR_MAP:
+    if ACTIVE_MODE == "POE":
+        POE_PALETTE.update(recolor(POE_PALETTE))
+    else:
+        COLLECTION_PALETTE[ACTIVE_MODE] = recolor(COLLECTION_PALETTE[ACTIVE_MODE])
+    TREE_PALETTE[ACTIVE_MODE] = recolor(TREE_PALETTE[ACTIVE_MODE])
+
 # (light, dark) tuples for CTk widgets
 SEPARATOR_COLOR = themed(("#d0d4d9", "#40444b"), POE_PALETTE["border_dim"])
 MUTED_TEXT = themed(("#5f6368", "#8e9297"), POE_PALETTE["muted"])
@@ -138,11 +164,13 @@ CARD_COLOR = themed(("#e8eaed", "#36393f"), POE_PALETTE["row_alt_bg"])
 DANGER_COLOR = ("#c62828", "#ed4245")
 DANGER_HOVER = themed(("#fbe3e3", "#4a2a2d"), "#3a1a14")
 ACCENT_COLOR = themed(("#0078d7", "#5865f2"), POE_PALETTE["gold"])
+# Single accent colour for the active theme (for widgets that take one colour).
+ACCENT_HEX = ACCENT_COLOR[_SLOT]
 
 
 def tree_palette(mode: str) -> dict:
-    return TREE_PALETTE.get(str(mode).upper(), TREE_PALETTE["DARK"])
+    return TREE_PALETTE.get(str(mode).upper(), TREE_PALETTE[ACTIVE_MODE])
 
 
 def collection_palette(mode: str) -> dict:
-    return COLLECTION_PALETTE.get(str(mode).upper(), COLLECTION_PALETTE["DARK"])
+    return COLLECTION_PALETTE.get(str(mode).upper(), COLLECTION_PALETTE[ACTIVE_MODE])

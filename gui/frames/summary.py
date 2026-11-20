@@ -20,6 +20,7 @@ from fonts import make_font
 from img_utils import get_cached_icon, get_icon
 from gui.palette import (ACCENT_COLOR, CARD_COLOR, MUTED_TEXT, POE_PALETTE, SEPARATOR_COLOR,
                          themed)
+from gui.layout import MARGIN
 from gui.tree.filtering import row_chaos_value
 from settings import get_setting, set_setting
 
@@ -48,6 +49,8 @@ PAGE_SUMMARY = "Summary"
 TWO_COL_WIDTH = 620
 THREE_COL_WIDTH = 960
 DEFAULT_WINDOW_GEOMETRY = "980x720"
+# Cards and tiles carry a 4px gutter of their own, so the page is inset that much less.
+SUMMARY_PAD = MARGIN - 4
 
 # Card placement per column count (keys of self._cards).
 COLUMN_PLANS = {
@@ -216,12 +219,12 @@ class SummaryFrame:
         self.detach_btn.configure(text="⇲ Attach summary" if self.detached else "⧉ Pop out summary")
         if self.view == PAGE_SUMMARY and not self.detached:
             self.tracker_page.grid_remove()
-            self.summary_page.grid(row=1, column=0, sticky="nsew")
+            self.summary_page.grid(row=1, column=0, sticky="nsew", padx=SUMMARY_PAD, pady=(0, MARGIN))
             if self.content is None or self._host is not self.summary_page:
                 self._mount(self.summary_page)
         else:
             self.summary_page.grid_remove()
-            self.tracker_page.grid(row=1, column=0, sticky="nsew")
+            self.tracker_page.grid(row=1, column=0, sticky="nsew", padx=MARGIN, pady=(0, MARGIN))
         if self.visible:
             self.schedule_refresh()
             self._schedule_tick()
@@ -303,8 +306,9 @@ class SummaryFrame:
         self._columns = 0
         self._drops_sig = None
         self._host = host
-        self.content = CTkScrollableFrame(host, corner_radius=8, fg_color="transparent")
-        self.content.grid(row=0, column=0, sticky="nsew")
+        self.content = CTkScrollableFrame(host, corner_radius=0, fg_color="transparent")
+        pad = 0 if host is self.summary_page else SUMMARY_PAD
+        self.content.grid(row=0, column=0, sticky="nsew", padx=pad, pady=pad)
         self.content.grid_columnconfigure(0, weight=1)
         self._build()
         self.content.bind("<Configure>", self._on_content_configure, add="+")
@@ -388,14 +392,14 @@ class SummaryFrame:
         header.grid(row=0, column=0, sticky="we", padx=4, pady=(4, 0))
         header.grid_columnconfigure(1, weight=1)
         title_box = CTkFrame(header, fg_color="transparent")
-        title_box.grid(row=0, column=0, sticky="w", padx=4)
+        title_box.grid(row=0, column=0, sticky="w")
         CTkLabel(title_box, text="Session Summary", font=make_font(18, "bold"), anchor="w",
                  height=24).grid(row=0, column=0, sticky="w")
         self.since_label = CTkLabel(title_box, text="", font=make_font(11), text_color=MUTED_TEXT,
                                     anchor="w", height=16)
         self.since_label.grid(row=1, column=0, sticky="w")
         controls = CTkFrame(header, fg_color="transparent")
-        controls.grid(row=0, column=2, sticky="e", padx=4)
+        controls.grid(row=0, column=2, sticky="e")
         self.mode_menu = CTkOptionMenu(
             controls, values=list(ss.SESSION_MODES), width=160, height=28,
             font=make_font(12), command=self._on_mode_changed,
@@ -491,7 +495,7 @@ class SummaryFrame:
     def _build_filter_bar(self, parent):
         """Dropdowns that narrow the whole page; table rows set them too."""
         bar = CTkFrame(parent, fg_color="transparent")
-        bar.grid(row=1, column=0, sticky="we", padx=8, pady=(8, 0))
+        bar.grid(row=1, column=0, sticky="we", padx=4, pady=(8, 0))
         CTkLabel(bar, text="FILTER", font=make_font(10, "bold"), text_color=MUTED_TEXT,
                  height=24).grid(row=0, column=0, padx=(0, 8))
         self.filter_menus = {}

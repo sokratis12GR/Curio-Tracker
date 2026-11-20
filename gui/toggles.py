@@ -3,7 +3,7 @@ from tkinter import BooleanVar
 from customtkinter import CTkFrame, CTkButton, CTkSwitch, CTkToplevel, CTkLabel
 
 from fonts import make_font
-from gui.palette import POE_PALETTE
+from gui.palette import ACCENT_HEX
 from settings import get_setting, set_setting
 from tree_manager import TreeManager
 
@@ -27,8 +27,7 @@ class TreeToggles:
 
     # --- Setup ---
     def _accent(self):
-        mode = getattr(self.theme_manager, "current_mode", "LIGHT").upper()
-        return {"DARK": "#5865f2", "POE": POE_PALETTE["gold"]}.get(mode, "#0078d7")
+        return ACCENT_HEX
 
     def _create_widgets(self):
         self.columns_btn = CTkButton(self.frame, command=self.open_menu_popup)

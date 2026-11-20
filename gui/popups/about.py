@@ -7,7 +7,7 @@ import customtkinter as ctk
 
 import load_utils
 from fonts import make_font
-from gui.palette import POE_PALETTE
+from gui.palette import ACCENT_HEX
 from version_utils import VERSION
 from win_utils import center_window_on_parent, prepare_popup
 
@@ -75,8 +75,7 @@ class CustomAboutPopup:
         self.popup.attributes("-topmost", True)
 
         # --- Determine accent color from theme ---
-        mode = getattr(self.theme_manager, "current_mode", "LIGHT").upper()
-        self.accent = {"DARK": "#5865f2", "POE": POE_PALETTE["gold"]}.get(mode, "#0078d7")
+        self.accent = ACCENT_HEX
 
         # --- Frame container ---
         frame = ctk.CTkFrame(self.popup, fg_color="transparent")
